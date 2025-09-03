@@ -1,118 +1,129 @@
-import { dependant, touched, unreactive } from "./core"
+import { allProps, dependant, touched, unreactive } from './core'
 
-const allProps = Symbol("all-props")
 // TODO: think - having added(ReactiveSet), removed(ReactiveSet) and changed(ReactiveSet) as a list of changes
+const original = Symbol('original')
 export class ReactiveWeakSet<T extends object> extends WeakSet<T> {
 	@unreactive
-	private originalSet: WeakSet<T>
+	declare readonly [original]: WeakSet<T>
 
 	constructor(originalSet: WeakSet<T>) {
 		super()
-		this.originalSet = originalSet
+		Object.defineProperty(this, original, {
+			value: originalSet,
+			enumerable: false,
+			configurable: false,
+		})
 	}
 
 	add(value: T): this {
-		const had = this.originalSet.has(value)
-		this.originalSet.add(value)
+		const had = this[original].has(value)
+		this[original].add(value)
 		if (!had) {
 			// touch the specific value and the collection view
-			touched(this.originalSet, value)
+			touched(this[original], value, { type: 'add', prop: value })
 			// no size/allProps for WeakSet
 		}
 		return this
 	}
 
 	delete(value: T): boolean {
-		const had = this.originalSet.has(value)
-		const res = this.originalSet.delete(value)
-		if (had) touched(this.originalSet, value)
+		const had = this[original].has(value)
+		const res = this[original].delete(value)
+		if (had) touched(this[original], value, { type: 'del', prop: value })
 		return res
 	}
 
 	has(value: T): boolean {
-		dependant(this.originalSet, value)
-		return this.originalSet.has(value)
+		dependant(this[original], value)
+		return this[original].has(value)
 	}
 
-	[Symbol.toStringTag]: string = "ReactiveWeakSet"
+	[Symbol.toStringTag]: string = 'ReactiveWeakSet'
 }
 
 export class ReactiveSet<T> extends Set<T> {
 	@unreactive
-	private originalSet: Set<T>
+	declare readonly [original]: Set<T>
 
 	constructor(originalSet: Set<T>) {
 		super()
-		this.originalSet = originalSet
+		Object.defineProperty(this, original, {
+			value: originalSet,
+			enumerable: false,
+			configurable: false,
+		})
 	}
 
 	get size(): number {
 		// size depends on the wrapper instance, like Map counterpart
-		dependant(this, "size")
-		return this.originalSet.size
+		dependant(this, 'size')
+		return this[original].size
 	}
 
 	add(value: T): this {
-		const had = this.originalSet.has(value)
-		this.originalSet.add(value)
+		const had = this[original].has(value)
+		this[original].add(value)
 		if (!had) {
+			const evolution = { type: 'add', prop: value } as const
 			// touch for value-specific and aggregate dependencies
-			touched(this.originalSet, value)
-			touched(this, "size")
-			touched(this, allProps)
+			touched(this[original], value, evolution)
+			touched(this, 'size', evolution)
+			touched(this[original], allProps, evolution)
 		}
 		return this
 	}
 
 	clear(): void {
-		const hadEntries = this.originalSet.size > 0
-		this.originalSet.clear()
+		const hadEntries = this[original].size > 0
+		this[original].clear()
 		if (hadEntries) {
-			touched(this, "size")
-			touched(this, allProps)
+			const evolution = { type: 'clear' } as const
+			touched(this, 'size', evolution)
+			touched(this[original], allProps, evolution)
 		}
 	}
 
 	delete(value: T): boolean {
-		const had = this.originalSet.has(value)
-		const res = this.originalSet.delete(value)
+		const had = this[original].has(value)
+		const res = this[original].delete(value)
 		if (had) {
-			touched(this.originalSet, value)
-			touched(this, "size")
-			touched(this, allProps)
+			const evolution = { type: 'del', prop: value } as const
+			touched(this[original], value, evolution)
+			touched(this, 'size', evolution)
+			touched(this[original], allProps, evolution)
 		}
 		return res
 	}
 
 	has(value: T): boolean {
-		dependant(this.originalSet, value)
-		return this.originalSet.has(value)
+		dependant(this[original], value)
+		return this[original].has(value)
 	}
 
 	entries(): SetIterator<[T, T]> {
-		dependant(this, allProps)
-		return this.originalSet.entries()
+		dependant(this[original], allProps)
+		return this[original].entries()
 	}
 
 	forEach(callbackfn: (value: T, value2: T, set: Set<T>) => void, thisArg?: any): void {
-		dependant(this, allProps)
-		this.originalSet.forEach(callbackfn, thisArg)
+		dependant(this[original], allProps)
+		this[original].forEach(callbackfn, thisArg)
 	}
 
 	keys(): SetIterator<T> {
-		dependant(this, allProps)
-		return this.originalSet.keys()
+		dependant(this[original], allProps)
+		return this[original].keys()
 	}
 
 	values(): SetIterator<T> {
-		dependant(this, allProps)
-		return this.originalSet.values()
+		dependant(this[original], allProps)
+		return this[original].values()
 	}
 
 	[Symbol.iterator](): SetIterator<T> {
-		dependant(this, allProps)
-		return this.originalSet[Symbol.iterator]()
+		dependant(this[original], allProps)
+		return this[original][Symbol.iterator]()
 	}
 
-	[Symbol.toStringTag]: string = "Set"
+	[Symbol.toStringTag]: string = 'Set'
 }

@@ -1,4 +1,5 @@
 import { getAt, Indexable, setAt } from './indexable'
+
 // TODO: get/set became this: based
 describe('Indexable', () => {
 	describe('Indexable(base, accessor)', () => {
@@ -8,10 +9,10 @@ describe('Indexable', () => {
 			}
 
 			const IndexableBase = Indexable(Base, {
-				get: function(this: Base, index) {
+				get: function (this: Base, index) {
 					return this.items[index]
 				},
-				set: function(this: Base, index, value) {
+				set: function (this: Base, index, value) {
 					this.items[index] = value
 				},
 			})
@@ -29,10 +30,10 @@ describe('Indexable', () => {
 			}
 
 			const IndexableBase = Indexable(Base, {
-				get: function(this: Base, index) {
+				get: function (this: Base, index) {
 					return this.numbers[index] * 2
 				},
-				set: function(this: Base, index, value) {
+				set: function (this: Base, index, value) {
 					this.numbers[index] = value / 2
 				},
 			})
@@ -52,10 +53,10 @@ describe('Indexable', () => {
 			}
 
 			const IndexableBase = Indexable(Base, {
-				get: function(this: Base, index) {
+				get: function (this: Base, index) {
 					return this.items[index]
 				},
-				set: function(this: Base, index, value) {
+				set: function (this: Base, index, value) {
 					this.items[index] = value
 				},
 			})
@@ -172,10 +173,10 @@ describe('Indexable', () => {
 			}
 
 			const IndexableBase = Indexable(Base, {
-				get: function(this: Base, index) {
+				get: function (this: Base, index) {
 					return this.items[index]
 				},
-				set: function(this: Base, index, value) {
+				set: function (this: Base, index, value) {
 					this.items[index] = value
 				},
 			})
@@ -191,10 +192,10 @@ describe('Indexable', () => {
 			}
 
 			const IndexableBase = Indexable(Base, {
-				get: function(this: Base, index) {
+				get: function (this: Base, index) {
 					return this.items[index]
 				},
-				set: function(this: Base, index, value) {
+				set: function (this: Base, index, value) {
 					this.items[index] = value
 				},
 			})
@@ -210,10 +211,10 @@ describe('Indexable', () => {
 			}
 
 			const IndexableBase = Indexable(Base, {
-				get: function(this: Base, index) {
+				get: function (this: Base, index) {
 					return this.items[index]
 				},
-				set: function(this: Base, index, value) {
+				set: function (this: Base, index, value) {
 					this.items[index] = value
 				},
 			})
@@ -230,10 +231,10 @@ describe('Indexable', () => {
 			}
 
 			const IndexableBase = Indexable(Base, {
-				get: function(this: Base, index) {
+				get: function (this: Base, index) {
 					return this.items[index]
 				},
-				set: function(this: Base, index, value) {
+				set: function (this: Base, index, value) {
 					this.items[index] = value
 				},
 			})
@@ -280,10 +281,10 @@ describe('Indexable', () => {
 			}
 
 			class Extended extends Indexable(Base, {
-				get: function(this: Base, index) {
+				get: function (this: Base, index) {
 					return this.items[index]
 				},
-				set: function(this: Base, index, value) {
+				set: function (this: Base, index, value) {
 					this.items[index] = value
 				},
 			}) {
@@ -306,10 +307,10 @@ describe('Indexable', () => {
 			}
 
 			const IndexableBase = Indexable(Base, {
-				get: function(this: Base, index) {
+				get: function (this: Base, index) {
 					return this.items[index]
 				},
-				set: function(this: Base, index, value) {
+				set: function (this: Base, index, value) {
 					// Custom logic: convert to uppercase
 					this.items[index] = value.toUpperCase()
 				},
@@ -325,10 +326,10 @@ describe('Indexable', () => {
 	describe('Indexable(accessor)', () => {
 		it('should create indexable object with custom accessor', () => {
 			const IndexableObj = Indexable({
-				get: function(this: any, index: number) {
+				get: function (this: any, index: number) {
 					return this._arr?.[index]
 				},
-				set: function(this: any, index: number, value: any) {
+				set: function (this: any, index: number, value: any) {
 					if (!this._arr) this._arr = []
 					this._arr[index] = value
 				},
@@ -342,10 +343,10 @@ describe('Indexable', () => {
 
 		it('should create indexable object with custom getter and setter', () => {
 			const IndexableObj = Indexable({
-				get: function(this: any, index: number) {
+				get: function (this: any, index: number) {
 					return this._arr?.[index]
 				},
-				set: function(this: any, index: number, value: string) {
+				set: function (this: any, index: number, value: string) {
 					if (!this._arr) this._arr = []
 					this._arr[index] = value
 				},
@@ -361,10 +362,10 @@ describe('Indexable', () => {
 
 		it('should support transformation in setter', () => {
 			const IndexableObj = Indexable({
-				get: function(this: any, index: number) {
+				get: function (this: any, index: number) {
 					return this._arr?.[index] * 2
 				},
-				set: function(this: any, index: number, value: number) {
+				set: function (this: any, index: number, value: number) {
 					if (!this._arr) this._arr = []
 					this._arr[index] = value / 2
 				},
@@ -378,7 +379,7 @@ describe('Indexable', () => {
 
 		it('should throw if setter is missing and assignment is attempted', () => {
 			const IndexableObj = Indexable({
-				get: function(this: any, index: number) {
+				get: function (this: any, index: number) {
 					return this._arr?.[index]
 				},
 			})

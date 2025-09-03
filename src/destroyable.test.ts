@@ -1,10 +1,16 @@
-import { Destroyable, DestructionError, allocated, allocatedValues, destructor } from './destroyable'
+import {
+	allocated,
+	allocatedValues,
+	Destroyable,
+	DestructionError,
+	destructor,
+} from './destroyable'
+
 function tick(ms: number = 0) {
 	return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 const gc = global.gc
-
 
 async function collectGarbages() {
 	await tick()
@@ -17,14 +23,18 @@ describe('Destroyable', () => {
 		it('should create destroyable class with custom destructor', async () => {
 			let receivedAllocated: any = null
 
-			class MyClass extends Destroyable({destructor(allocated) { receivedAllocated = allocated }}) {
+			class MyClass extends Destroyable({
+				destructor(allocated) {
+					receivedAllocated = allocated
+				},
+			}) {
 				constructor(public name: string) {
 					super()
 					this[allocatedValues].name = name
 				}
 			}
 
-			;(()=>{
+			;(() => {
 				const obj = new MyClass('test')
 				expect(obj.name).toBe('test')
 			})()
@@ -38,7 +48,7 @@ describe('Destroyable', () => {
 			}
 
 			const DestroyableBaseClass = Destroyable(BaseClass, {
-				destructor: () => {}
+				destructor: () => {},
 			})
 
 			const obj = new DestroyableBaseClass(42)
@@ -51,14 +61,14 @@ describe('Destroyable', () => {
 			}
 
 			const DestroyableMyClass = Destroyable(MyClass, {
-				destructor: () => {}
+				destructor: () => {},
 			})
 
 			const obj = new DestroyableMyClass('test')
 			DestroyableMyClass.destroy(obj)
 
 			expect(() => obj.name).toThrow(DestructionError)
-			expect(() => obj.name = 'value').toThrow(DestructionError)
+			expect(() => (obj.name = 'value')).toThrow(DestructionError)
 		})
 	})
 
@@ -69,7 +79,7 @@ describe('Destroyable', () => {
 			const DestroyableClass = Destroyable({
 				destructor: () => {
 					destructorCalled = true
-				}
+				},
 			})
 
 			const obj = new DestroyableClass()
@@ -90,7 +100,7 @@ describe('Destroyable', () => {
 
 			const DestroyableMyClass = Destroyable(MyClass)
 
-			expect(()=> new DestroyableMyClass('test')).toThrow(DestructionError)
+			expect(() => new DestroyableMyClass('test')).toThrow(DestructionError)
 		})
 	})
 
@@ -108,7 +118,7 @@ describe('Destroyable', () => {
 				}
 			}
 
-			;(()=>{
+			;(() => {
 				const obj = new MyClass('test')
 				expect(obj.name).toBe('test')
 			})()
@@ -132,7 +142,7 @@ describe('Destroyable', () => {
 				}
 			}
 
-			;(()=>{
+			;(() => {
 				const obj = new MyClass('test')
 				expect(obj.name).toBe('test')
 			})()
@@ -140,4 +150,4 @@ describe('Destroyable', () => {
 			expect(receivedAllocated.name).toBe('test')
 		})
 	})
-}) 
+})

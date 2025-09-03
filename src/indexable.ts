@@ -8,6 +8,8 @@ interface IndexingAt<Items = any> {
 interface Accessor<T, Items> {
 	get(this: T, index: number): Items
 	set?(this: T, index: number, value: Items): void
+	getLength?(this: T): number
+	setLength?(this: T, value: number): void
 }
 
 abstract class AbstractGetAt<Items = any> {
@@ -75,6 +77,8 @@ export function Indexable<Items, Base extends abstract new (...args: any[]) => a
 					return getter ? getter.call(receiver) : target[prop]
 				}
 				if (typeof prop === 'string') {
+					if (prop === 'length' && accessor.getLength)
+						return accessor.getLength.call(receiver)
 					const numProp = Number(prop)
 					if (!Number.isNaN(numProp)) {
 						return accessor.get!.call(receiver, numProp) as Items
@@ -90,6 +94,10 @@ export function Indexable<Items, Base extends abstract new (...args: any[]) => a
 					return true
 				}
 				if (typeof prop === 'string') {
+					if (prop === 'length' && accessor.setLength) {
+						accessor.setLength.call(receiver, value)
+						return true
+					}
 					const numProp = Number(prop)
 					if (!Number.isNaN(numProp)) {
 						if (!accessor.set) {

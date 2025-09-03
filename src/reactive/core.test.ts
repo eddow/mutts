@@ -1,31 +1,31 @@
 import {
+	computed,
 	effect,
 	isNonReactive,
 	isReactive,
 	Reactive,
 	reactive,
-	unwrap,
 	unreactive,
-	computed
-} from "./core"
+	unwrap,
+} from './index'
 
-describe("reactive", () => {
-	describe("basic functionality", () => {
-		it("should make objects reactive", () => {
-			const obj = { count: 0, name: "test" }
+describe('reactive', () => {
+	describe('basic functionality', () => {
+		it('should make objects reactive', () => {
+			const obj = { count: 0, name: 'test' }
 			const reactiveObj = reactive(obj)
 
 			expect(isReactive(reactiveObj)).toBe(true)
 			expect(isReactive(obj)).toBe(false)
 			expect(reactiveObj.count).toBe(0)
-			expect(reactiveObj.name).toBe("test")
+			expect(reactiveObj.name).toBe('test')
 		})
 
-		it("should not make primitives reactive", () => {
+		it('should not make primitives reactive', () => {
 			//@ts-expect-error - we want to test the behavior of reactive with primitives
 			expect(reactive(42)).toBe(42)
 			//@ts-expect-error - we want to test the behavior of reactive with primitives
-			expect(reactive("string")).toBe("string")
+			expect(reactive('string')).toBe('string')
 			//@ts-expect-error - we want to test the behavior of reactive with primitives
 			expect(reactive(true)).toBe(true)
 			//@ts-expect-error - we want to test the behavior of reactive with primitives
@@ -40,12 +40,7 @@ describe("reactive", () => {
 			expect(reactive(undefined)).toBe(undefined)
 		})
 
-		it("should not make arrays reactive", () => {
-			const arr = [1, 2, 3]
-			expect(reactive(arr)).toBe(arr)
-		})
-
-		it("should return same proxy for same object", () => {
+		it('should return same proxy for same object', () => {
 			const obj = { count: 0 }
 			const proxy1 = reactive(obj)
 			const proxy2 = reactive(obj)
@@ -53,7 +48,7 @@ describe("reactive", () => {
 			expect(proxy1).toBe(proxy2)
 		})
 
-		it("should return same proxy when called on proxy", () => {
+		it('should return same proxy when called on proxy', () => {
 			const obj = { count: 0 }
 			const proxy1 = reactive(obj)
 			const proxy2 = reactive(proxy1)
@@ -62,16 +57,16 @@ describe("reactive", () => {
 		})
 	})
 
-	describe("property access and modification", () => {
-		it("should allow reading properties", () => {
-			const obj = { count: 0, name: "test" }
+	describe('property access and modification', () => {
+		it('should allow reading properties', () => {
+			const obj = { count: 0, name: 'test' }
 			const reactiveObj = reactive(obj)
 
 			expect(reactiveObj.count).toBe(0)
-			expect(reactiveObj.name).toBe("test")
+			expect(reactiveObj.name).toBe('test')
 		})
 
-		it("should allow setting properties", () => {
+		it('should allow setting properties', () => {
 			const obj = { count: 0 }
 			const reactiveObj = reactive(obj)
 
@@ -80,31 +75,31 @@ describe("reactive", () => {
 			expect(obj.count).toBe(5)
 		})
 
-		it("should handle numeric properties", () => {
-			const obj = { 0: "zero", 1: "one" }
+		it('should handle numeric properties', () => {
+			const obj = { 0: 'zero', 1: 'one' }
 			const reactiveObj = reactive(obj)
 
-			expect(reactiveObj[0]).toBe("zero")
-			expect(reactiveObj[1]).toBe("one")
+			expect(reactiveObj[0]).toBe('zero')
+			expect(reactiveObj[1]).toBe('one')
 
-			reactiveObj[0] = "ZERO"
-			expect(reactiveObj[0]).toBe("ZERO")
+			reactiveObj[0] = 'ZERO'
+			expect(reactiveObj[0]).toBe('ZERO')
 		})
 
-		it("should handle symbol properties", () => {
-			const sym = Symbol("test")
-			const obj = { [sym]: "value" }
+		it('should handle symbol properties', () => {
+			const sym = Symbol('test')
+			const obj = { [sym]: 'value' }
 			const reactiveObj = reactive(obj)
 
-			expect(reactiveObj[sym]).toBe("value")
+			expect(reactiveObj[sym]).toBe('value')
 
-			reactiveObj[sym] = "new value"
-			expect(reactiveObj[sym]).toBe("new value")
+			reactiveObj[sym] = 'new value'
+			expect(reactiveObj[sym]).toBe('new value')
 		})
 	})
 
-	describe("unwrap functionality", () => {
-		it("should unwrap reactive objects", () => {
+	describe('unwrap functionality', () => {
+		it('should unwrap reactive objects', () => {
 			const obj = { count: 0 }
 			const reactiveObj = reactive(obj)
 
@@ -113,16 +108,16 @@ describe("reactive", () => {
 			expect(unwrapped).not.toBe(reactiveObj)
 		})
 
-		it("should return non-reactive objects as-is", () => {
+		it('should return non-reactive objects as-is', () => {
 			const obj = { count: 0 }
 			expect(unwrap(obj)).toBe(obj)
 		})
 	})
 })
 
-describe("effect", () => {
-	describe("basic effect functionality", () => {
-		it("should run effect immediately", () => {
+describe('effect', () => {
+	describe('basic effect functionality', () => {
+		it('should run effect immediately', () => {
 			let count = 0
 			const reactiveObj = reactive({ value: 0 })
 
@@ -134,7 +129,7 @@ describe("effect", () => {
 			expect(count).toBe(1)
 		})
 
-		it("should track dependencies", () => {
+		it('should track dependencies', () => {
 			let effectCount = 0
 			const reactiveObj = reactive({ count: 0 })
 
@@ -149,9 +144,9 @@ describe("effect", () => {
 			expect(effectCount).toBe(2)
 		})
 
-		it("should only track accessed properties", () => {
+		it('should only track accessed properties', () => {
 			let effectCount = 0
-			const reactiveObj = reactive({ count: 0, name: "test" })
+			const reactiveObj = reactive({ count: 0, name: 'test' })
 
 			effect(() => {
 				effectCount++
@@ -160,7 +155,7 @@ describe("effect", () => {
 
 			expect(effectCount).toBe(1)
 
-			reactiveObj.name = "new name" // Change name
+			reactiveObj.name = 'new name' // Change name
 			expect(effectCount).toBe(1) // Should not trigger effect
 
 			reactiveObj.count = 5 // Change count
@@ -168,8 +163,8 @@ describe("effect", () => {
 		})
 	})
 
-	describe("cascading effects", () => {
-		it("should properly handle cascading effects", () => {
+	describe('cascading effects', () => {
+		it('should properly handle cascading effects', () => {
 			const reactiveObj = reactive({ a: 0, b: 0, c: 0 })
 
 			effect(() => {
@@ -194,7 +189,7 @@ describe("effect", () => {
 			expect(reactiveObj.c).toBe(5)
 		})
 
-		it("should prevent nested effects", () => {
+		it('should prevent nested effects', () => {
 			const reactiveObj = reactive({ count: 0 })
 
 			expect(() => {
@@ -204,12 +199,12 @@ describe("effect", () => {
 						reactiveObj.count
 					})
 				})
-			}).toThrow("Nested effects are not allowed")
+			}).toThrow('Nested effects are not allowed')
 		})
 	})
 
-	describe("effect cleanup", () => {
-		it("should return unwatch function", () => {
+	describe('effect cleanup', () => {
+		it('should return unwatch function', () => {
 			const reactiveObj = reactive({ count: 0 })
 			let effectCount = 0
 
@@ -218,11 +213,11 @@ describe("effect", () => {
 				reactiveObj.count
 			})
 
-			expect(typeof unwatch).toBe("function")
+			expect(typeof unwatch).toBe('function')
 			expect(effectCount).toBe(1)
 		})
 
-		it("should stop tracking when unwatched", () => {
+		it('should stop tracking when unwatched', () => {
 			const reactiveObj = reactive({ count: 0 })
 			let effectCount = 0
 
@@ -239,8 +234,8 @@ describe("effect", () => {
 			expect(effectCount).toBe(1) // Should not trigger effect
 		})
 
-		it("should clean up dependencies on re-run", () => {
-			const reactiveObj = reactive({ count: 0, name: "test" })
+		it('should clean up dependencies on re-run', () => {
+			const reactiveObj = reactive({ count: 0, name: 'test' })
 			let effectCount = 0
 
 			effect(() => {
@@ -261,13 +256,13 @@ describe("effect", () => {
 			reactiveObj.count = 5
 			expect(effectCount).toBe(3) // Should not trigger effect anymore
 
-			reactiveObj.name = "new name"
+			reactiveObj.name = 'new name'
 			expect(effectCount).toBe(4) // Should trigger effect
 		})
 	})
 
-	describe("error handling", () => {
-		it("should propagate errors from effects", () => {
+	describe('error handling', () => {
+		it('should propagate errors from effects', () => {
 			const reactiveObj = reactive({ count: 0 })
 			let effectCount = 0
 
@@ -276,7 +271,7 @@ describe("effect", () => {
 				reactiveObj.count
 
 				if (reactiveObj.count === 1) {
-					throw new Error("Test error")
+					throw new Error('Test error')
 				}
 			})
 
@@ -285,16 +280,16 @@ describe("effect", () => {
 			// This should throw an error when the effect runs
 			expect(() => {
 				reactiveObj.count = 1
-			}).toThrow("Test error")
+			}).toThrow('Test error')
 
 			expect(effectCount).toBe(2)
 		})
 	})
 
-	describe("complex scenarios", () => {
-		it("should handle multiple reactive objects", () => {
+	describe('complex scenarios', () => {
+		it('should handle multiple reactive objects', () => {
 			const obj1 = reactive({ count: 0 })
-			const obj2 = reactive({ name: "test" })
+			const obj2 = reactive({ name: 'test' })
 			let effectCount = 0
 
 			effect(() => {
@@ -308,11 +303,11 @@ describe("effect", () => {
 			obj1.count = 5
 			expect(effectCount).toBe(2)
 
-			obj2.name = "new name"
+			obj2.name = 'new name'
 			expect(effectCount).toBe(3)
 		})
 
-		it("should handle object identity changes", () => {
+		it('should handle object identity changes', () => {
 			const reactiveObj = reactive({ inner: { count: 0 } })
 			let effectCount = 0
 
@@ -332,22 +327,22 @@ describe("effect", () => {
 	})
 })
 
-describe("integration tests", () => {
-	it("should work with complex nested structures", () => {
+describe('integration tests', () => {
+	it('should work with complex nested structures', () => {
 		const state = reactive({
 			user: {
 				profile: {
-					name: "John",
+					name: 'John',
 					age: 30,
 				},
 				settings: {
-					theme: "dark",
+					theme: 'dark',
 					notifications: true,
 				},
 			},
 			app: {
-				version: "1.0.0",
-				features: ["auth", "chat"],
+				version: '1.0.0',
+				features: ['auth', 'chat'],
 			},
 		})
 
@@ -376,30 +371,30 @@ describe("integration tests", () => {
 		expect(appEffectCount).toBe(1)
 
 		// Change profile
-		state.user.profile.name = "Jane"
+		state.user.profile.name = 'Jane'
 		expect(profileEffectCount).toBe(2)
 		expect(settingsEffectCount).toBe(1)
 		expect(appEffectCount).toBe(1)
 
 		// Change settings
-		state.user.settings.theme = "light"
+		state.user.settings.theme = 'light'
 		expect(profileEffectCount).toBe(2)
 		expect(settingsEffectCount).toBe(2)
 		expect(appEffectCount).toBe(1)
 
 		// Change app
-		state.app.version = "1.1.0"
+		state.app.version = '1.1.0'
 		expect(profileEffectCount).toBe(2)
 		expect(settingsEffectCount).toBe(2)
 		expect(appEffectCount).toBe(2)
 	})
 })
 
-describe("Reactive mixin", () => {
-	it("should make class instances reactive", () => {
+describe('Reactive mixin', () => {
+	it('should make class instances reactive', () => {
 		class TestClass {
 			count = 0
-			name = "test"
+			name = 'test'
 
 			increment() {
 				this.count++
@@ -427,9 +422,9 @@ describe("Reactive mixin", () => {
 		expect(instance.count).toBe(1)
 	})
 
-	it("should track property changes on reactive class instances", () => {
+	it('should track property changes on reactive class instances', () => {
 		class User {
-			name = "John"
+			name = 'John'
 			age = 30
 
 			updateProfile(newName: string, newAge: number) {
@@ -457,21 +452,21 @@ describe("Reactive mixin", () => {
 		expect(nameEffectCount).toBe(1)
 		expect(ageEffectCount).toBe(1)
 
-		user.updateProfile("Jane", 25)
+		user.updateProfile('Jane', 25)
 		expect(nameEffectCount).toBe(2)
 		expect(ageEffectCount).toBe(2)
-		expect(user.name).toBe("Jane")
+		expect(user.name).toBe('Jane')
 		expect(user.age).toBe(25)
 	})
 
-	it("should work with inheritance", () => {
+	it('should work with inheritance', () => {
 		class Animal {
-			species = "unknown"
+			species = 'unknown'
 			energy = 100
 		}
 
 		class Dog extends Animal {
-			breed = "mixed"
+			breed = 'mixed'
 			bark() {
 				this.energy -= 10
 			}
@@ -494,7 +489,7 @@ describe("Reactive mixin", () => {
 		expect(dog.energy).toBe(90)
 	})
 
-	it("should handle method calls that modify properties", () => {
+	it('should handle method calls that modify properties', () => {
 		class Counter {
 			value = 0
 
@@ -529,10 +524,10 @@ describe("Reactive mixin", () => {
 	})
 })
 
-describe("non-reactive functionality", () => {
-	describe("markNonReactive", () => {
-		it("should mark individual objects as non-reactive", () => {
-			const obj = { count: 0, name: "test" }
+describe('non-reactive functionality', () => {
+	describe('markNonReactive', () => {
+		it('should mark individual objects as non-reactive', () => {
+			const obj = { count: 0, name: 'test' }
 			unreactive(obj)
 
 			expect(isNonReactive(obj)).toBe(true)
@@ -540,7 +535,7 @@ describe("non-reactive functionality", () => {
 			expect(isReactive(obj)).toBe(false)
 		})
 
-		it("should not affect other objects", () => {
+		it('should not affect other objects', () => {
 			const obj1 = { count: 0 }
 			const obj2 = { count: 0 }
 
@@ -554,11 +549,11 @@ describe("non-reactive functionality", () => {
 		})
 	})
 
-	describe("markNonReactiveClass", () => {
-		it("should mark entire classes as non-reactive", () => {
+	describe('markNonReactiveClass', () => {
+		it('should mark entire classes as non-reactive', () => {
 			class TestClass {
 				count = 0
-				name = "test"
+				name = 'test'
 			}
 
 			unreactive(TestClass)
@@ -572,13 +567,13 @@ describe("non-reactive functionality", () => {
 			expect(reactive(instance2)).toBe(instance2)
 		})
 
-		it("should work with inheritance", () => {
+		it('should work with inheritance', () => {
 			class BaseClass {
-				baseProp = "base"
+				baseProp = 'base'
 			}
 
 			class DerivedClass extends BaseClass {
-				derivedProp = "derived"
+				derivedProp = 'derived'
 			}
 
 			unreactive(BaseClass)
@@ -590,13 +585,13 @@ describe("non-reactive functionality", () => {
 			expect(isNonReactive(derivedInstance)).toBe(true) // Inherits non-reactive status
 		})
 
-		it("should not affect other classes", () => {
+		it('should not affect other classes', () => {
 			class NonReactiveClass {
-				prop = "non-reactive"
+				prop = 'non-reactive'
 			}
 
 			class ReactiveClass {
-				prop = "reactive"
+				prop = 'reactive'
 			}
 
 			unreactive(NonReactiveClass)
@@ -612,8 +607,8 @@ describe("non-reactive functionality", () => {
 		})
 	})
 
-	describe("NonReactive symbol (internal)", () => {
-		it("should mark objects with symbol as non-reactive", () => {
+	describe('NonReactive symbol (internal)', () => {
+		it('should mark objects with symbol as non-reactive', () => {
 			const obj: any = { count: 0 }
 			// Since we can't access the internal symbol, test the behavior indirectly
 			// by using the public markNonReactive function
@@ -624,7 +619,7 @@ describe("non-reactive functionality", () => {
 			expect(isReactive(obj)).toBe(false)
 		})
 
-		it("should work with the Reactive mixin", () => {
+		it('should work with the Reactive mixin', () => {
 			class TestClass {
 				count = 0
 			}
@@ -640,28 +635,28 @@ describe("non-reactive functionality", () => {
 		})
 	})
 
-	describe("native objects", () => {
-		it("should not make Date objects reactive", () => {
+	describe('native objects', () => {
+		it('should not make Date objects reactive', () => {
 			const date = new Date()
 			expect(reactive(date)).toBe(date)
 			expect(isReactive(date)).toBe(false)
 		})
 
-		it("should not make RegExp objects reactive", () => {
+		it('should not make RegExp objects reactive', () => {
 			const regex = /test/
 			expect(reactive(regex)).toBe(regex)
 			expect(isReactive(regex)).toBe(false)
 		})
 
-		it("should not make Error objects reactive", () => {
-			const error = new Error("test")
+		it('should not make Error objects reactive', () => {
+			const error = new Error('test')
 			expect(reactive(error)).toBe(error)
 			expect(isReactive(error)).toBe(false)
 		})
 	})
 
-	describe("integration with existing reactive system", () => {
-		it("should work with effects on non-reactive objects", () => {
+	describe('integration with existing reactive system', () => {
+		it('should work with effects on non-reactive objects', () => {
 			const obj = { count: 0 }
 			unreactive(obj)
 
@@ -677,9 +672,9 @@ describe("non-reactive functionality", () => {
 			expect(effectCount).toBe(1) // Should not trigger effect
 		})
 
-		it("should allow mixing reactive and non-reactive objects", () => {
+		it('should allow mixing reactive and non-reactive objects', () => {
 			const reactiveObj = reactive({ count: 0 })
-			const unreactiveObj = { name: "test" }
+			const unreactiveObj = { name: 'test' }
 			unreactive(unreactiveObj)
 
 			let effectCount = 0
@@ -694,11 +689,11 @@ describe("non-reactive functionality", () => {
 			reactiveObj.count = 5
 			expect(effectCount).toBe(2) // Should trigger effect
 
-			unreactiveObj.name = "new name"
+			unreactiveObj.name = 'new name'
 			expect(effectCount).toBe(2) // Should not trigger effect
 		})
 
-		it("should work with the Reactive mixin and non-reactive classes", () => {
+		it('should work with the Reactive mixin and non-reactive classes', () => {
 			class NonReactiveClass {
 				count = 0
 			}
@@ -725,14 +720,14 @@ describe("non-reactive functionality", () => {
 	})
 })
 
-describe("@unreactive decorator", () => {
-	describe("legacy decorator syntax", () => {
-		it("should mark properties as unreactive using legacy syntax", () => {
+describe('@unreactive decorator', () => {
+	describe('legacy decorator syntax', () => {
+		it('should mark properties as unreactive using legacy syntax', () => {
 			class TestClass {
 				@unreactive
-				unreactiveProp = "test"
+				unreactiveProp = 'test'
 
-				reactiveProp = "reactive"
+				reactiveProp = 'reactive'
 			}
 
 			const instance = new TestClass()
@@ -749,23 +744,23 @@ describe("@unreactive decorator", () => {
 			expect(effectCount).toBe(1)
 
 			// Changing unreactive property should not trigger effect
-			reactiveInstance.unreactiveProp = "new value"
+			reactiveInstance.unreactiveProp = 'new value'
 			expect(effectCount).toBe(1)
 
 			// Changing reactive property should trigger effect
-			reactiveInstance.reactiveProp = "new reactive value"
+			reactiveInstance.reactiveProp = 'new reactive value'
 			expect(effectCount).toBe(2)
 		})
 
-		it("should work with multiple unreactive properties", () => {
+		it('should work with multiple unreactive properties', () => {
 			class TestClass {
 				@unreactive
-				prop1 = "value1"
+				prop1 = 'value1'
 
 				@unreactive
-				prop2 = "value2"
+				prop2 = 'value2'
 
-				reactiveProp = "reactive"
+				reactiveProp = 'reactive'
 			}
 
 			const instance = new TestClass()
@@ -782,23 +777,23 @@ describe("@unreactive decorator", () => {
 			expect(effectCount).toBe(1)
 
 			// Changing unreactive properties should not trigger effect
-			reactiveInstance.prop1 = "new value1"
-			reactiveInstance.prop2 = "new value2"
+			reactiveInstance.prop1 = 'new value1'
+			reactiveInstance.prop2 = 'new value2'
 			expect(effectCount).toBe(1)
 
 			// Changing reactive property should trigger effect
-			reactiveInstance.reactiveProp = "new reactive value"
+			reactiveInstance.reactiveProp = 'new reactive value'
 			expect(effectCount).toBe(2)
 		})
 
-		it("should work with symbol properties", () => {
-			const sym = Symbol("test")
+		it('should work with symbol properties', () => {
+			const sym = Symbol('test')
 
 			class TestClass {
 				@unreactive
-				[sym] = "symbol value"
+				[sym] = 'symbol value'
 
-				reactiveProp = "reactive"
+				reactiveProp = 'reactive'
 			}
 
 			const instance = new TestClass()
@@ -814,23 +809,23 @@ describe("@unreactive decorator", () => {
 			expect(effectCount).toBe(1)
 
 			// Changing unreactive symbol property should not trigger effect
-			reactiveInstance[sym] = "new symbol value"
+			reactiveInstance[sym] = 'new symbol value'
 			expect(effectCount).toBe(1)
 
 			// Changing reactive property should trigger effect
-			reactiveInstance.reactiveProp = "new reactive value"
+			reactiveInstance.reactiveProp = 'new reactive value'
 			expect(effectCount).toBe(2)
 		})
 
-		it("should work with numeric properties", () => {
+		it('should work with numeric properties', () => {
 			class TestClass {
 				@unreactive
-				0 = "zero"
+				0 = 'zero'
 
 				@unreactive
-				1 = "one"
+				1 = 'one'
 
-				reactiveProp = "reactive"
+				reactiveProp = 'reactive'
 			}
 
 			const instance = new TestClass()
@@ -847,23 +842,23 @@ describe("@unreactive decorator", () => {
 			expect(effectCount).toBe(1)
 
 			// Changing unreactive numeric properties should not trigger effect
-			reactiveInstance[0] = "ZERO"
-			reactiveInstance[1] = "ONE"
+			reactiveInstance[0] = 'ZERO'
+			reactiveInstance[1] = 'ONE'
 			expect(effectCount).toBe(1)
 
 			// Changing reactive property should trigger effect
-			reactiveInstance.reactiveProp = "new reactive value"
+			reactiveInstance.reactiveProp = 'new reactive value'
 			expect(effectCount).toBe(2)
 		})
 	})
 
-	describe("integration with reactive system", () => {
-		it("should bypass reactivity completely for unreactive properties", () => {
+	describe('integration with reactive system', () => {
+		it('should bypass reactivity completely for unreactive properties', () => {
 			class TestClass {
 				@unreactive
-				unreactiveProp = { nested: "value" }
+				unreactiveProp = { nested: 'value' }
 
-				reactiveProp = { nested: "reactive" }
+				reactiveProp = { nested: 'reactive' }
 			}
 
 			const instance = new TestClass()
@@ -879,20 +874,20 @@ describe("@unreactive decorator", () => {
 			expect(effectCount).toBe(1)
 
 			// Changing nested unreactive property should not trigger effect
-			reactiveInstance.unreactiveProp.nested = "new nested value"
+			reactiveInstance.unreactiveProp.nested = 'new nested value'
 			expect(effectCount).toBe(1)
 
 			// Changing nested reactive property should trigger effect
-			reactiveInstance.reactiveProp.nested = "new nested reactive value"
+			reactiveInstance.reactiveProp.nested = 'new nested reactive value'
 			expect(effectCount).toBe(2)
 		})
 
-		it("should work with regular properties", () => {
+		it('should work with regular properties', () => {
 			class TestClass {
 				@unreactive
-				unreactiveProp = "test"
+				unreactiveProp = 'test'
 
-				reactiveProp = "reactive"
+				reactiveProp = 'reactive'
 			}
 
 			const instance = new TestClass()
@@ -908,27 +903,27 @@ describe("@unreactive decorator", () => {
 			expect(effectCount).toBe(1)
 
 			// Changing unreactive property should not trigger effect
-			reactiveInstance.unreactiveProp = "new value"
+			reactiveInstance.unreactiveProp = 'new value'
 			expect(effectCount).toBe(1)
 
 			// Changing reactive property should trigger effect
-			reactiveInstance.reactiveProp = "new reactive value"
+			reactiveInstance.reactiveProp = 'new reactive value'
 			expect(effectCount).toBe(2)
 		})
 
-		it("should work with inheritance", () => {
+		it('should work with inheritance', () => {
 			class BaseClass {
 				@unreactive
-				baseUnreactiveProp = "base unreactive"
+				baseUnreactiveProp = 'base unreactive'
 
-				baseReactiveProp = "base reactive"
+				baseReactiveProp = 'base reactive'
 			}
 
 			class DerivedClass extends BaseClass {
 				@unreactive
-				derivedUnreactiveProp = "derived unreactive"
+				derivedUnreactiveProp = 'derived unreactive'
 
-				derivedReactiveProp = "derived reactive"
+				derivedReactiveProp = 'derived reactive'
 			}
 
 			const instance = new DerivedClass()
@@ -946,20 +941,20 @@ describe("@unreactive decorator", () => {
 			expect(effectCount).toBe(1)
 
 			// Changing unreactive properties should not trigger effect
-			reactiveInstance.baseUnreactiveProp = "new base unreactive"
-			reactiveInstance.derivedUnreactiveProp = "new derived unreactive"
+			reactiveInstance.baseUnreactiveProp = 'new base unreactive'
+			reactiveInstance.derivedUnreactiveProp = 'new derived unreactive'
 			expect(effectCount).toBe(1)
 
 			// Changing reactive properties should trigger effect
-			reactiveInstance.baseReactiveProp = "new base reactive"
+			reactiveInstance.baseReactiveProp = 'new base reactive'
 			expect(effectCount).toBe(2)
-			reactiveInstance.derivedReactiveProp = "new derived reactive"
+			reactiveInstance.derivedReactiveProp = 'new derived reactive'
 			expect(effectCount).toBe(3)
 		})
 	})
 
-	describe("edge cases", () => {
-		it("should handle undefined and null values", () => {
+	describe('edge cases', () => {
+		it('should handle undefined and null values', () => {
 			class TestClass {
 				@unreactive
 				unreactiveProp: any = undefined
@@ -980,22 +975,22 @@ describe("@unreactive decorator", () => {
 			expect(effectCount).toBe(1)
 
 			// Setting values should not trigger effects for unreactive properties
-			reactiveInstance.unreactiveProp = "new value"
+			reactiveInstance.unreactiveProp = 'new value'
 			expect(effectCount).toBe(1)
 
 			// Setting values should trigger effects for reactive properties
-			reactiveInstance.reactiveProp = "new value"
+			reactiveInstance.reactiveProp = 'new value'
 			expect(effectCount).toBe(2)
 		})
 
-		it("should work with computed property names", () => {
-			const propName = "computed"
+		it('should work with computed property names', () => {
+			const propName = 'computed'
 
 			class TestClass {
 				@unreactive
-				[propName] = "computed unreactive"
+				[propName] = 'computed unreactive'
 
-				reactiveProp = "reactive"
+				reactiveProp = 'reactive'
 			}
 
 			const instance = new TestClass()
@@ -1011,20 +1006,20 @@ describe("@unreactive decorator", () => {
 			expect(effectCount).toBe(1)
 
 			// Changing computed unreactive property should not trigger effect
-			reactiveInstance[propName] = "new computed unreactive"
+			reactiveInstance[propName] = 'new computed unreactive'
 			expect(effectCount).toBe(1)
 
 			// Changing reactive property should trigger effect
-			reactiveInstance.reactiveProp = "new reactive value"
+			reactiveInstance.reactiveProp = 'new reactive value'
 			expect(effectCount).toBe(2)
 		})
 
-		it("should handle property deletion", () => {
+		it('should handle property deletion', () => {
 			class TestClass {
 				@unreactive
-				unreactiveProp?: string = "test"
+				unreactiveProp?: string = 'test'
 
-				reactiveProp?: string = "reactive"
+				reactiveProp?: string = 'reactive'
 			}
 
 			const instance = new TestClass()
@@ -1050,18 +1045,21 @@ describe("@unreactive decorator", () => {
 	})
 })
 
-describe("effect reaction result", () => {
-	it("should pass the effect result to the reaction on initial and subsequent runs", () => {
+describe('effect reaction result', () => {
+	it('should pass the effect result to the reaction on initial and subsequent runs', () => {
 		const state = reactive({ a: 1, b: 2 })
 
 		const received: number[] = []
-		const unwatch = effect(() => {
-			// effect returns a value derived from dependencies
-			return state.a + state.b
-		}, (sum) => {
-			received.push(sum)
-			return undefined
-		})
+		const unwatch = effect(
+			() => {
+				// effect returns a value derived from dependencies
+				return state.a + state.b
+			},
+			(sum) => {
+				received.push(sum)
+				return undefined
+			}
+		)
 
 		// initial run
 		expect(received).toEqual([3])
@@ -1078,35 +1076,41 @@ describe("effect reaction result", () => {
 	})
 })
 
-describe("effect reaction cleanup", () => {
-	it("should run previous reaction cleanup before the next reaction on change", () => {
+describe('effect reaction cleanup', () => {
+	it('should run previous reaction cleanup before the next reaction on change', () => {
 		const state = reactive({ v: 1 })
 
 		const calls: string[] = []
-		effect(() => {
-			return state.v
-		}, (val) => {
-			calls.push(`reaction:${val}`)
-			return () => calls.push(`cleanup:${val}`)
-		})
+		effect(
+			() => {
+				return state.v
+			},
+			(val) => {
+				calls.push(`reaction:${val}`)
+				return () => calls.push(`cleanup:${val}`)
+			}
+		)
 
 		// initial
-		expect(calls).toEqual(["reaction:1"]) // no cleanup yet
+		expect(calls).toEqual(['reaction:1']) // no cleanup yet
 
 		state.v = 2
 		// cleanup for 1 must run before reaction for 2
-		expect(calls).toEqual(["reaction:1", "cleanup:1", "reaction:2"]) 
+		expect(calls).toEqual(['reaction:1', 'cleanup:1', 'reaction:2'])
 
 		state.v = 3
-		expect(calls).toEqual(["reaction:1", "cleanup:1", "reaction:2", "cleanup:2", "reaction:3"]) 
+		expect(calls).toEqual(['reaction:1', 'cleanup:1', 'reaction:2', 'cleanup:2', 'reaction:3'])
 	})
 })
 
-describe("computed", () => {
-	it("returns computed value and caches it", () => {
+describe('computed', () => {
+	it('returns computed value and caches it', () => {
 		const state = reactive({ a: 1, b: 2 })
 		let runs = 0
-		const getter = () => { runs++; return state.a + state.b }
+		const getter = () => {
+			runs++
+			return state.a + state.b
+		}
 
 		const v1 = computed(getter)
 		expect(v1).toBe(3)
@@ -1118,10 +1122,13 @@ describe("computed", () => {
 		expect(runs).toBe(1)
 	})
 
-	it("recomputes after a dependency change (at least once)", () => {
+	it('recomputes after a dependency change (at least once)', () => {
 		const state = reactive({ a: 1, b: 2 })
 		let runs = 0
-		const getter = () => { runs++; return state.a + state.b }
+		const getter = () => {
+			runs++
+			return state.a + state.b
+		}
 
 		// initial compute
 		expect(computed(getter)).toBe(3)
@@ -1131,6 +1138,31 @@ describe("computed", () => {
 		state.a = 5
 		expect(computed(getter)).toBe(7)
 		// getter should have run again exactly once
+		expect(runs).toBe(2)
+	})
+
+	it('flows with the effects', () => {
+		const state = reactive({ a: 1, b: 2 })
+		let runs = 0
+		const getter = () => {
+			runs++
+			return state.b + 1
+		}
+
+		effect(() => {
+			state.a = computed(getter) + 1
+		})
+		// initial compute
+		expect(computed(getter)).toBe(3)
+		expect(runs).toBe(1)
+
+		// mutate dependency -> internal effect should refresh cache once
+		state.b = 3
+		expect(state.a).toBe(5)
+		// getter should have run again exactly once
+		expect(runs).toBe(2)
+		expect(computed(getter)).toBe(4)
+		// getter should have not run again
 		expect(runs).toBe(2)
 	})
 })

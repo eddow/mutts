@@ -1,17 +1,17 @@
-import { ReactiveSet, ReactiveWeakSet } from "./set"
-import { reactive, effect } from "./core"
+import { effect, reactive } from './index'
+import { ReactiveSet, ReactiveWeakSet } from './set'
 import './index'
 
-describe("ReactiveWeakSet", () => {
-	describe("basic functionality", () => {
-		it("should create a reactive WeakSet wrapper", () => {
+describe('ReactiveWeakSet', () => {
+	describe('basic functionality', () => {
+		it('should create a reactive WeakSet wrapper', () => {
 			const ws = new WeakSet<object>()
 			const rws = new ReactiveWeakSet(ws)
 			expect(rws).toBeInstanceOf(ReactiveWeakSet)
 			expect(rws).toBeInstanceOf(WeakSet)
 		})
 
-		it("should work with reactive() function", () => {
+		it('should work with reactive() function', () => {
 			const ws = new WeakSet<object>()
 			const rws = reactive(ws)
 			expect(rws).toBeInstanceOf(WeakSet)
@@ -19,8 +19,8 @@ describe("ReactiveWeakSet", () => {
 		})
 	})
 
-	describe("reactive operations", () => {
-		it("should track dependencies when checking existence", () => {
+	describe('reactive operations', () => {
+		it('should track dependencies when checking existence', () => {
 			const ws = new WeakSet<object>()
 			const rws = new ReactiveWeakSet(ws)
 			const key = { id: 1 }
@@ -38,7 +38,7 @@ describe("ReactiveWeakSet", () => {
 			expect(count).toBe(3)
 		})
 
-		it("should not trigger when deleting non-existent keys", () => {
+		it('should not trigger when deleting non-existent keys', () => {
 			const ws = new WeakSet<object>()
 			const rws = new ReactiveWeakSet(ws)
 			const key = { id: 1 }
@@ -55,25 +55,25 @@ describe("ReactiveWeakSet", () => {
 		})
 	})
 
-	describe("toStringTag", () => {
-		it("should have correct toStringTag", () => {
+	describe('toStringTag', () => {
+		it('should have correct toStringTag', () => {
 			const ws = new WeakSet<object>()
 			const rws = new ReactiveWeakSet(ws)
-			expect(rws[Symbol.toStringTag]).toBe("ReactiveWeakSet")
+			expect(rws[Symbol.toStringTag]).toBe('ReactiveWeakSet')
 		})
 	})
 })
 
-describe("ReactiveSet", () => {
-	describe("basic functionality", () => {
-		it("should create a reactive Set wrapper", () => {
+describe('ReactiveSet', () => {
+	describe('basic functionality', () => {
+		it('should create a reactive Set wrapper', () => {
 			const s = new Set<number>()
 			const rs = new ReactiveSet(s)
 			expect(rs).toBeInstanceOf(ReactiveSet)
 			expect(rs).toBeInstanceOf(Set)
 		})
 
-		it("should work with reactive() function", () => {
+		it('should work with reactive() function', () => {
 			const s = new Set<number>()
 			const rs = reactive(s)
 			expect(rs).toBeInstanceOf(Set)
@@ -81,8 +81,8 @@ describe("ReactiveSet", () => {
 		})
 	})
 
-	describe("reactive operations", () => {
-		it("should track size dependencies", () => {
+	describe('reactive operations', () => {
+		it('should track size dependencies', () => {
 			const s = new Set<number>()
 			const rs = new ReactiveSet(s)
 
@@ -97,7 +97,7 @@ describe("ReactiveSet", () => {
 			expect(count).toBe(2)
 		})
 
-		it("should track dependencies when checking existence", () => {
+		it('should track dependencies when checking existence', () => {
 			const s = new Set<number>()
 			const rs = new ReactiveSet(s)
 			rs.add(1)
@@ -115,7 +115,7 @@ describe("ReactiveSet", () => {
 			expect(count).toBe(2)
 		})
 
-		it("should trigger effects when adding new values", () => {
+		it('should trigger effects when adding new values', () => {
 			const s = new Set<number>()
 			const rs = new ReactiveSet(s)
 
@@ -130,7 +130,7 @@ describe("ReactiveSet", () => {
 			expect(count).toBe(2)
 		})
 
-		it("should trigger effects when deleting values", () => {
+		it('should trigger effects when deleting values', () => {
 			const s = new Set<number>()
 			const rs = new ReactiveSet(s)
 			rs.add(1)
@@ -146,7 +146,7 @@ describe("ReactiveSet", () => {
 			expect(count).toBe(2)
 		})
 
-		it("should not trigger effects when deleting non-existent values", () => {
+		it('should not trigger effects when deleting non-existent values', () => {
 			const s = new Set<number>()
 			const rs = new ReactiveSet(s)
 
@@ -162,8 +162,8 @@ describe("ReactiveSet", () => {
 		})
 	})
 
-	describe("allProps reactivity", () => {
-		it("should trigger allProps effects when adding values", () => {
+	describe('allProps reactivity', () => {
+		it('should trigger allProps effects when adding values', () => {
 			const s = new Set<number>()
 			const rs = new ReactiveSet(s)
 
@@ -171,7 +171,8 @@ describe("ReactiveSet", () => {
 			effect(() => {
 				allPropsCount++
 				// Use iteration to depend on all entries
-				for (const _v of rs.entries()) {}
+				for (const _v of rs.entries()) {
+				}
 			})
 
 			expect(allPropsCount).toBe(1)
@@ -181,7 +182,7 @@ describe("ReactiveSet", () => {
 			expect(allPropsCount).toBe(3)
 		})
 
-		it("should trigger allProps effects when deleting values", () => {
+		it('should trigger allProps effects when deleting values', () => {
 			const s = new Set<number>()
 			const rs = new ReactiveSet(s)
 			rs.add(1)
@@ -200,7 +201,7 @@ describe("ReactiveSet", () => {
 			expect(allPropsCount).toBe(3)
 		})
 
-		it("should trigger allProps effects when clearing", () => {
+		it('should trigger allProps effects when clearing', () => {
 			const s = new Set<number>()
 			const rs = new ReactiveSet(s)
 			rs.add(1)
@@ -225,8 +226,8 @@ describe("ReactiveSet", () => {
 		})
 	})
 
-	describe("iteration methods", () => {
-		it("should track allProps for entries()", () => {
+	describe('iteration methods', () => {
+		it('should track allProps for entries()', () => {
 			const rs = new ReactiveSet(new Set<number>())
 
 			let count = 0
@@ -240,7 +241,7 @@ describe("ReactiveSet", () => {
 			expect(count).toBe(2)
 		})
 
-		it("should track allProps for forEach()", () => {
+		it('should track allProps for forEach()', () => {
 			const rs = new ReactiveSet(new Set<number>())
 
 			let count = 0
@@ -254,18 +255,28 @@ describe("ReactiveSet", () => {
 			expect(count).toBe(2)
 		})
 
-		it("should track allProps for keys() and values() and iterator", () => {
+		it('should track allProps for keys() and values() and iterator', () => {
 			const rs = new ReactiveSet(new Set<number>())
 
 			let countKeys = 0
 			let countValues = 0
 			let countIter = 0
-		
-effect(() => { countKeys++; rs.keys() })
-		
-effect(() => { countValues++; rs.values() })
-		
-effect(() => { countIter++; for (const _v of rs) {} })
+
+			effect(() => {
+				countKeys++
+				rs.keys()
+			})
+
+			effect(() => {
+				countValues++
+				rs.values()
+			})
+
+			effect(() => {
+				countIter++
+				for (const _v of rs) {
+				}
+			})
 
 			expect(countKeys).toBe(1)
 			expect(countValues).toBe(1)
@@ -278,28 +289,34 @@ effect(() => { countIter++; for (const _v of rs) {} })
 		})
 	})
 
-	describe("seamless reactive integration", () => {
-		it("should automatically create ReactiveSet when using reactive() on native Set", () => {
+	describe('seamless reactive integration', () => {
+		it('should automatically create ReactiveSet when using reactive() on native Set', () => {
 			const nativeSet = new Set([1, 2])
 			const rs = reactive(nativeSet)
 			expect(rs).toBeInstanceOf(ReactiveSet)
 			expect(rs.size).toBe(2)
 			// dependency tracking
 			let count = 0
-			effect(() => { count++; rs.has(1) })
+			effect(() => {
+				count++
+				rs.has(1)
+			})
 			expect(count).toBe(1)
 			rs.delete(1)
 			expect(count).toBe(2)
 		})
 
-		it("should automatically create ReactiveWeakSet when using reactive() on native WeakSet", () => {
+		it('should automatically create ReactiveWeakSet when using reactive() on native WeakSet', () => {
 			const k = { id: 1 }
 			const native = new WeakSet([k])
 			const rws = reactive(native)
 			expect(rws).toBeInstanceOf(ReactiveWeakSet)
 
 			let count = 0
-			effect(() => { count++; rws.has(k) })
+			effect(() => {
+				count++
+				rws.has(k)
+			})
 			expect(count).toBe(1)
 			rws.delete(k)
 			expect(count).toBe(2)

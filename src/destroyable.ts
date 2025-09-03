@@ -1,9 +1,12 @@
+// TODO: integrate with `with` keyword ?
 const fr = new FinalizationRegistry<() => void>((f) => f())
 export const destructor = Symbol('destructor')
 export const allocatedValues = Symbol('allocated')
 export class DestructionError extends Error {
 	static throw<T = void>(msg: string) {
-		return ()=> {throw new DestructionError(msg)}
+		return () => {
+			throw new DestructionError(msg)
+		}
 	}
 	constructor(msg: string) {
 		super('Object is destroyed')
@@ -33,33 +36,35 @@ export function Destroyable<
 	destructorObj: Destructor<Allocated>
 ): (new (
 	...args: ConstructorParameters<T>
-) => InstanceType<T> & {[allocatedValues]: Allocated}) & {
+) => InstanceType<T> & { [allocatedValues]: Allocated }) & {
 	destroy(obj: InstanceType<T>): boolean
 	isDestroyable(obj: InstanceType<T>): boolean
 }
 
 export function Destroyable<Allocated extends Record<PropertyKey, any> = Record<PropertyKey, any>>(
 	destructorObj: Destructor<Allocated>
-): (new () => {[allocatedValues]: Allocated}) & {
+): (new () => { [allocatedValues]: Allocated }) & {
 	destroy(obj: any): boolean
 	isDestroyable(obj: any): boolean
 }
 
 export function Destroyable<
-	T extends new (...args: any[]) => any,
-	Allocated extends Record<PropertyKey, any> = Record<PropertyKey, any>
+	T extends new (
+		...args: any[]
+	) => any,
+	Allocated extends Record<PropertyKey, any> = Record<PropertyKey, any>,
 >(
 	base: T
 ): (new (
 	...args: ConstructorParameters<T>
-) => AbstractDestroyable<Allocated> & InstanceType<T> & {[allocatedValues]: Allocated}) & {
+) => AbstractDestroyable<Allocated> & InstanceType<T> & { [allocatedValues]: Allocated }) & {
 	destroy(obj: InstanceType<T>): boolean
 	isDestroyable(obj: InstanceType<T>): boolean
 }
 
 export function Destroyable<
 	Allocated extends Record<PropertyKey, any> = Record<PropertyKey, any>,
->(): abstract new () => (AbstractDestroyable<Allocated> & {[allocatedValues]: Allocated}) & {
+>(): abstract new () => (AbstractDestroyable<Allocated> & { [allocatedValues]: Allocated }) & {
 	destroy(obj: any): boolean
 	isDestroyable(obj: any): boolean
 }
@@ -101,10 +106,10 @@ export function Destroyable<
 		readonly [allocatedValues]: Allocated
 		constructor(...args: any[]) {
 			super(...args)
-			const allocated = this[allocatedValues] = {} as Allocated
+			const allocated = (this[allocatedValues] = {} as Allocated)
 			// @ts-expect-error `this` is an AbstractDestroyable
 			const myDestructor = destructorObj?.destructor ?? this[destructor]
-			if(!myDestructor) {
+			if (!myDestructor) {
 				throw new DestructionError('Destructor is not defined')
 			}
 			function destruction() {
@@ -122,10 +127,12 @@ export function allocated<Allocated extends Record<PropertyKey, any>>(
 	propertyKey: PropertyKey
 ) {
 	const forwarding = target as { [forwardProperties]?: PropertyKey[] }
-	if(!forwarding[forwardProperties]) {
+	if (!forwarding[forwardProperties]) {
 		forwarding[forwardProperties] = []
 		//const superConstructor = Object.getPrototypeOf(target).constructor
-		forwarding.constructor = function () {debugger}
+		forwarding.constructor = () => {
+			debugger
+		}
 	}
 	forwarding[forwardProperties].push(propertyKey)
 	// Make a get/set accessor that stores the value in the allocated object
@@ -135,6 +142,6 @@ export function allocated<Allocated extends Record<PropertyKey, any>>(
 		},
 		set: function (this: any, value: any) {
 			this[allocatedValues][propertyKey] = value
-		}
+		},
 	})
 }

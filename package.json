@@ -1,5 +1,6 @@
 {
   "name": "mutts",
+  "description": "Modern UTility TS: A collection of TypeScript utilities",
   "version": "1.0.0",
   "main": "src/index.ts",
   "scripts": {
@@ -10,7 +11,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "typescript": "^5.8.3"
   },

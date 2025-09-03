@@ -1,4 +1,4 @@
-const Events = Symbol("events")
+const Events = Symbol('events')
 export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 	constructor() {
 		Object.defineProperty(this, Events, {
@@ -13,9 +13,9 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 	public on<EventType extends keyof Events>(event: EventType, cb: Events[EventType]): () => void
 	public on<EventType extends keyof Events>(
 		eventOrEvents: EventType | Partial<Events>,
-		cb?: Events[EventType],
+		cb?: Events[EventType]
 	): () => void {
-		if (typeof eventOrEvents === "object") {
+		if (typeof eventOrEvents === 'object') {
 			for (const e of Object.keys(eventOrEvents) as (keyof Events)[]) {
 				this.on(e, eventOrEvents[e]!)
 			}
@@ -34,9 +34,9 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 	public off<EventType extends keyof Events>(event: EventType, cb?: Events[EventType]): void
 	public off<EventType extends keyof Events>(
 		eventOrEvents: EventType | Partial<Events>,
-		cb?: Events[EventType],
+		cb?: Events[EventType]
 	): void {
-		if (typeof eventOrEvents === "object") {
+		if (typeof eventOrEvents === 'object') {
 			for (const e of Object.keys(eventOrEvents) as (keyof Events)[]) {
 				this.off(e, eventOrEvents[e])
 			}
@@ -45,7 +45,7 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 			if (callbacks) {
 				this[Events].set(
 					eventOrEvents,
-					callbacks.filter((c) => c !== cb),
+					callbacks.filter((c) => c !== cb)
 				)
 			}
 		}
