@@ -9,11 +9,14 @@ export {
 	reactive,
 	unwrap,
 	Reactive,
-	type UnwatchFunction
+	type ScopedCallback
 } from "./core"
 
 import { ReactiveWeakMap, ReactiveMap } from "./map"
+import { ReactiveWeakSet, ReactiveSet } from "./set"
 import { registerNativeReactivity } from "./core"
 
 registerNativeReactivity(WeakMap, ReactiveWeakMap)
 registerNativeReactivity(Map, ReactiveMap)
+registerNativeReactivity(WeakSet, ReactiveWeakSet)
+registerNativeReactivity(Set, ReactiveSet)

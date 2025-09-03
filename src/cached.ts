@@ -1,5 +1,6 @@
 // In order to avoid async re-entrance, we could use zone.js or something like that.
 const syncCalculating: { object: object; prop: PropertyKey }[] = []
+// TODO: stage3 decorators
 export function cached(_target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) {
 	const original = descriptor.get
 	if (!original) {

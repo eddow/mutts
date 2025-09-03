@@ -6,6 +6,7 @@ import {
 	reactive,
 	unwrap,
 	unreactive,
+	computed
 } from "./core"
 
 describe("reactive", () => {
@@ -657,18 +658,6 @@ describe("non-reactive functionality", () => {
 			expect(reactive(error)).toBe(error)
 			expect(isReactive(error)).toBe(false)
 		})
-
-		it("should not make Set objects reactive", () => {
-			const set = new Set([1, 2, 3])
-			expect(reactive(set)).toBe(set)
-			expect(isReactive(set)).toBe(false)
-		})
-
-		it("should not make WeakSet objects reactive", () => {
-			const weakSet = new WeakSet()
-			expect(reactive(weakSet)).toBe(weakSet)
-			expect(isReactive(weakSet)).toBe(false)
-		})
 	})
 
 	describe("integration with existing reactive system", () => {
@@ -1058,5 +1047,90 @@ describe("@unreactive decorator", () => {
 			delete reactiveInstance.reactiveProp
 			expect(effectCount).toBe(2)
 		})
+	})
+})
+
+describe("effect reaction result", () => {
+	it("should pass the effect result to the reaction on initial and subsequent runs", () => {
+		const state = reactive({ a: 1, b: 2 })
+
+		const received: number[] = []
+		const unwatch = effect(() => {
+			// effect returns a value derived from dependencies
+			return state.a + state.b
+		}, (sum) => {
+			received.push(sum)
+			return undefined
+		})
+
+		// initial run
+		expect(received).toEqual([3])
+
+		// update triggers rerun and new result
+		state.a = 5
+		expect(received).toEqual([3, 7])
+
+		// another update
+		state.b = 10
+		expect(received).toEqual([3, 7, 15])
+
+		unwatch()
+	})
+})
+
+describe("effect reaction cleanup", () => {
+	it("should run previous reaction cleanup before the next reaction on change", () => {
+		const state = reactive({ v: 1 })
+
+		const calls: string[] = []
+		effect(() => {
+			return state.v
+		}, (val) => {
+			calls.push(`reaction:${val}`)
+			return () => calls.push(`cleanup:${val}`)
+		})
+
+		// initial
+		expect(calls).toEqual(["reaction:1"]) // no cleanup yet
+
+		state.v = 2
+		// cleanup for 1 must run before reaction for 2
+		expect(calls).toEqual(["reaction:1", "cleanup:1", "reaction:2"]) 
+
+		state.v = 3
+		expect(calls).toEqual(["reaction:1", "cleanup:1", "reaction:2", "cleanup:2", "reaction:3"]) 
+	})
+})
+
+describe("computed", () => {
+	it("returns computed value and caches it", () => {
+		const state = reactive({ a: 1, b: 2 })
+		let runs = 0
+		const getter = () => { runs++; return state.a + state.b }
+
+		const v1 = computed(getter)
+		expect(v1).toBe(3)
+		expect(runs).toBe(1)
+
+		const v2 = computed(getter)
+		expect(v2).toBe(3)
+		// still cached, no re-run
+		expect(runs).toBe(1)
+	})
+
+	it("recomputes after a dependency change (at least once)", () => {
+		const state = reactive({ a: 1, b: 2 })
+		let runs = 0
+		const getter = () => { runs++; return state.a + state.b }
+
+		// initial compute
+		expect(computed(getter)).toBe(3)
+		expect(runs).toBe(1)
+
+		// mutate dependency -> internal effect should refresh cache once
+		state.a = 5
+		expect(computed(getter)).toBe(7)
+		// getter should have run again exactly once
+		expect(runs).toBe(2)
 	})
 })

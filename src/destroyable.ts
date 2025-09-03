@@ -97,6 +97,7 @@ export function Destroyable<
 			return Destroyable.destructors.has(obj)
 		}
 
+		declare [forwardProperties]: PropertyKey[]
 		readonly [allocatedValues]: Allocated
 		constructor(...args: any[]) {
 			super(...args)
@@ -134,6 +135,6 @@ export function allocated<Allocated extends Record<PropertyKey, any>>(
 		},
 		set: function (this: any, value: any) {
 			this[allocatedValues][propertyKey] = value
-		},
+		}
 	})
 }

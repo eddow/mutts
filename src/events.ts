@@ -1,5 +1,14 @@
+const Events = Symbol("events")
 export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
-	protected readonly events = new Map<PropertyKey, ((...args: any[]) => void)[]>()
+	constructor() {
+		Object.defineProperty(this, Events, {
+			...Object.getOwnPropertyDescriptor(Eventful.prototype, Events)!,
+			enumerable: false,
+			writable: false,
+			configurable: false,
+		})
+	}
+	protected readonly [Events] = new Map<PropertyKey, ((...args: any[]) => void)[]>()
 	public on(events: Partial<Events>): void
 	public on<EventType extends keyof Events>(event: EventType, cb: Events[EventType]): () => void
 	public on<EventType extends keyof Events>(
@@ -11,10 +20,10 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 				this.on(e, eventOrEvents[e]!)
 			}
 		} else if (cb !== undefined) {
-			let callbacks = this.events.get(eventOrEvents)
+			let callbacks = this[Events].get(eventOrEvents)
 			if (!callbacks) {
 				callbacks = []
-				this.events.set(eventOrEvents, callbacks)
+				this[Events].set(eventOrEvents, callbacks)
 			}
 			callbacks.push(cb)
 		}
@@ -32,9 +41,9 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 				this.off(e, eventOrEvents[e])
 			}
 		} else if (cb !== null && cb !== undefined) {
-			const callbacks = this.events.get(eventOrEvents)
+			const callbacks = this[Events].get(eventOrEvents)
 			if (callbacks) {
-				this.events.set(
+				this[Events].set(
 					eventOrEvents,
 					callbacks.filter((c) => c !== cb),
 				)
@@ -45,7 +54,7 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 		event: EventType,
 		...args: Parameters<Events[EventType]>
 	) {
-		const callbacks = this.events.get(event)
+		const callbacks = this[Events].get(event)
 		if (callbacks)
 			for (const cb of callbacks) {
 				cb(...args)
