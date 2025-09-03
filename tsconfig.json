@@ -1,0 +1,20 @@
+{
+	"compilerOptions": {
+		"moduleResolution": "Node",
+		"target": "ESNext",
+		"module": "ESNext",
+		"lib": ["ESNext", "DOM"],
+		"declaration": false,
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true,
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"baseUrl": ".",
+		"paths": {
+			"tslib": ["./node_modules/tslib/tslib.d.ts"],
+			"~/*": ["./packages/*"]
+		}
+	}
+}

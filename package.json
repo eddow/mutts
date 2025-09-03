@@ -1,0 +1,24 @@
+{
+  "name": "mutts",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "node --expose-gc node_modules/.bin/jest",
+    "biome": "biome check --write src",
+    "dev": "tsx watch src/promiseChain.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "typescript": "^5.8.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.6",
+    "@types/jest": "^30.0.0",
+    "jest": "^30.0.4",
+    "ts-jest": "^29.4.0",
+    "tsx": "^4.20.4"
+  }
+}
