@@ -13,7 +13,8 @@ export {
 	type ScopedCallback,
 	unreactive,
 	unwrap,
-	touched
+	touched,
+	watch
 } from './core'
 
 import { ReactiveArray } from './array'

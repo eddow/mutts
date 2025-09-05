@@ -2,7 +2,7 @@ export type DependencyFunction = <T>(cb: () => T) => T
 
 // TODO: doc: effect is re-enterable
 
-export type EffectFunction = (dep: DependencyFunction, ...args: any[]) => void
+export type EffectFunction<Args extends any[] = any[], Return = void> = (dep: DependencyFunction, ...args: Args) => Return
 export type ScopedCallback = () => void
 
 export type PropEvolution = {
@@ -91,8 +91,8 @@ export const options = {
 		Set: true,
 		WeakMap: true,
 		WeakSet: true,
-	} as const,
-} as const
+	},
+}
 
 //#region nonReactive
 
@@ -242,21 +242,23 @@ export function dependant(obj: any, prop: any) {
 const plannedEffects = new Set<ScopedCallback>()
 function hasEffect(effect: ScopedCallback) {
 	plannedEffects.add(effect)
-	let effectCount = 0
+	const runEffects: any[] = []
 	if (!activeEffect) {
 		try {
 			while (plannedEffects.size) {
-				if (effectCount > options.maxEffectChain)
+				if (runEffects.length > options.maxEffectChain)
 					throw new ReactiveError('[reactive] Max effect chain reached')
-				effectCount++
 				const effect = plannedEffects.values().next().value!
+				runEffects.push(effect)
 				effect()
 				plannedEffects.delete(effect)
 			}
 		} finally {
 			plannedEffects.clear()
 		}
-	} else options?.chain(activeEffect, effect)
+	} else
+		// @ts-expect-error - original given function for debugging
+		options?.chain(activeEffect.original, effect. original)
 }
 
 export function touched(obj: any, prop: any, evolution?: Evolution) {
@@ -289,7 +291,7 @@ const reactiveHandlers = {
 			if (specificAccessors in obj && prop in obj[specificAccessors])
 				return obj[specificAccessors][prop].get(receiver)
 			// For unreactive properties, bypass reactivity entirely
-			if (!(prop in obj)) return undefined
+			if (!(prop in obj)) return obj[prop]
 			let browser = obj
 			let pD = Object.getOwnPropertyDescriptor(browser, prop)
 			while (!pD && browser !== Object.prototype) {
@@ -304,7 +306,7 @@ const reactiveHandlers = {
 		if (!options.instanceMembers || Object.hasOwn(receiver, prop) || absent)
 			dependant(obj, prop)
 		if(typeof prop === 'number') return obj[prop]
-		if (absent) return undefined
+		if (absent) return obj[prop]
 		return reactive(get())
 	},
 	set(obj: any, prop: PropertyKey, value: any, receiver: any): boolean {
@@ -367,6 +369,15 @@ function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T): T {
 }
 
 export function reactive<T>(anyTarget: T): T {
+	/*if(typeof anyTarget === 'function') { // Stage 3 decorator and legacy decorator
+		// @ts-expect-error - decorator, so `anyTarget` is the base class constructor
+		return class extends anyTarget {
+			constructor(...args: any[]) {
+				super(...args)
+				return reactive(this)
+			}
+		}
+	}*/
 	const target = anyTarget as any
 	// If target is already a proxy, return it
 	if (proxyToObject.has(target) || isNonReactive(target)) return target as T
@@ -455,6 +466,7 @@ export function effect<Args extends any[]>(
 			}
 		}
 	}
+	Object.defineProperty(runEffect, 'original', { value: fn })
 
 	// Run the effect immediately
 	runEffect()
@@ -465,6 +477,21 @@ export function effect<Args extends any[]>(
 			cleanup = null
 		}
 	}
+}
+const unsetYet = Symbol('unset-yet')
+export function watch<T, Args extends any[]>(
+	value: (dep: DependencyFunction, ...args: Args) => T,
+	changed: (value: T, oldValue?: T) => void, ...args: Args
+) {
+	let oldValue: T | typeof unsetYet = unsetYet
+	return effect((dep) => {
+		const newValue = value(dep, ...args)
+		if(oldValue !== newValue) {
+			if (oldValue === unsetYet) changed(newValue)
+			else changed(newValue, oldValue)
+			oldValue = newValue
+		}
+	})
 }
 
 // TODO: Note - and in the documentation, that `Reactive` must be the last mixin applied!

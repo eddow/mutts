@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --expose-gc node_modules/.bin/jest",
     "biome": "biome check --write src",
-    "dev": "tsx watch src/promiseChain.ts"
+    "stage3": "tsx --tsconfig tsconfig.stage3.json src/decorator.ts",
+    "legacy": "tsx --tsconfig tsconfig.json src/decorator.ts"
   },
   "keywords": [],
   "author": "",

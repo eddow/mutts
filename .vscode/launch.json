@@ -1,0 +1,26 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Run Decorator (Legacy)",
+			"type": "node",
+			"request": "launch",
+			"program": "${workspaceFolder}/node_modules/.bin/tsx",
+			"args": ["src/decorator.ts"],
+			"console": "integratedTerminal",
+			"cwd": "${workspaceFolder}",
+			"env": {
+				"TS_NODE_PROJECT": "tsconfig.json"
+			}
+		},
+		{
+			"name": "Run Decorator (Stage 3)",
+			"type": "node",
+			"request": "launch",
+			"program": "${workspaceFolder}/node_modules/.bin/tsx",
+			"args": ["--tsconfig", "tsconfig.stage3.json", "src/decorator.ts"],
+			"console": "integratedTerminal",
+			"cwd": "${workspaceFolder}"
+		}
+	]
+}
