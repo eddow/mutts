@@ -1,5 +1,9 @@
 # Reactive Documentation
 
+### TODOcument
+
+- symbol-key properties are not reactive
+
 ## Table of Contents
 
 1. [Introduction](#introduction)
@@ -9,12 +13,13 @@
 5. [Advanced Effects](#advanced-effects)
 6. [Evolution Tracking](#evolution-tracking)
 7. [Collections](#collections)
-8. [Class Reactivity](#class-reactivity)
-9. [Non-Reactive System](#non-reactive-system)
-10. [Computed Properties](#computed-properties)
-11. [Advanced Patterns](#advanced-patterns)
-12. [Debugging and Development](#debugging-and-development)
-13. [API Reference](#api-reference)
+8. [ReactiveArray](#reactivearray)
+9. [Class Reactivity](#class-reactivity)
+10. [Non-Reactive System](#non-reactive-system)
+11. [Computed Properties](#computed-properties)
+12. [Advanced Patterns](#advanced-patterns)
+13. [Debugging and Development](#debugging-and-development)
+14. [API Reference](#api-reference)
 
 ## Introduction
 
@@ -28,7 +33,7 @@ Reactivity is a programming paradigm where the system automatically tracks depen
 - **Effects**: Functions that automatically re-run when their dependencies change
 - **Dependencies**: Reactive properties that an effect depends on
 - **Evolution Tracking**: Built-in change history for reactive objects
-- **Collections**: Reactive wrappers for Map, Set, WeakMap, and WeakSet
+- **Collections**: Reactive wrappers for Array, Map, Set, WeakMap, and WeakSet
 
 ### Basic Example
 
@@ -134,38 +139,45 @@ reactiveObj.count = 5 // Triggers effect
 Creates a reactive effect that automatically re-runs when dependencies change.
 
 ```typescript
-function effect<T>(
-    fn: (dep: DependencyFunction) => T,
-    reaction?: (param: T) => (ScopedCallback | undefined | void)
-): ScopedCallback
-
 function effect(
-    fn: (dep: DependencyFunction) => (ScopedCallback | undefined | void)
+    fn: (dep: DependencyFunction, ...args: any[]) => (ScopedCallback | undefined | void),
+    ...args: any[]
 ): ScopedCallback
 ```
 
 **Parameters:**
-- `fn`: The effect function that provides dependencies
-- `reaction` (optional): A function that runs after the effect, receiving the effect's return value
+- `fn`: The effect function that provides dependencies and may return a cleanup function
+- `...args`: Additional arguments that are forwarded to the effect function
 
 **Returns:** A cleanup function to stop the effect
 
 **Example:**
 ```typescript
-const state = reactive({ count: 0, mood = 'happy' })
+const state = reactive({ count: 0, mood: 'happy' })
 
 const cleanup = effect(() => {
     console.log(`Count is: ${state.count}`)
-    return `Processed count: ${state.count}`
-}, (result) => {
-    console.log('Effect result:', result, ' while being ', state.mood)
+    // Optional cleanup called before next run
     return () => console.log('Cleaning up...')
 })
 
-state.mood = 'surprised' // Will not trigger any effect
+state.count++   // Does trigger: 1- the cleaning, 2- the effect
+state.mood = 'surprised' // Does not trigger the effect
 
 // Later...
 cleanup() // Stops the effect
+```
+
+**Using effect with arguments (useful in loops):**
+```typescript
+const items = reactive([{ id: 1 }, { id: 2 }, { id: 3 }])
+
+// Create effects in a loop, passing loop variables
+for (let i = 0; i < items.length; i++) {
+    effect((dep, index) => {
+        console.log(`Item ${index}:`, items[index])
+    }, i) // Pass the loop variable as argument
+}
 ```
 
 ### `unwrap()`
@@ -256,28 +268,64 @@ state.b = 10 // Triggers effect
 state.c = 15 // Does NOT trigger effect
 ```
 
-### Nested Effects Prevention
+### Nested Effects
 
-The system prevents nested effects to avoid infinite loops and complex dependency graphs.
+Effects can be created inside other effects and will have separate effect scopes:
 
 ```typescript
-const state = reactive({ count: 0 })
+import { effect, reactive } from './reactive'
+
+const state = reactive({ a: 0, b: 0 })
+
+const stopOuter = effect(() => {
+    state.a
+
+    // Create an inner effect with its own scope
+    const stopInner = effect(() => {
+        state.b
+    })
+
+    // Return cleanup function for the inner effect
+    return stopInner
+})
+```
+
+### `untracked()`
+
+The `untracked()` function allows you to run code without tracking dependencies, which can be useful for creating effects or performing operations that shouldn't be part of the current effect's dependency graph.
+
+```typescript
+import { effect, untracked, reactive } from './reactive'
+
+const state = reactive({ a: 0, b: 0 })
 
 effect(() => {
-    // This will throw an error
-    effect(() => {
-        console.log(state.count)
+    state.a
+
+    // Create an inner effect without tracking the creation under the outer effect
+    let stopInner: (() => void) | undefined
+    untracked(() => {
+        stopInner = effect(() => {
+            state.b
+        })
     })
+
+    // Optionally stop it immediately to avoid accumulating watchers
+    stopInner && stopInner()
 })
-// Error: "Nested effects are not allowed"
 ```
+
+**Use cases for `untracked()`:**
+- Creating effects inside other effects without coupling their dependencies
+- Performing side effects that shouldn't trigger when dependencies change
+- Avoiding circular dependencies in complex reactive systems
 
 ### Effect Options and debugging
 
 Configure the reactive system behavior:
 
 ```typescript
-import { reactiveOptions } from './reactive'
+import { options as reactiveOptions } from './reactive'
 
 // Set maximum effect chain depth
 reactiveOptions.maxEffectChain = 50
@@ -290,24 +338,23 @@ reactiveOptions.chain = (caller, target) => console.log('Chaining:', caller, '->
 
 ## Advanced Effects
 
-### Effect Reactions
+### Recording Results inside Effects
 
-Effects can have reaction functions that run after the effect completes, receiving the effect's return value. They will not be reactive by themselves.
+If you want to capture derived values from an effect, push them from inside the effect body. Use the returned cleanup to manage resources between runs.
 
 ```typescript
-const state = reactive({ count: 0, mood: 'happy' })
+const state = reactive({ count: 0 })
+const results: number[] = []
 
-effect(() => {
-    return state.count * 2
-}, (result) => {
-    console.log('Effect result:', result)
+const stop = effect(() => {
+    results.push(state.count * 2)
     return () => {
-        console.log('Cleaning up reaction for result:', result, ' while being ', state.mood)
+        // cleanup between runs if needed
     }
 })
 
-state.count = 5 // Reaction runs, reaction receives 10
-state.mood = 'surprised'	// No effect run
+state.count = 5 // results: [0, 10]
+stop()
 ```
 
 ### Effect Cleanup Functions
@@ -358,6 +405,50 @@ state.count = 5
 stop() // Effect stops permanently
 ```
 
+### Effect Arguments
+
+Effects can accept additional arguments that are forwarded to the effect function. This is particularly useful in loops or when you need to pass context to the effect:
+
+```typescript
+const items = reactive([
+    { id: 1, name: 'Item 1' },
+    { id: 2, name: 'Item 2' },
+    { id: 3, name: 'Item 3' }
+])
+
+// Create effects for each item with the item index
+const effectCleanups: (() => void)[] = []
+
+for (let i = 0; i < items.length; i++) {
+    const cleanup = effect((dep, index) => {
+        console.log(`Item ${index}:`, items[index].name)
+        
+        // The index is captured in the closure and passed as argument
+        return () => console.log(`Cleaning up effect for item ${index}`)
+    }, i)
+    
+    effectCleanups.push(cleanup)
+}
+
+// Later, clean up all effects
+effectCleanups.forEach(cleanup => cleanup())
+```
+
+**Advanced use case - Dynamic effect creation:**
+```typescript
+const createItemEffect = (itemId: number) => {
+    return effect((dep, id) => {
+        console.log(`Tracking item ${id}`)
+        // Use the id parameter in the effect logic
+        
+        return () => console.log(`Stopped tracking item ${id}`)
+    }, itemId)
+}
+
+const item1Effect = createItemEffect(1)
+const item2Effect = createItemEffect(2)
+```
+
 ## Evolution Tracking
 
 ### Understanding Object Evolution
@@ -400,7 +491,7 @@ The system tracks different types of changes:
 - **`add`**: Property was added
 - **`set`**: Property value was changed
 - **`del`**: Property was deleted
-- **`clear`**: Collection was cleared
+- **`bunch`**: Collection operation (array methods, map/set operations)
 
 ```typescript
 const obj = reactive({ count: 0 })
@@ -421,6 +512,11 @@ effect(() => {
 obj.count = 5        // { type: 'set', prop: 'count' }
 obj.newProp = 'test' // { type: 'add', prop: 'newProp' }
 delete obj.count      // { type: 'del', prop: 'count' }
+
+// Array operations
+const array = reactive([1, 2, 3])
+array.push(4)        // { type: 'bunch', method: 'push' }
+array.reverse()      // { type: 'bunch', method: 'reverse' }
 ```
 
 ### Change History Patterns
@@ -571,6 +667,157 @@ effect(() => {
 map.set('key1', 'value1') // Triggers size and key1 effects
 map.set('key2', 'value2') // Triggers size and allProps effects
 map.delete('key1')         // Triggers size, key1, and allProps effects
+```
+
+## ReactiveArray
+
+### `ReactiveArray`
+
+A reactive wrapper around JavaScript's `Array` class with full array method support.
+
+```typescript
+const array = reactive([1, 2, 3])
+
+effect(() => {
+    console.log('Array length:', array.length)
+    console.log('First element:', array[0])
+})
+
+array.push(4)    // Triggers effect
+array[0] = 10    // Triggers effect
+```
+
+**Features:**
+- Tracks `length` changes
+- Tracks individual index operations
+- Tracks collection-wide operations via `allProps`
+- Supports all array methods with proper reactivity
+
+### Array Methods
+
+All standard array methods are supported with reactivity:
+
+```typescript
+const array = reactive([1, 2, 3])
+
+// Mutator methods
+array.push(4)           // Triggers length and allProps effects
+array.pop()             // Triggers length and allProps effects
+array.shift()           // Triggers length and allProps effects
+array.unshift(0)        // Triggers length and allProps effects
+array.splice(1, 1, 10)  // Triggers length and allProps effects
+array.reverse()         // Triggers allProps effects
+array.sort()            // Triggers allProps effects
+array.fill(0)           // Triggers allProps effects
+array.copyWithin(0, 2)  // Triggers allProps effects
+
+// Accessor methods (immutable)
+const reversed = array.toReversed()
+const sorted = array.toSorted()
+const spliced = array.toSpliced(1, 1)
+const withNew = array.with(0, 100)
+```
+
+### Index Access
+
+ReactiveArray supports both positive and negative index access:
+
+```typescript
+const array = reactive([1, 2, 3, 4, 5])
+
+effect(() => {
+    console.log('First element:', array[0])
+    console.log('Last element:', array.at(-1))
+})
+
+array[0] = 10     // Triggers effect
+array[4] = 50     // Triggers effect
+```
+
+### Length Reactivity
+
+The `length` property is fully reactive:
+
+```typescript
+const array = reactive([1, 2, 3])
+
+effect(() => {
+    console.log('Array length:', array.length)
+})
+
+array.push(4)        // Triggers effect
+array.length = 2     // Triggers effect
+array[5] = 10        // Triggers effect (expands array)
+```
+
+### Array Evolution Tracking
+
+Array operations generate specific evolution events:
+
+```typescript
+const array = reactive([1, 2, 3])
+let state = getState(array)
+
+effect(() => {
+    while ('evolution' in state) {
+        console.log('Array change:', state.evolution)
+        state = state.next
+    }
+})
+
+array.push(4)        // { type: 'bunch', method: 'push' }
+array[0] = 10        // { type: 'set', prop: 0 }
+array[5] = 20        // { type: 'add', prop: 5 }
+```
+
+### Array-Specific Reactivity Patterns
+
+```typescript
+const array = reactive([1, 2, 3])
+
+// Track specific indices
+effect(() => {
+    console.log('First two elements:', array[0], array[1])
+})
+
+// Track length changes
+effect(() => {
+    console.log('Array size changed to:', array.length)
+})
+
+// Track all elements (via iteration)
+effect(() => {
+    for (const item of array) {
+        // This effect depends on allProps
+    }
+})
+
+// Track specific array methods
+effect(() => {
+    const lastElement = array.at(-1)
+    console.log('Last element:', lastElement)
+})
+```
+
+### Performance Considerations
+
+ReactiveArray is optimized for common array operations:
+
+```typescript
+// Efficient: Direct index access
+effect(() => {
+    console.log(array[0]) // Only tracks index 0
+})
+
+// Efficient: Length tracking
+effect(() => {
+    console.log(array.length) // Only tracks length
+})
+
+// Less efficient: Iteration tracks all elements
+effect(() => {
+    array.forEach(item => console.log(item)) // Tracks allProps
+})
 ```
 
 ## Class Reactivity
@@ -775,6 +1022,45 @@ effect(() => {
 config.apiUrl = 'https://new-api.example.com'
 config.timeout = 10000
 ```
+
+### Making Special Reactive Objects Non-Reactive
+
+Special reactive objects (Arrays, Maps, Sets, WeakMaps, WeakSets) can also be made non-reactive:
+
+```typescript
+// Make individual reactive collections non-reactive
+const array = reactive([1, 2, 3])
+unreactive(array) // array is no longer reactive
+
+const map = reactive(new Map([['key', 'value']]))
+unreactive(map) // map is no longer reactive
+
+const set = reactive(new Set([1, 2, 3]))
+unreactive(set) // set is no longer reactive
+```
+
+**Making reactive collection classes non-reactive:**
+
+```typescript
+// Make the entire ReactiveArray class non-reactive
+unreactive(ReactiveArray)
+
+// Now all ReactiveArray instances will be non-reactive
+const array = reactive([1, 2, 3]) // Returns non-reactive array
+const reactiveArray = new ReactiveArray([1, 2, 3]) // Non-reactive instance
+
+// Make other reactive collection classes non-reactive
+unreactive(ReactiveMap)
+unreactive(ReactiveSet)
+unreactive(ReactiveWeakMap)
+unreactive(ReactiveWeakSet)
+```
+
+**Use cases for non-reactive collections:**
+- Large datasets that don't need reactivity
+- Performance-critical operations
+- Static configuration data
+- Temporary data structures
 
 ### Performance Considerations
 
@@ -1018,7 +1304,7 @@ const largeMap = new ReactiveMap(new Map()) // For large collections with key ac
 Configure debug behavior:
 
 ```typescript
-import { reactiveOptions } from './reactive'
+import { options as reactiveOptions } from './reactive'
 
 // Track effect entry/exit
 reactiveOptions.enter = (effect) => {
@@ -1085,14 +1371,17 @@ delete obj.x
 
 **1. Nested Effects**
 ```typescript
-// ❌ This will throw an error
+// ✅ Nested effects are supported with separate scopes
 effect(() => {
-    effect(() => {
-        console.log('Nested effect')
+    const innerEffect = effect(() => {
+        console.log('Inner effect')
     })
+    
+    // Return cleanup function for the inner effect
+    return innerEffect
 })
 
-// ✅ Use separate effects instead
+// ✅ Or create effects separately
 const innerEffect = effect(() => {
     console.log('Inner effect')
 })
@@ -1165,8 +1454,9 @@ stop()
 ```typescript
 // Core functions
 function reactive<T extends Record<PropertyKey, any>>(target: T): T
-function effect<T>(fn: (dep: DependencyFunction) => T, reaction?: (param: T) => (ScopedCallback | undefined | void)): ScopedCallback
-function effect(fn: (dep: DependencyFunction) => (ScopedCallback | undefined | void)): ScopedCallback
+function effect<T>(fn: (dep: DependencyFunction, ...args: any[]) => T, reaction?: (param: T) => (ScopedCallback | undefined | void), ...args: any[]): ScopedCallback
+function effect(fn: (dep: DependencyFunction, ...args: any[]) => (ScopedCallback | undefined | void), ...args: any[]): ScopedCallback
+function untracked(fn: () => ScopedCallback | undefined | void): void
 function unwrap<T>(proxy: T): T
 function isReactive(obj: any): boolean
 function isNonReactive(obj: any): boolean
@@ -1185,6 +1475,7 @@ function computed(target: any, desc: PropertyKey, descriptor: PropertyDescriptor
 function computed(target: undefined, desc: ClassAccessorDecoratorContext): void
 
 // Collections
+class ReactiveArray extends Array
 class ReactiveMap<K, V> extends Map<K, V>
 class ReactiveWeakMap<K extends object, V> extends WeakMap<K, V>
 class ReactiveSet<T> extends Set<T>
@@ -1209,18 +1500,19 @@ type PropEvolution = {
     prop: any
 }
 
-type MapEvolution = {
-    type: 'clear'
+type BunchEvolution = {
+    type: 'bunch'
+    method: string
 }
 
-type Evolution = PropEvolution | MapEvolution
+type Evolution = PropEvolution | BunchEvolution
 
 type State = {
     evolution: Evolution
     next: State
 } | {}
 
-type DependencyFunction = (obj: any, prop: any) => void
+type DependencyFunction = <T>(cb: () => T) => T
 ```
 
 ### Configuration Options

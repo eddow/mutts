@@ -1,8 +1,8 @@
 export {
-	allProps,
 	computed,
 	type EffectFunction,
 	effect,
+	untracked,
 	getState,
 	isNonReactive,
 	isReactive,
@@ -13,6 +13,7 @@ export {
 	type ScopedCallback,
 	unreactive,
 	unwrap,
+	touched
 } from './core'
 
 import { ReactiveArray } from './array'

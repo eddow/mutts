@@ -1,8 +1,11 @@
-import { allProps, dependant, touched, unreactive } from './core'
+import { dependant, reactive, touched } from './core'
 
 const original = Symbol('original')
+const allProps = Symbol('all-props')
+// TODO: make a nuance anyProp vs allProp here too
+// TODO: [prototypeForwarding]
+
 export class ReactiveWeakMap<K extends object, V> extends WeakMap<K, V> {
-	@unreactive
 	declare readonly [original]: WeakMap<K, V>
 
 	constructor(originalMap: WeakMap<K, V>) {
@@ -26,7 +29,7 @@ export class ReactiveWeakMap<K extends object, V> extends WeakMap<K, V> {
 
 	get(key: K): V | undefined {
 		dependant(this[original], key)
-		return this[original].get(key)
+		return reactive(this[original].get(key))
 	}
 
 	has(key: K): boolean {
@@ -46,7 +49,6 @@ export class ReactiveWeakMap<K extends object, V> extends WeakMap<K, V> {
 }
 
 export class ReactiveMap<K, V> extends Map<K, V> {
-	@unreactive
 	declare readonly [original]: Map<K, V>
 
 	constructor(originalMap: Map<K, V>) {
@@ -69,7 +71,7 @@ export class ReactiveMap<K, V> extends Map<K, V> {
 		this[original].clear()
 
 		if (hadEntries) {
-			const evolution = { type: 'clear' } as const
+			const evolution = { type: 'bunch', method: 'clear' } as const
 			// Clear triggers all effects since all keys are affected
 			touched(this, 'size', evolution)
 			touched(this[original], allProps, evolution)
@@ -111,8 +113,8 @@ export class ReactiveMap<K, V> extends Map<K, V> {
 		if (hadKey) {
 			const evolution = { type: 'del', prop: key } as const
 			touched(this[original], key, evolution)
+			touched(this[original], allProps)
 			touched(this, 'size', evolution)
-			touched(this[original], allProps, evolution)
 		}
 
 		return result
@@ -120,7 +122,7 @@ export class ReactiveMap<K, V> extends Map<K, V> {
 
 	get(key: K): V | undefined {
 		dependant(this[original], key)
-		return this[original].get(key)
+		return reactive(this[original].get(key))
 	}
 
 	has(key: K): boolean {
@@ -136,8 +138,8 @@ export class ReactiveMap<K, V> extends Map<K, V> {
 		if (!hadKey || oldValue !== value) {
 			const evolution = { type: hadKey ? 'set' : 'add', prop: key } as const
 			touched(this[original], key, evolution)
+			touched(this[original], allProps)
 			touched(this, 'size', evolution)
-			touched(this[original], allProps, evolution)
 		}
 
 		return this

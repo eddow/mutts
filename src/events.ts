@@ -1,14 +1,28 @@
-const Events = Symbol('events')
+const events = Symbol('events')
+const hooks = Symbol('hooks')
 export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 	constructor() {
-		Object.defineProperty(this, Events, {
-			...Object.getOwnPropertyDescriptor(Eventful.prototype, Events)!,
+		Object.defineProperty(this, events, {
+			...Object.getOwnPropertyDescriptor(Eventful.prototype, events)!,
 			enumerable: false,
 			writable: false,
 			configurable: false,
 		})
 	}
-	protected readonly [Events] = new Map<PropertyKey, ((...args: any[]) => void)[]>()
+	protected readonly [events] = new Map<keyof Events, ((...args: any[]) => void)[]>()
+	protected readonly [hooks] = [] as ((...args: any[]) => void)[]
+
+	public hook(
+		cb: <EventType extends keyof Events>(event: EventType, ...args: Parameters<Events[EventType]>) => void
+	): () => void {
+		if(!this[hooks].includes(cb))
+			this[hooks].push(cb)
+		return () => {
+			this[hooks].splice(this[hooks].indexOf(cb), 1)
+		}
+	}
+
+
 	public on(events: Partial<Events>): void
 	public on<EventType extends keyof Events>(event: EventType, cb: Events[EventType]): () => void
 	public on<EventType extends keyof Events>(
@@ -20,10 +34,10 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 				this.on(e, eventOrEvents[e]!)
 			}
 		} else if (cb !== undefined) {
-			let callbacks = this[Events].get(eventOrEvents)
+			let callbacks = this[events].get(eventOrEvents)
 			if (!callbacks) {
 				callbacks = []
-				this[Events].set(eventOrEvents, callbacks)
+				this[events].set(eventOrEvents, callbacks)
 			}
 			callbacks.push(cb)
 		}
@@ -41,9 +55,9 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 				this.off(e, eventOrEvents[e])
 			}
 		} else if (cb !== null && cb !== undefined) {
-			const callbacks = this[Events].get(eventOrEvents)
+			const callbacks = this[events].get(eventOrEvents)
 			if (callbacks) {
-				this[Events].set(
+				this[events].set(
 					eventOrEvents,
 					callbacks.filter((c) => c !== cb)
 				)
@@ -54,10 +68,11 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 		event: EventType,
 		...args: Parameters<Events[EventType]>
 	) {
-		const callbacks = this[Events].get(event)
+		const callbacks = this[events].get(event)
 		if (callbacks)
-			for (const cb of callbacks) {
+			for (const cb of callbacks)
 				cb(...args)
-			}
+		for (const cb of this[hooks])
+			cb(event, ...args)
 	}
 }

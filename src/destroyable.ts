@@ -13,10 +13,11 @@ export class DestructionError extends Error {
 		this.name = 'DestroyedAccessError'
 	}
 }
-const destroyedHandler: ProxyHandler<any> = {
+const destroyedHandler = {
+	[Symbol.toStringTag]: 'MutTs Destroyable',
 	get: DestructionError.throw('Cannot access destroyed object'),
 	set: DestructionError.throw('Cannot access destroyed object'),
-}
+} as const
 
 abstract class AbstractDestroyable<Allocated> {
 	abstract [destructor](allocated: Allocated): void

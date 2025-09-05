@@ -1,9 +1,11 @@
-import { allProps, dependant, touched, unreactive } from './core'
+import { dependant, touched } from './core'
 
-// TODO: think - having added(ReactiveSet), removed(ReactiveSet) and changed(ReactiveSet) as a list of changes
 const original = Symbol('original')
+const allProps = Symbol('all-props')
+// TODO: make a nuance anyProp vs allProp here too
+// TODO: [prototypeForwarding]
+
 export class ReactiveWeakSet<T extends object> extends WeakSet<T> {
-	@unreactive
 	declare readonly [original]: WeakSet<T>
 
 	constructor(originalSet: WeakSet<T>) {
@@ -42,7 +44,6 @@ export class ReactiveWeakSet<T extends object> extends WeakSet<T> {
 }
 
 export class ReactiveSet<T> extends Set<T> {
-	@unreactive
 	declare readonly [original]: Set<T>
 
 	constructor(originalSet: Set<T>) {
@@ -67,8 +68,8 @@ export class ReactiveSet<T> extends Set<T> {
 			const evolution = { type: 'add', prop: value } as const
 			// touch for value-specific and aggregate dependencies
 			touched(this[original], value, evolution)
+			touched(this[original], allProps)
 			touched(this, 'size', evolution)
-			touched(this[original], allProps, evolution)
 		}
 		return this
 	}
@@ -77,7 +78,7 @@ export class ReactiveSet<T> extends Set<T> {
 		const hadEntries = this[original].size > 0
 		this[original].clear()
 		if (hadEntries) {
-			const evolution = { type: 'clear' } as const
+			const evolution = { type: 'bunch', method: 'clear' } as const
 			touched(this, 'size', evolution)
 			touched(this[original], allProps, evolution)
 		}
@@ -89,8 +90,8 @@ export class ReactiveSet<T> extends Set<T> {
 		if (had) {
 			const evolution = { type: 'del', prop: value } as const
 			touched(this[original], value, evolution)
+			touched(this[original], allProps)
 			touched(this, 'size', evolution)
-			touched(this[original], allProps, evolution)
 		}
 		return res
 	}

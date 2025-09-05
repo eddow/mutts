@@ -1,20 +1,20 @@
 export type DependencyFunction = <T>(cb: () => T) => T
 
-export type EffectFunction = (dep: DependencyFunction) => void
-export type ScopedCallback = () => void
+// TODO: doc: effect is re-enterable
 
-export const allProps = Symbol('all-props')
+export type EffectFunction = (dep: DependencyFunction, ...args: any[]) => void
+export type ScopedCallback = () => void
 
 export type PropEvolution = {
 	type: 'set' | 'del' | 'add'
 	prop: any
 }
 
-export type MapEvolution = {
-	type: 'clear'
+export type BunchEvolution = {
+	type: 'bunch'
+	method: string
 }
-
-type Evolution = PropEvolution | MapEvolution
+type Evolution = PropEvolution | BunchEvolution
 
 type State =
 	| {
@@ -30,9 +30,7 @@ let activeEffect: ScopedCallback | undefined
 // Track effects per reactive object and property
 const watchers = new WeakMap<object, Map<any, Set<ScopedCallback>>>()
 // Track which effects are watching which reactive objects for cleanup
-const effectToReactiveObjects = new Map<ScopedCallback, Set<object>>()
-// Track currently executing effects to prevent re-execution
-const plannedEffects = new Set<ScopedCallback>()
+const effectToReactiveObjects = new WeakMap<ScopedCallback, Set<object>>()
 
 // Track object -> proxy and proxy -> object relationships
 const objectToProxy = new WeakMap<object, object>()
@@ -41,13 +39,14 @@ const proxyToObject = new WeakMap<object, object>()
 // Track objects that should never be reactive
 const nonReactiveObjects = new WeakSet<object>()
 // Track native reactivity
-const NativeReactive = Symbol('native-reactive')
+const nativeReactive = Symbol('native-reactive')
 
 // Symbol to mark individual objects as non-reactive
-const NonReactive = Symbol('non-reactive')
+const nonReactiveMark = Symbol('non-reactive')
 // Symbol to mark class properties as non-reactive
-const UnreactiveProperties = Symbol('unreactive-properties')
+const unreactiveProperties = Symbol('unreactive-properties')
 const unspecified = Symbol('unspecified')
+export const prototypeForwarding = Symbol('prototype-forwarding')
 export class ReactiveError extends Error {
 	constructor(message: string) {
 		super(message)
@@ -86,6 +85,13 @@ export const options = {
 	 * @default true
 	 */
 	instanceMembers: true,
+	areReactive: {
+		Array: true,
+		Map: true,
+		Set: true,
+		WeakMap: true,
+		WeakSet: true,
+	} as const,
 } as const
 
 //#region nonReactive
@@ -115,7 +121,7 @@ function deepNonReactive<T>(obj: T): T {
  * @param cls - The class constructor to mark as non-reactive
  */
 function nonReactiveClass<T extends (new (...args: any[]) => any)[]>(...cls: T): T[0] {
-	for (const c of cls) if (c) (c.prototype as any)[NonReactive] = true
+	for (const c of cls) if (c) (c.prototype as any)[nonReactiveMark] = true
 	return cls[0]
 }
 
@@ -158,22 +164,22 @@ export function unreactive(
 // TODO: stage3 decorators -> generic prototype decorators
 function unreactiveLegacy(target: any, propertyKey: PropertyKey) {
 	// Initialize the unreactive properties set if it doesn't exist
-	if (!target[UnreactiveProperties]) {
-		target[UnreactiveProperties] = new Set<PropertyKey>()
+	if (!target[unreactiveProperties]) {
+		target[unreactiveProperties] = new Set<PropertyKey>()
 	}
 
 	// Add this property to the unreactive set
-	target[UnreactiveProperties].add(propertyKey)
+	target[unreactiveProperties].add(propertyKey)
 }
 function unreactiveStage3(context: ClassFieldDecoratorContext) {
 	context.addInitializer(function (this: any) {
 		// Initialize the unreactive properties set if it doesn't exist
-		if (!this[UnreactiveProperties]) {
-			this[UnreactiveProperties] = new Set<PropertyKey>()
+		if (!this[unreactiveProperties]) {
+			this[unreactiveProperties] = new Set<PropertyKey>()
 		}
 
 		// Add this property to the unreactive set
-		this[UnreactiveProperties].add(context.name)
+		this[unreactiveProperties].add(context.name)
 	})
 }
 
@@ -190,7 +196,7 @@ export function isNonReactive(obj: any): boolean {
 	if (nonReactiveObjects.has(obj)) return true
 
 	// Check if the object has the non-reactive symbol
-	if (obj[NonReactive]) return true
+	if (obj[nonReactiveMark]) return true
 
 	return false
 }
@@ -232,6 +238,8 @@ export function dependant(obj: any, prop: any) {
 	}
 }
 
+// Track currently executing effects to prevent re-execution
+const plannedEffects = new Set<ScopedCallback>()
 function hasEffect(effect: ScopedCallback) {
 	plannedEffects.add(effect)
 	let effectCount = 0
@@ -251,7 +259,7 @@ function hasEffect(effect: ScopedCallback) {
 	} else options?.chain(activeEffect, effect)
 }
 
-export function touched(obj: any, prop: any, evolution: Evolution | null) {
+export function touched(obj: any, prop: any, evolution?: Evolution) {
 	if (evolution) addState(obj, evolution)
 	const objectWatchers = watchers.get(obj)
 	if (objectWatchers) {
@@ -273,6 +281,7 @@ function retyped(prop: PropertyKey) {
 // Only used for Array.length as it is hardcoded as a fake own property - but needed
 export const specificAccessors = Symbol('specific-accessors')
 const reactiveHandlers = {
+	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
 		// Check if this property is marked as unreactive
 		prop = retyped(prop)
@@ -289,10 +298,11 @@ const reactiveHandlers = {
 			}
 			return pD?.get ? pD.get.call(receiver) : obj[prop]
 		}
-		if (obj[UnreactiveProperties]?.has(prop)) return get()
+		if (obj[unreactiveProperties]?.has(prop) || typeof prop === 'symbol') return get()
 		const absent = !(prop in obj)
-		// Only track own properties, not inherited methods or properties
-		if (!options.instanceMembers || Object.hasOwn(receiver, prop) || absent) dependant(obj, prop)
+		// Depend if...
+		if (!options.instanceMembers || Object.hasOwn(receiver, prop) || absent)
+			dependant(obj, prop)
 		if(typeof prop === 'number') return obj[prop]
 		if (absent) return undefined
 		return reactive(get())
@@ -315,7 +325,7 @@ const reactiveHandlers = {
 		}
 
 		// Check if this property is marked as unreactive
-		if (obj[UnreactiveProperties]?.has(prop)) {
+		if (obj[unreactiveProperties]?.has(prop)) {
 			if (!set(value)) (obj as any)[prop] = value
 			return true
 		}
@@ -335,9 +345,29 @@ const reactiveHandlers = {
 		touched(obj, prop, { type: 'del', prop })
 		return true
 	},
+	getPrototypeOf(obj: any): object | null {
+		if (prototypeForwarding in obj) return obj[prototypeForwarding]
+		return Object.getPrototypeOf(obj)
+	},
+	setPrototypeOf(obj: any, proto: object | null): boolean {
+		if (prototypeForwarding in obj) return false
+		Object.setPrototypeOf(obj, proto)
+		return true
+	},
+} as const
+
+function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T): T {
+	const oldActiveEffect = activeEffect
+	activeEffect = effect
+	try {
+		return fn()
+	} finally {
+		activeEffect = oldActiveEffect
+	}
 }
 
-export function reactive<T extends Record<PropertyKey, any>>(target: T): T {
+export function reactive<T>(anyTarget: T): T {
+	const target = anyTarget as any
 	// If target is already a proxy, return it
 	if (proxyToObject.has(target) || isNonReactive(target)) return target as T
 
@@ -345,8 +375,8 @@ export function reactive<T extends Record<PropertyKey, any>>(target: T): T {
 	if (objectToProxy.has(target)) return objectToProxy.get(target) as T
 
 	const proxied =
-		target[NativeReactive] && !(target instanceof target[NativeReactive])
-			? new target[NativeReactive](target)
+		nativeReactive in target && !(target instanceof target[nativeReactive])
+			? new target[nativeReactive](target)
 			: target
 
 	const proxy = new Proxy(proxied, reactiveHandlers)
@@ -371,35 +401,24 @@ export function isReactive(obj: any): boolean {
 	return proxyToObject.has(obj)
 }
 // TODO: effect chains are badly debugged as `runEffect` is referred, not `fn` - should be corrected or removed
-/**
- *
- * @param fn - The effect function to run
- * @param reaction - The effect-less function to run each time the effect is run - provides the cleaner
- * @returns The cleanup function
- */
-export function effect<T>(
-	fn: (dep: DependencyFunction) => T,
-	reaction: (param: T) => ScopedCallback | undefined | void
-): ScopedCallback
+
+export function untracked(
+	fn: () => ScopedCallback | undefined | void
+) {
+	withEffect(undefined, fn)
+}
+
 /**
  * @param fn - The effect function to run - provides the cleaner
  * @returns The cleanup function
  */
-export function effect(
-	fn: (dep: DependencyFunction) => ScopedCallback | undefined | void
-): ScopedCallback
-export function effect<T>(
-	fn: (dep: DependencyFunction) => T,
-	reaction?: (param: T) => ScopedCallback | undefined | void
+export function effect<Args extends any[]>(
+	fn: (dep: DependencyFunction, ...args: Args) => ScopedCallback | undefined | void,
+	...args: Args
 ): ScopedCallback {
-	// Prevent nested effects
-	if (activeEffect) {
-		throw new ReactiveError(
-			'Nested effects are not allowed. Effects cannot be created inside other effects.'
-		)
-	}
 
 	let cleanup: (() => void) | null = null
+	const dep = <T>(cb: () => T) => withEffect(runEffect, cb)
 
 	function runEffect() {
 		// Clear previous dependencies
@@ -408,33 +427,9 @@ export function effect<T>(
 			cleanup = null
 		}
 
-		// Push this effect onto the active effects stack
-		activeEffect = runEffect
-		const dep = (cb: () => any) => {
-			if (activeEffect && activeEffect !== runEffect)
-				throw new ReactiveError(
-					'Nested effects are not allowed. Effects cannot be created inside other effects.'
-				)
-			const asyncCall = !activeEffect
-			activeEffect = runEffect
-			try {
-				return cb()
-			} finally {
-				activeEffect = asyncCall ? undefined : activeEffect
-			}
-		}
-
 		options.enter(fn)
-		let result: T
-		try {
-			// Run the effect function
-			result = fn(dep)
-		} finally {
-			// Pop this effect from the active effects stack
-			activeEffect = undefined
-			options.leave(fn)
-		}
-		const reactionCleanup = reaction ? reaction(result) : (result as ScopedCallback)
+		const reactionCleanup = withEffect(runEffect, () => fn(dep, ...args))
+		options.leave(fn)
 
 		// Create cleanup function for next run
 		cleanup = () => {
@@ -472,6 +467,8 @@ export function effect<T>(
 	}
 }
 
+// TODO: Note - and in the documentation, that `Reactive` must be the last mixin applied!
+
 const classCache = new WeakMap<new (...args: any[]) => any, new (...args: any[]) => any>()
 /**
  * Mixin to have a class defining reactive objects
@@ -479,8 +476,7 @@ const classCache = new WeakMap<new (...args: any[]) => any, new (...args: any[])
  * @param target - The object to make reactive
  * @returns The reactive object
  */
-
-export const Reactive = <Base extends new (...args: any[]) => any>(Base: Base = Object as any) => {
+export const Reactive = <Base extends new (...args: any[]) => any>(Base: Base) => {
 	// Check cache first
 	const cache = classCache.get(Base)
 	if (cache) return cache as Base
@@ -507,14 +503,13 @@ export function registerNativeReactivity(
 	originalClass: new (...args: any[]) => any,
 	reactiveClass: new (...args: any[]) => any
 ) {
-	originalClass.prototype[NativeReactive] = reactiveClass
+	originalClass.prototype[nativeReactive] = reactiveClass
 }
-// TODO: Think twice about memory leaks + make `computedCache` reactive!! (reactiveMap is not yet registered)
 type ComputedFunction<T> = (dep: DependencyFunction) => T
 const computedCache = new WeakMap<ComputedFunction<any>, any>()
 function computedFunction<T>(getter: ComputedFunction<T>): T {
 	const cache = computedCache.get(getter)
-	dependant(getter, getter)
+	dependant(computedCache, getter)
 	if (cache) return cache
 	const oldActiveEffect = activeEffect
 	activeEffect = undefined
@@ -522,7 +517,7 @@ function computedFunction<T>(getter: ComputedFunction<T>): T {
 		const stop = effect((dep) => {
 			if (computedCache.has(getter)) {
 				computedCache.delete(getter)
-				touched(getter, getter, null)
+				touched(computedCache, getter)
 				stop()
 			}
 			computedCache.set(getter, getter(dep))

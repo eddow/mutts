@@ -71,6 +71,8 @@ export function Indexable<Items, Base extends abstract new (...args: any[]) => a
 	Object.setPrototypeOf(
 		Indexable.prototype,
 		new Proxy(base.prototype, {
+			//@ts-expect-error
+			[Symbol.toStringTag]: 'MutTs Indexable',
 			get(target, prop, receiver) {
 				if (prop in target) {
 					const getter = Object.getOwnPropertyDescriptor(target, prop)?.get

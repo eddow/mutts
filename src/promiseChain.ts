@@ -37,6 +37,8 @@ type ChainedFunction<T> = ((...args: any[]) => PromiseChain<T>) & {
 }
 
 const promiseProxyHandler: ProxyHandler<ChainedFunction<any>> = {
+	//@ts-expect-error
+	[Symbol.toStringTag]: 'MutTs PromiseChain function',
 	get(target, prop) {
 		if (prop === Symbol.toStringTag) return 'PromiseProxy'
 		if (typeof prop === 'string' && ['then', 'catch', 'finally'].includes(prop))
@@ -50,6 +52,8 @@ const promiseForward = (target: any) => ({
 	finally: forward('finally', target),
 })
 const objectProxyHandler: ProxyHandler<any> = {
+	//@ts-expect-error
+	[Symbol.toStringTag]: 'MutTs PromiseChain object',
 	get(target, prop, receiver) {
 		const getter = Object.getOwnPropertyDescriptor(target, prop)?.get
 		const rv = getter ? getter.call(receiver) : target[prop]

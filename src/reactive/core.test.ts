@@ -7,6 +7,7 @@ import {
 	reactive,
 	unreactive,
 	unwrap,
+	untracked,
 } from './index'
 
 describe('reactive', () => {
@@ -22,21 +23,13 @@ describe('reactive', () => {
 		})
 
 		it('should not make primitives reactive', () => {
-			//@ts-expect-error - we want to test the behavior of reactive with primitives
 			expect(reactive(42)).toBe(42)
-			//@ts-expect-error - we want to test the behavior of reactive with primitives
 			expect(reactive('string')).toBe('string')
-			//@ts-expect-error - we want to test the behavior of reactive with primitives
 			expect(reactive(true)).toBe(true)
-			//@ts-expect-error - we want to test the behavior of reactive with primitives
 			expect(reactive(null)).toBe(null)
-			//@ts-expect-error - we want to test the behavior of reactive with primitives
 			expect(reactive(undefined)).toBe(undefined)
-			//@ts-expect-error - we want to test the behavior of reactive with primitives
 			expect(reactive(true)).toBe(true)
-			//@ts-expect-error - we want to test the behavior of reactive with primitives
 			expect(reactive(null)).toBe(null)
-			//@ts-expect-error - we want to test the behavior of reactive with primitives
 			expect(reactive(undefined)).toBe(undefined)
 		})
 
@@ -189,17 +182,40 @@ describe('effect', () => {
 			expect(reactiveObj.c).toBe(5)
 		})
 
-		it('should prevent nested effects', () => {
-			const reactiveObj = reactive({ count: 0 })
+		it('should allow re-entrant effects (create inner effect inside outer via untracked)', () => {
+			const state = reactive({ a: 0, b: 0 })
+			let outerRuns = 0
+			let innerRuns = 0
 
-			expect(() => {
-				effect(() => {
-					reactiveObj.count
-					effect(() => {
-						reactiveObj.count
+			const stopOuter = effect(() => {
+				outerRuns++
+				state.a
+				// Create/refresh inner effect each time outer runs (re-entrancy)
+				// Use untracked to avoid nested-effect guard and dependency coupling
+				let stopInner: (() => void) | undefined
+				untracked(() => {
+					stopInner = effect(() => {
+						innerRuns++
+						state.b
 					})
 				})
-			}).toThrow('Nested effects are not allowed')
+				// Immediately stop to avoid accumulating watchers
+				stopInner && stopInner()
+			})
+
+			expect(outerRuns).toBe(1)
+			expect(innerRuns).toBe(1)
+
+			state.a = 1
+			expect(outerRuns).toBe(2)
+			// inner created again due to re-entrancy
+			expect(innerRuns).toBe(2)
+
+			state.b = 1
+			// inner was stopped in the same tick; no rerun expected
+			expect(innerRuns).toBe(2)
+
+			stopOuter()
 		})
 	})
 
@@ -1046,20 +1062,15 @@ describe('@unreactive decorator', () => {
 })
 
 describe('effect reaction result', () => {
-	it('should pass the effect result to the reaction on initial and subsequent runs', () => {
+	it('should support recording the computed result each run (via effect return cleanup)', () => {
 		const state = reactive({ a: 1, b: 2 })
 
 		const received: number[] = []
-		const unwatch = effect(
-			() => {
-				// effect returns a value derived from dependencies
-				return state.a + state.b
-			},
-			(sum) => {
-				received.push(sum)
-				return undefined
-			}
-		)
+		const stop = effect(() => {
+			const sum = state.a + state.b
+			received.push(sum)
+			return () => {}
+		})
 
 		// initial run
 		expect(received).toEqual([3])
@@ -1072,34 +1083,30 @@ describe('effect reaction result', () => {
 		state.b = 10
 		expect(received).toEqual([3, 7, 15])
 
-		unwatch()
+		stop()
 	})
 })
 
-describe('effect reaction cleanup', () => {
-	it('should run previous reaction cleanup before the next reaction on change', () => {
+describe('effect cleanup timing', () => {
+	it('should run previous cleanup before the next execution', () => {
 		const state = reactive({ v: 1 })
 
 		const calls: string[] = []
-		effect(
-			() => {
-				return state.v
-			},
-			(val) => {
-				calls.push(`reaction:${val}`)
-				return () => calls.push(`cleanup:${val}`)
-			}
-		)
+		effect(() => {
+			calls.push(`run:${state.v}`)
+			return () => calls.push(`cleanup:${state.v}`)
+		})
 
 		// initial
-		expect(calls).toEqual(['reaction:1']) // no cleanup yet
+		expect(calls).toEqual(['run:1'])
 
 		state.v = 2
-		// cleanup for 1 must run before reaction for 2
-		expect(calls).toEqual(['reaction:1', 'cleanup:1', 'reaction:2'])
+		// cleanup for previous run must happen before new run is recorded
+		// cleanup logs the current value at cleanup time (already updated)
+		expect(calls).toEqual(['run:1', 'cleanup:2', 'run:2'])
 
 		state.v = 3
-		expect(calls).toEqual(['reaction:1', 'cleanup:1', 'reaction:2', 'cleanup:2', 'reaction:3'])
+		expect(calls).toEqual(['run:1', 'cleanup:2', 'run:2', 'cleanup:3', 'run:3'])
 	})
 })
 
