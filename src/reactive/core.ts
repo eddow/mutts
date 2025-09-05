@@ -1,5 +1,6 @@
 export type DependencyFunction = <T>(cb: () => T) => T
-
+// TODO: proper async management, read when fn returns a promise and let the effect as "running",
+//  either to cancel the running one or to avoid running 2 in "parallel" and debounce the second one
 export type ScopedCallback = () => void
 
 export type PropEvolution = {
@@ -22,8 +23,6 @@ type State =
 
 const states = new WeakMap<object, State>()
 
-// Stack of active effects to handle nested effects
-let activeEffect: ScopedCallback | undefined
 // Track effects per reactive object and property
 const watchers = new WeakMap<object, Map<any, Set<ScopedCallback>>>()
 // Track which effects are watching which reactive objects for cleanup
@@ -64,9 +63,8 @@ function markWithRoot<T extends Function>(fn: T, root: Function): T {
  * @param fn - The function to get the root from
  * @returns The root function, or the function itself if no root exists
  */
-function getRoot(fn: Function): Function {
-	const root = (fn as any)[rootFunction]
-	return root || fn
+function getRoot(fn: Function | undefined): Function {
+	return (fn as any)?.[rootFunction] || fn
 }
 
 export class ReactiveError extends Error {
@@ -247,23 +245,47 @@ export function getState(obj: any) {
 
 export function dependant(obj: any, prop: any) {
 	if (activeEffect) {
-		const objectWatchers = watchers.get(obj) || new Map<PropertyKey, Set<ScopedCallback>>()
-		const deps = objectWatchers.get(prop) || new Set<ScopedCallback>()
+		let objectWatchers = watchers.get(obj)
+		if(!objectWatchers) {
+			objectWatchers = new Map<PropertyKey, Set<ScopedCallback>>()
+			watchers.set(obj, objectWatchers)
+		}
+		let deps = objectWatchers.get(prop)
+		if(!deps) {
+			deps = new Set<ScopedCallback>()
+			objectWatchers.set(prop, deps)
+		}
 		deps.add(activeEffect)
-		objectWatchers.set(prop, deps)
-		watchers.set(obj, objectWatchers)
 
 		// Track which reactive objects this effect is watching
-		const effectObjects = effectToReactiveObjects.get(activeEffect) || new Set<object>()
+		let effectObjects = effectToReactiveObjects.get(activeEffect)
+		if(!effectObjects) {
+			effectObjects = new Set<object>()
+			effectToReactiveObjects.set(activeEffect, effectObjects)
+		}
 		effectObjects.add(obj)
-		effectToReactiveObjects.set(activeEffect, effectObjects)
 	}
 }
 
+// Stack of active effects to handle nested effects
+let activeEffect: ScopedCallback | undefined
+
 // Track currently executing effects to prevent re-execution
-const plannedEffects = new Map<Function, ScopedCallback>()
+// These are all the effects triggered under `activeEffect`
+let plannedEffects: Map<Function, ScopedCallback>
+// The root planned effects list is created here, not in a `withEffect` function
+const rootPlannedEffects = new Map<Function, ScopedCallback>()
+
+plannedEffects = rootPlannedEffects
+
+// Track which sub-effects have been executed to prevent infinite loops
+// These are all the effects triggered under `activeEffect` and all their sub-effects
+const subEffectsDone = new Set<Function>()
+
 function hasEffect(effect: ScopedCallback) {
-	plannedEffects.set(getRoot(effect), effect)
+	const root = getRoot(effect)
+	plannedEffects.set(root, effect)
+	subEffectsDone.delete(root)
 	const runEffects: any[] = []
 	if (!activeEffect) {
 		try {
@@ -271,15 +293,45 @@ function hasEffect(effect: ScopedCallback) {
 				if (runEffects.length > options.maxEffectChain)
 					throw new ReactiveError('[reactive] Max effect chain reached')
 				const [root, effect] = plannedEffects.entries().next().value!
-				runEffects.push(getRoot(effect))
-				effect()
+				runEffects.push(root)
+				if(!subEffectsDone.has(root)) {
+					effect()
+					subEffectsDone.add(root)
+				}
 				plannedEffects.delete(root)
 			}
 		} finally {
 			plannedEffects.clear()
+			if(plannedEffects === rootPlannedEffects)
+				subEffectsDone.clear()
 		}
 	} else
 		options?.chain(getRoot(activeEffect), getRoot(effect))
+}
+
+function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T): T {
+	if(getRoot(effect) === getRoot(activeEffect)) {
+		return fn()
+	}
+	const oldActiveEffect = activeEffect
+	const oldPlannedEffects = plannedEffects
+	activeEffect = effect
+	plannedEffects = new Map<Function, ScopedCallback>()
+	try {
+		return fn()
+	} finally {
+		activeEffect = oldActiveEffect
+		for(const [root, effect] of plannedEffects.entries()) {
+			oldPlannedEffects.set(root, effect)
+		}
+		plannedEffects = oldPlannedEffects
+	}
+}
+
+export function debugListeners(obj: any, prop?: string) {
+	obj = unwrap(obj)
+	const objectWatchers = watchers.get(obj)
+	return prop === undefined ? objectWatchers : objectWatchers?.get(prop)
 }
 
 export function touched(obj: any, prop: any, evolution?: Evolution) {
@@ -379,16 +431,6 @@ const reactiveHandlers = {
 	},
 } as const
 
-function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T): T {
-	const oldActiveEffect = activeEffect
-	activeEffect = effect
-	try {
-		return fn()
-	} finally {
-		activeEffect = oldActiveEffect
-	}
-}
-
 export function reactive<T>(anyTarget: T): T {
 	/*if(typeof anyTarget === 'function') { // Stage 3 decorator and legacy decorator
 		// @ts-expect-error - decorator, so `anyTarget` is the base class constructor
@@ -432,8 +474,6 @@ export function unwrap<T>(proxy: T): T {
 export function isReactive(obj: any): boolean {
 	return proxyToObject.has(obj)
 }
-// TODO: effect chains are badly debugged as `runEffect` is referred, not `fn` - should be corrected or removed
-
 export function untracked(
 	fn: () => ScopedCallback | undefined | void
 ) {
@@ -450,7 +490,7 @@ export function effect<Args extends any[]>(
 ): ScopedCallback {
 
 	let cleanup: (() => void) | null = null
-	const dep = <T>(cb: () => T) => withEffect(runEffect, cb)
+	const dep = markWithRoot(<T>(cb: () => T) => withEffect(runEffect, cb), fn)
 
 	function runEffect() {
 		// Clear previous dependencies
@@ -487,8 +527,6 @@ export function effect<Args extends any[]>(
 			}
 		}
 	}
-	Object.defineProperty(runEffect, 'original', { value: fn })
-	
 	// Mark the runEffect callback with the original function as its root
 	markWithRoot(runEffect, fn)
 
@@ -510,11 +548,11 @@ export function watch<T, Args extends any[]>(
 	let oldValue: T | typeof unsetYet = unsetYet
 	return effect(markWithRoot((dep) => {
 		const newValue = value(dep, ...args)
-		if(oldValue !== newValue) {
+		if(oldValue !== newValue) untracked(markWithRoot(() => {
 			if (oldValue === unsetYet) changed(newValue)
 			else changed(newValue, oldValue)
 			oldValue = newValue
-		}
+		}, changed))
 	}, value))
 }
 

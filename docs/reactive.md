@@ -10,6 +10,12 @@
 2. [Getting Started](#getting-started)
 3. [Core API](#core-api)
 4. [Effect System](#effect-system)
+   - [Basic Effects](#basic-effects)
+   - [Effect Cleanup](#effect-cleanup)
+   - [Effect Dependencies](#effect-dependencies)
+   - [Async Effects and the `dep` Parameter](#async-effects-and-the-dep-parameter)
+   - [Nested Effects](#nested-effects)
+   - [untracked()](#untracked)
 5. [Advanced Effects](#advanced-effects)
 6. [Evolution Tracking](#evolution-tracking)
 7. [Collections](#collections)
@@ -268,6 +274,57 @@ state.b = 10 // Triggers effect
 state.c = 15 // Does NOT trigger effect
 ```
 
+### Async Effects and the `dep` Parameter
+
+The `effect` function provides a special `dep` parameter that restores the active effect context for dependency tracking in asynchronous operations. This is crucial because async functions lose the global active effect context when they yield control.
+
+#### The Problem with Async Effects
+
+When an effect function is synchronous, reactive property access automatically tracks dependencies, however, in async functions, the active effect context is lost when the function yields control. 
+
+The `dep` parameter restores the active effect context for dependency tracking.
+
+#### Understanding the active effect context
+
+The reactive system uses a global active effect variable to track which effect is currently running:
+
+```typescript
+// Synchronous effect - active effect is maintained throughout
+effect(() => {
+    // active effect = this effect
+    const value = state.count // ✅ Tracked (active effect is set)
+    // active effect = this effect (still set)
+    const another = state.name // ✅ Tracked (active effect is still set)
+})
+
+// Async effect - active effect is lost after await
+effect(async () => {
+    // active effect = this effect
+    const value = state.count // ✅ Tracked (active effect is set)
+    
+    await someAsyncOperation() // Function exits, active effect = undefined
+    
+    // active effect = undefined (lost!)
+    const another = state.name // ❌ NOT tracked (no active effect)
+})
+
+// Async effect with dep() - active effect is restored
+effect(async (dep) => {
+    // active effect = this effect
+    const value = state.count // ✅ Tracked (active effect is set)
+    
+    await someAsyncOperation() // Function exits, active effect = undefined
+    
+    // dep() temporarily restores active effect for the callback
+    const another = dep(() => state.name) // ✅ Tracked (active effect restored)
+})
+```
+
+#### Key Benefits of `dep()` in Async Effects
+
+1. **Restored Context**: `dep()` temporarily restores the active effect context for dependency tracking
+2. **Consistent Tracking**: Reactive property access works the same way before and after `await`
+
 ### Nested Effects
 
 Effects can be created inside other effects and will have separate effect scopes:
@@ -432,21 +489,6 @@ for (let i = 0; i < items.length; i++) {
 
 // Later, clean up all effects
 effectCleanups.forEach(cleanup => cleanup())
-```
-
-**Advanced use case - Dynamic effect creation:**
-```typescript
-const createItemEffect = (itemId: number) => {
-    return effect((dep, id) => {
-        console.log(`Tracking item ${id}`)
-        // Use the id parameter in the effect logic
-        
-        return () => console.log(`Stopped tracking item ${id}`)
-    }, itemId)
-}
-
-const item1Effect = createItemEffect(1)
-const item2Effect = createItemEffect(2)
 ```
 
 ## Evolution Tracking

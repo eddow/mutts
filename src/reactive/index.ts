@@ -13,7 +13,8 @@ export {
 	unreactive,
 	unwrap,
 	touched,
-	watch
+	watch,
+	debugListeners
 } from './core'
 
 import { ReactiveArray } from './array'
