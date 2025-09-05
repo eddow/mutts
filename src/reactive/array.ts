@@ -98,6 +98,7 @@ export class ReactiveArray extends Indexable(
 	}
 
 	pop() {
+		if(this[original].length === 0) return undefined
 		try { return this[original].pop() }
 		finally {
 			touched(this[RA], 'length', { type: 'bunch', method: 'pop' })
@@ -107,6 +108,7 @@ export class ReactiveArray extends Indexable(
 	}
 
 	shift() {
+		if(this[original].length === 0) return undefined
 		try { return this[original].shift() }
 		finally {
 			touched(this[RA], 'length', { type: 'bunch', method: 'shift' })

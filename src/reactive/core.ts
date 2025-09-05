@@ -1,8 +1,5 @@
 export type DependencyFunction = <T>(cb: () => T) => T
 
-// TODO: doc: effect is re-enterable
-
-export type EffectFunction<Args extends any[] = any[], Return = void> = (dep: DependencyFunction, ...args: Args) => Return
 export type ScopedCallback = () => void
 
 export type PropEvolution = {
@@ -47,6 +44,31 @@ const nonReactiveMark = Symbol('non-reactive')
 const unreactiveProperties = Symbol('unreactive-properties')
 const unspecified = Symbol('unspecified')
 export const prototypeForwarding = Symbol('prototype-forwarding')
+
+// Symbol to mark functions with their root function
+const rootFunction = Symbol('root-function')
+
+/**
+ * Mark a function with its root function. If the function already has a root,
+ * the root becomes the root of the new root (transitive root tracking).
+ * @param fn - The function to mark
+ * @param root - The root function to associate with fn
+ */
+function markWithRoot<T extends Function>(fn: T, root: Function): T {
+	// Mark fn with the new root
+	return Object.defineProperty(fn, rootFunction, { value: getRoot(root), writable: false })
+}
+
+/**
+ * Retrieve the root function from a callback. Returns the function itself if it has no root.
+ * @param fn - The function to get the root from
+ * @returns The root function, or the function itself if no root exists
+ */
+function getRoot(fn: Function): Function {
+	const root = (fn as any)[rootFunction]
+	return root || fn
+}
+
 export class ReactiveError extends Error {
 	constructor(message: string) {
 		super(message)
@@ -62,18 +84,18 @@ export const options = {
 	 * Debug purpose: called when an effect is entered
 	 * @param effect - The effect that is entered
 	 */
-	enter: (effect: EffectFunction) => {},
+	enter: (effect: Function) => {},
 	/**
 	 * Debug purpose: called when an effect is left
 	 * @param effect - The effect that is left
 	 */
-	leave: (effect: EffectFunction) => {},
+	leave: (effect: Function) => {},
 	/**
 	 * Debug purpose: called when an effect is chained
 	 * @param caller - The effect that is calling the target
 	 * @param target - The effect that is being triggered
 	 */
-	chain: (caller: EffectFunction, target: EffectFunction) => {},
+	chain: (caller: Function, target: Function) => {},
 	/**
 	 * Debug purpose: maximum effect chain (like call stack max depth)
 	 * Used to prevent infinite loops
@@ -239,26 +261,25 @@ export function dependant(obj: any, prop: any) {
 }
 
 // Track currently executing effects to prevent re-execution
-const plannedEffects = new Set<ScopedCallback>()
+const plannedEffects = new Map<Function, ScopedCallback>()
 function hasEffect(effect: ScopedCallback) {
-	plannedEffects.add(effect)
+	plannedEffects.set(getRoot(effect), effect)
 	const runEffects: any[] = []
 	if (!activeEffect) {
 		try {
 			while (plannedEffects.size) {
 				if (runEffects.length > options.maxEffectChain)
 					throw new ReactiveError('[reactive] Max effect chain reached')
-				const effect = plannedEffects.values().next().value!
-				runEffects.push(effect)
+				const [root, effect] = plannedEffects.entries().next().value!
+				runEffects.push(getRoot(effect))
 				effect()
-				plannedEffects.delete(effect)
+				plannedEffects.delete(root)
 			}
 		} finally {
 			plannedEffects.clear()
 		}
 	} else
-		// @ts-expect-error - original given function for debugging
-		options?.chain(activeEffect.original, effect. original)
+		options?.chain(getRoot(activeEffect), getRoot(effect))
 }
 
 export function touched(obj: any, prop: any, evolution?: Evolution) {
@@ -467,6 +488,9 @@ export function effect<Args extends any[]>(
 		}
 	}
 	Object.defineProperty(runEffect, 'original', { value: fn })
+	
+	// Mark the runEffect callback with the original function as its root
+	markWithRoot(runEffect, fn)
 
 	// Run the effect immediately
 	runEffect()
@@ -484,14 +508,14 @@ export function watch<T, Args extends any[]>(
 	changed: (value: T, oldValue?: T) => void, ...args: Args
 ) {
 	let oldValue: T | typeof unsetYet = unsetYet
-	return effect((dep) => {
+	return effect(markWithRoot((dep) => {
 		const newValue = value(dep, ...args)
 		if(oldValue !== newValue) {
 			if (oldValue === unsetYet) changed(newValue)
 			else changed(newValue, oldValue)
 			oldValue = newValue
 		}
-	})
+	}, value))
 }
 
 // TODO: Note - and in the documentation, that `Reactive` must be the last mixin applied!
@@ -541,14 +565,14 @@ function computedFunction<T>(getter: ComputedFunction<T>): T {
 	const oldActiveEffect = activeEffect
 	activeEffect = undefined
 	try {
-		const stop = effect((dep) => {
+		const stop = effect(markWithRoot((dep) => {
 			if (computedCache.has(getter)) {
 				computedCache.delete(getter)
 				touched(computedCache, getter)
 				stop()
 			}
 			computedCache.set(getter, getter(dep))
-		})
+		}, getter))
 	} finally {
 		activeEffect = oldActiveEffect
 	}
@@ -585,19 +609,19 @@ export function computed(
 function computedStage3(context: ClassAccessorDecoratorContext) {
 	return {
 		get(this: any) {
-			return computedFunction(() => context.access.get(this))
+			return computedFunction(markWithRoot(() => context.access.get(this), context.access.get))
 		},
 		set(this: any, value: any) {
 			context.access.set(this, value)
 		},
 	}
 }
-function computedLegacy(target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) {
+function computedLegacy(_target: any, _propertyKey: string | symbol, descriptor: PropertyDescriptor) {
 	const original = descriptor.get
 	if (original)
 		return {
 			get(this: any) {
-				return computedFunction(() => original.call(this))
+				return computedFunction(markWithRoot(() => original.call(this), original))
 			},
 			set: descriptor.set,
 		}

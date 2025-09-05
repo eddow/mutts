@@ -1,6 +1,5 @@
 export {
 	computed,
-	type EffectFunction,
 	effect,
 	untracked,
 	getState,
