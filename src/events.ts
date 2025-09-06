@@ -13,15 +13,16 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 	protected readonly [hooks] = [] as ((...args: any[]) => void)[]
 
 	public hook(
-		cb: <EventType extends keyof Events>(event: EventType, ...args: Parameters<Events[EventType]>) => void
+		cb: <EventType extends keyof Events>(
+			event: EventType,
+			...args: Parameters<Events[EventType]>
+		) => void
 	): () => void {
-		if(!this[hooks].includes(cb))
-			this[hooks].push(cb)
+		if (!this[hooks].includes(cb)) this[hooks].push(cb)
 		return () => {
 			this[hooks].splice(this[hooks].indexOf(cb), 1)
 		}
 	}
-
 
 	public on(events: Partial<Events>): void
 	public on<EventType extends keyof Events>(event: EventType, cb: Events[EventType]): () => void
@@ -69,10 +70,7 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 		...args: Parameters<Events[EventType]>
 	) {
 		const callbacks = this[events].get(event)
-		if (callbacks)
-			for (const cb of callbacks)
-				cb(...args)
-		for (const cb of this[hooks])
-			cb(event, ...args)
+		if (callbacks) for (const cb of callbacks) cb(...args)
+		for (const cb of this[hooks]) cb(event, ...args)
 	}
 }

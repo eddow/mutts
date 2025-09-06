@@ -1,13 +1,12 @@
 import { effect, reactive } from './index'
-import { ReactiveMap, ReactiveWeakMap } from './map'
 import './index'
+import { ReactiveMap } from './map'
 
 describe('ReactiveWeakMap', () => {
 	describe('basic functionality', () => {
 		it('should create a reactive WeakMap wrapper', () => {
 			const weakMap = new WeakMap<object, string>()
-			const reactiveWeakMap = new ReactiveWeakMap(weakMap)
-			expect(reactiveWeakMap).toBeInstanceOf(ReactiveWeakMap)
+			const reactiveWeakMap = reactive(weakMap)
 			expect(reactiveWeakMap).toBeInstanceOf(Object)
 			// ReactiveWeakMap is a wrapper, not a native WeakMap instance
 			expect(reactiveWeakMap).toBeInstanceOf(WeakMap)
@@ -19,7 +18,6 @@ describe('ReactiveWeakMap', () => {
 
 			// The reactive wrapper should behave like a WeakMap
 			expect(reactiveWeakMap).toBeInstanceOf(WeakMap)
-			expect(reactiveWeakMap).toBeInstanceOf(ReactiveWeakMap)
 		})
 
 		it('should wrap existing WeakMap with entries', () => {
@@ -29,7 +27,7 @@ describe('ReactiveWeakMap', () => {
 				[key1, 'value1'],
 				[key2, 'value2'],
 			])
-			const reactiveWeakMap = new ReactiveWeakMap(originalWeakMap)
+			const reactiveWeakMap = reactive(originalWeakMap)
 
 			expect(reactiveWeakMap.get(key1)).toBe('value1')
 			expect(reactiveWeakMap.get(key2)).toBe('value2')
@@ -39,7 +37,7 @@ describe('ReactiveWeakMap', () => {
 	describe('reactive operations', () => {
 		it('should track dependencies when getting values', () => {
 			const weakMap = new WeakMap<object, string>()
-			const reactiveWeakMap = new ReactiveWeakMap(weakMap)
+			const reactiveWeakMap = reactive(weakMap)
 			const key = { id: 1 }
 			reactiveWeakMap.set(key, 'test')
 
@@ -58,7 +56,7 @@ describe('ReactiveWeakMap', () => {
 
 		it('should track dependencies when checking existence', () => {
 			const weakMap = new WeakMap<object, string>()
-			const reactiveWeakMap = new ReactiveWeakMap(weakMap)
+			const reactiveWeakMap = reactive(weakMap)
 			const key = { id: 1 }
 			reactiveWeakMap.set(key, 'test')
 
@@ -77,7 +75,7 @@ describe('ReactiveWeakMap', () => {
 
 		it('should trigger effects when setting new values', () => {
 			const weakMap = new WeakMap<object, string>()
-			const reactiveWeakMap = new ReactiveWeakMap(weakMap)
+			const reactiveWeakMap = reactive(weakMap)
 			const key = { id: 1 }
 
 			let effectCount = 0
@@ -95,7 +93,7 @@ describe('ReactiveWeakMap', () => {
 
 		it('should trigger effects when updating existing values', () => {
 			const weakMap = new WeakMap<object, string>()
-			const reactiveWeakMap = new ReactiveWeakMap(weakMap)
+			const reactiveWeakMap = reactive(weakMap)
 			const key = { id: 1 }
 			reactiveWeakMap.set(key, 'old value')
 
@@ -114,7 +112,7 @@ describe('ReactiveWeakMap', () => {
 
 		it('should trigger effects when deleting keys', () => {
 			const weakMap = new WeakMap<object, string>()
-			const reactiveWeakMap = new ReactiveWeakMap(weakMap)
+			const reactiveWeakMap = reactive(weakMap)
 			const key = { id: 1 }
 			reactiveWeakMap.set(key, 'test')
 
@@ -133,7 +131,7 @@ describe('ReactiveWeakMap', () => {
 
 		it('should not trigger effects when deleting non-existent keys', () => {
 			const weakMap = new WeakMap<object, string>()
-			const reactiveWeakMap = new ReactiveWeakMap(weakMap)
+			const reactiveWeakMap = reactive(weakMap)
 			const key = { id: 1 }
 
 			let effectCount = 0
@@ -153,7 +151,7 @@ describe('ReactiveWeakMap', () => {
 	describe('allProps reactivity', () => {
 		it('should trigger allProps effects when setting values', () => {
 			const weakMap = new WeakMap<object, string>()
-			const reactiveWeakMap = new ReactiveWeakMap(weakMap)
+			const reactiveWeakMap = reactive(weakMap)
 			const key1 = { id: 1 }
 			const key2 = { id: 2 }
 
@@ -178,7 +176,7 @@ describe('ReactiveWeakMap', () => {
 
 		it('should trigger allProps effects when deleting values', () => {
 			const weakMap = new WeakMap<object, string>()
-			const reactiveWeakMap = new ReactiveWeakMap(weakMap)
+			const reactiveWeakMap = reactive(weakMap)
 			const key1 = { id: 1 }
 			const key2 = { id: 2 }
 
@@ -208,7 +206,7 @@ describe('ReactiveWeakMap', () => {
 	describe('WeakMap constraints', () => {
 		it('should only accept objects as keys', () => {
 			const weakMap = new WeakMap<object, string>()
-			const reactiveWeakMap = new ReactiveWeakMap(weakMap)
+			const reactiveWeakMap = reactive(weakMap)
 
 			// These should work
 			const objKey = { id: 1 }
@@ -226,7 +224,7 @@ describe('ReactiveWeakMap', () => {
 
 		it('should not have size property', () => {
 			const weakMap = new WeakMap<object, string>()
-			const reactiveWeakMap = new ReactiveWeakMap(weakMap)
+			const reactiveWeakMap = reactive(weakMap)
 
 			// WeakMap should not have a size property
 			expect('size' in reactiveWeakMap).toBe(false)
@@ -235,7 +233,7 @@ describe('ReactiveWeakMap', () => {
 
 		it('should not have clear method', () => {
 			const weakMap = new WeakMap<object, string>()
-			const reactiveWeakMap = new ReactiveWeakMap(weakMap)
+			const reactiveWeakMap = reactive(weakMap)
 
 			// WeakMap should not have a clear method
 			expect(typeof (reactiveWeakMap as any).clear).toBe('undefined')
@@ -245,7 +243,7 @@ describe('ReactiveWeakMap', () => {
 	describe('toStringTag', () => {
 		it('should have correct toStringTag', () => {
 			const weakMap = new WeakMap<object, string>()
-			const reactiveWeakMap = new ReactiveWeakMap(weakMap)
+			const reactiveWeakMap = reactive(weakMap)
 			expect(reactiveWeakMap[Symbol.toStringTag]).toBe('ReactiveWeakMap')
 		})
 	})
@@ -255,8 +253,7 @@ describe('ReactiveMap', () => {
 	describe('basic functionality', () => {
 		it('should create a reactive Map wrapper', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
-			expect(reactiveMap).toBeInstanceOf(ReactiveMap)
+			const reactiveMap = reactive(map)
 			expect(reactiveMap).toBeInstanceOf(Object)
 			// ReactiveMap is a wrapper, not a native Map instance
 			expect(reactiveMap).toBeInstanceOf(Map)
@@ -268,7 +265,6 @@ describe('ReactiveMap', () => {
 
 			// The reactive wrapper should behave like a Map
 			expect(reactiveMap).toBeInstanceOf(Map)
-			expect(reactiveMap).toBeInstanceOf(ReactiveMap)
 		})
 
 		it('should wrap existing Map with entries', () => {
@@ -276,7 +272,7 @@ describe('ReactiveMap', () => {
 				['key1', 1],
 				['key2', 2],
 			])
-			const reactiveMap = new ReactiveMap(originalMap)
+			const reactiveMap = reactive(originalMap)
 
 			expect(reactiveMap.get('key1')).toBe(1)
 			expect(reactiveMap.get('key2')).toBe(2)
@@ -288,7 +284,7 @@ describe('ReactiveMap', () => {
 				['key1', 1],
 				['key2', 2],
 			])
-			const reactiveMap = new ReactiveMap(originalMap)
+			const reactiveMap = reactive(originalMap)
 
 			expect(reactiveMap.get('key1')).toBe(1)
 			expect(reactiveMap.get('key2')).toBe(2)
@@ -299,7 +295,7 @@ describe('ReactiveMap', () => {
 	describe('reactive operations', () => {
 		it('should track size dependencies', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 
 			let effectCount = 0
 			effect(() => {
@@ -316,7 +312,7 @@ describe('ReactiveMap', () => {
 
 		it('should track dependencies when getting values', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 			reactiveMap.set('test', 42)
 
 			let effectCount = 0
@@ -334,7 +330,7 @@ describe('ReactiveMap', () => {
 
 		it('should track dependencies when checking existence', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 			reactiveMap.set('test', 42)
 
 			let effectCount = 0
@@ -352,7 +348,7 @@ describe('ReactiveMap', () => {
 
 		it('should trigger effects when setting new values', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 
 			let effectCount = 0
 			effect(() => {
@@ -369,7 +365,7 @@ describe('ReactiveMap', () => {
 
 		it('should trigger effects when updating existing values', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 			reactiveMap.set('test', 42)
 
 			let effectCount = 0
@@ -387,7 +383,7 @@ describe('ReactiveMap', () => {
 
 		it('should trigger effects when deleting keys', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 			reactiveMap.set('test', 42)
 
 			let effectCount = 0
@@ -405,7 +401,7 @@ describe('ReactiveMap', () => {
 
 		it('should not trigger effects when deleting non-existent keys', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 
 			let effectCount = 0
 			effect(() => {
@@ -424,7 +420,7 @@ describe('ReactiveMap', () => {
 	describe('allProps reactivity', () => {
 		it('should trigger allProps effects when setting values', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 
 			let allPropsEffectCount = 0
 			effect(() => {
@@ -446,7 +442,7 @@ describe('ReactiveMap', () => {
 
 		it('should trigger allProps effects when deleting values', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 			reactiveMap.set('key1', 1)
 			reactiveMap.set('key2', 2)
 
@@ -470,7 +466,7 @@ describe('ReactiveMap', () => {
 
 		it('should trigger allProps effects when clearing', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 			reactiveMap.set('key1', 1)
 			reactiveMap.set('key2', 2)
 
@@ -492,7 +488,7 @@ describe('ReactiveMap', () => {
 	describe('iteration methods', () => {
 		it('should track allProps for entries()', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 
 			let effectCount = 0
 			effect(() => {
@@ -509,7 +505,7 @@ describe('ReactiveMap', () => {
 
 		it('should track allProps for forEach()', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 
 			let effectCount = 0
 			effect(() => {
@@ -526,7 +522,7 @@ describe('ReactiveMap', () => {
 
 		it('should track allProps for keys()', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 
 			let effectCount = 0
 			effect(() => {
@@ -543,7 +539,7 @@ describe('ReactiveMap', () => {
 
 		it('should track allProps for values()', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 
 			let effectCount = 0
 			effect(() => {
@@ -560,7 +556,7 @@ describe('ReactiveMap', () => {
 
 		it('should track allProps for Symbol.iterator', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 
 			let effectCount = 0
 			effect(() => {
@@ -581,7 +577,7 @@ describe('ReactiveMap', () => {
 	describe('clear method', () => {
 		it('should trigger size and allProps effects when clearing', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 			reactiveMap.set('key1', 1)
 			reactiveMap.set('key2', 2)
 
@@ -609,7 +605,7 @@ describe('ReactiveMap', () => {
 
 		it('should not trigger effects when clearing empty map', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
+			const reactiveMap = reactive(map)
 
 			let sizeEffectCount = 0
 			let allPropsEffectCount = 0
@@ -640,8 +636,7 @@ describe('ReactiveMap', () => {
 				['key1', 1],
 				['key2', 2],
 			])
-			const reactiveMap = new ReactiveMap(originalMap)
-			expect(reactiveMap).toBeInstanceOf(ReactiveMap)
+			const reactiveMap = reactive(originalMap)
 			expect(reactiveMap.size).toBe(2)
 			expect(reactiveMap.get('key1')).toBe(1)
 			expect(reactiveMap.get('key2')).toBe(2)
@@ -653,7 +648,6 @@ describe('ReactiveMap', () => {
 				['key2', 2],
 			])
 			const reactiveMap = reactive(originalMap)
-			expect(reactiveMap).toBeInstanceOf(ReactiveMap)
 			expect(reactiveMap.size).toBe(2)
 			expect(reactiveMap.get('key1')).toBe(1)
 			expect(reactiveMap.get('key2')).toBe(2)
@@ -663,8 +657,8 @@ describe('ReactiveMap', () => {
 	describe('toStringTag', () => {
 		it('should have correct toStringTag', () => {
 			const map = new Map<string, number>()
-			const reactiveMap = new ReactiveMap(map)
-			expect(reactiveMap[Symbol.toStringTag]).toBe('Map')
+			const reactiveMap = reactive(map)
+			expect(reactiveMap[Symbol.toStringTag]).toBe('ReactiveMap')
 		})
 	})
 
@@ -677,8 +671,6 @@ describe('ReactiveMap', () => {
 				])
 				const reactiveMap = reactive(nativeMap)
 
-				// Should be a ReactiveMap instance
-				expect(reactiveMap).toBeInstanceOf(ReactiveMap)
 				// Should still behave like a Map
 				expect(reactiveMap.get('key1')).toBe(1)
 				expect(reactiveMap.get('key2')).toBe(2)
@@ -775,9 +767,6 @@ describe('ReactiveMap', () => {
 					[key2, 'value2'],
 				])
 				const reactiveWeakMap = reactive(nativeWeakMap)
-
-				// Should be a ReactiveWeakMap instance
-				expect(reactiveWeakMap).toBeInstanceOf(ReactiveWeakMap)
 				// Should still behave like a WeakMap
 				expect(reactiveWeakMap.get(key1)).toBe('value1')
 				expect(reactiveWeakMap.get(key2)).toBe('value2')
@@ -873,16 +862,6 @@ describe('ReactiveMap', () => {
 
 				// Should return the same reactive instance
 				expect(reactiveMap1).toBe(reactiveMap2)
-				expect(reactiveMap1).toBeInstanceOf(ReactiveMap)
-			})
-
-			it('should handle empty maps and weak maps', () => {
-				const emptyMap = reactive(new Map())
-				const emptyWeakMap = reactive(new WeakMap())
-
-				expect(emptyMap).toBeInstanceOf(ReactiveMap)
-				expect(emptyWeakMap).toBeInstanceOf(ReactiveWeakMap)
-				expect(emptyMap.size).toBe(0)
 			})
 		})
 	})

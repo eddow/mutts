@@ -79,8 +79,7 @@ export function Indexable<Items, Base extends abstract new (...args: any[]) => a
 					return getter ? getter.call(receiver) : target[prop]
 				}
 				if (typeof prop === 'string') {
-					if (prop === 'length' && accessor.getLength)
-						return accessor.getLength.call(receiver)
+					if (prop === 'length' && accessor.getLength) return accessor.getLength.call(receiver)
 					const numProp = Number(prop)
 					if (!Number.isNaN(numProp)) {
 						return accessor.get!.call(receiver, numProp) as Items

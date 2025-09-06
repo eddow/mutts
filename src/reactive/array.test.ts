@@ -680,11 +680,11 @@ describe('ReactiveArray', () => {
 			it('should track anyProps for find()', () => {
 				const array = [1, 2, 3]
 				const ra = reactive(array)
-				let found: number | undefined = undefined
+				let found: number | undefined
 				let runs = 0
 				effect(() => {
 					runs++
-					found = ra.find(v => v === 9)
+					found = ra.find((v) => v === 9)
 				})
 
 				expect(runs).toBe(1)
@@ -706,7 +706,7 @@ describe('ReactiveArray', () => {
 				let runs = 0
 				effect(() => {
 					runs++
-					allTrue = ra.every(v => v > 0)
+					allTrue = ra.every((v) => v > 0)
 				})
 
 				expect(runs).toBe(1)
@@ -729,7 +729,7 @@ describe('ReactiveArray', () => {
 				let runs = 0
 				effect(() => {
 					runs++
-					filtered = ra.filter(v => v % 2 === 0)
+					filtered = ra.filter((v) => v % 2 === 0)
 				})
 
 				expect(runs).toBe(1)
@@ -752,7 +752,7 @@ describe('ReactiveArray', () => {
 				let runs = 0
 				effect(() => {
 					runs++
-					mapped = ra.map(v => v * 2)
+					mapped = ra.map((v) => v * 2)
 				})
 
 				expect(runs).toBe(1)
@@ -892,7 +892,9 @@ describe('ReactiveArray', () => {
 				effect(() => {
 					runs++
 					sum = 0
-					ra.forEach(v => { sum += v })
+					ra.forEach((v) => {
+						sum += v
+					})
 				})
 
 				expect(runs).toBe(1)

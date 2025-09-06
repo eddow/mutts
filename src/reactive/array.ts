@@ -1,317 +1,320 @@
 import { Indexable } from '../indexable'
-import { dependant, prototypeForwarding, specificAccessors, touched } from './core'
-const allProps = Symbol('all-props')
-const anyProps = Symbol('any-props')
-const original = Symbol('original')
-const RA = Symbol('ReactiveArray')
+import { dependant, prototypeForwarding, touched } from './core'
 
-// TODO: map/foreach/every/some - re-implement (ex, [x,x,x].map -> 3 effects)
-
+const native = Symbol('native')
 class ReactiveBaseArray {
-	declare readonly [RA]: any
-	declare readonly [original]: any[]
-	get length() {
-		return this[original].length
-	}
-	set length(value: number) {
-		this[original].length = value
-	}
-	[Symbol.iterator]() {
-		return this[original][Symbol.iterator]()
-	}
+	declare readonly [native]: any[]
+}
+function* index(i: number, { length = true } = {}): IterableIterator<number | 'length'> {
+	yield i
+	if (length) yield 'length'
 }
 
-Object.defineProperties(ReactiveBaseArray.prototype, {
-	[specificAccessors]: {
-		value: Object.setPrototypeOf({
-			length: {
-				get(ra: ReactiveArray) {
-					dependant(ra[RA], 'length')
-					return ra[original].length
-				},
-				set(ra: ReactiveArray, value: number) {
-					try {
-						ra[original].length = value
-					}
-					finally {
-						touched(ra[RA], anyProps, { type: 'set', prop: 'length' })
-					}
-				},
-			},
-		}, null),
-		enumerable: false,
-		configurable: false,
-	}
-})
-export class ReactiveArray extends Indexable(
-	ReactiveBaseArray,
-	{
-		get(index: number): any {
-			dependant(this[RA], allProps)
-			return this[original][index]
-		},
-		set(index: number, value: any) {
-			const added = index >= this[original].length
-			this[original][index] = value
-			if (added)
-				touched(this[RA], 'length')
-			touched(this[RA], anyProps, { type: added ? 'add' : 'set', prop: index })
-		},
-	}
-) {
-	constructor(originalArray: any[]) {
+function* range(
+	a: number,
+	b: number,
+	{ length = false } = {}
+): IterableIterator<number | 'length'> {
+	const start = Math.min(a, b)
+	const end = Math.max(a, b)
+	for (let i = start; i <= end; i++) yield i
+	if (length) yield 'length'
+}
+export class ReactiveArray extends Indexable(ReactiveBaseArray, {
+	get(i: number): any {
+		return this[native][i]
+	},
+	set(i: number, value: any) {
+		const added = i >= this[native].length
+		this[native][i] = value
+		if (added) touched(this[native], { type: 'bunch', method: 'set' }, ['length'])
+	},
+	getLength() {
+		dependant(this, 'length')
+		return this[native].length
+	},
+	setLength(value: number) {
+		const oldLength = this[native].length
+		try {
+			this[native].length = value
+		} finally {
+			touched(this, { type: 'set', prop: 'length' }, range(oldLength, value, { length: true }))
+		}
+	},
+}) {
+	declare length: number
+	constructor(original: any[]) {
 		super()
 		Object.defineProperties(this, {
-			[RA]: {
-				value: this,
-				enumerable: false,
-				configurable: false,
-			},
-			[original]: {
-				value: originalArray,
-				enumerable: false,
-				configurable: false,
-			},
-			[prototypeForwarding]: {
-				value: originalArray,
-			},
+			// We have to make it double, as [native] must be `unique symbol` - impossible through import
+			[native]: { value: original },
+			[prototypeForwarding]: { value: original },
 		})
 	}
 
 	// Safe array access with negative indices
 	at(index: number): any {
-		const actualIndex = index < 0 ? this.length + index : index
-		dependant(this[RA], actualIndex)
-		if (actualIndex < 0 || actualIndex >= this.length) return undefined
-		return this[original][actualIndex]
+		const actualIndex = index < 0 ? this[native].length + index : index
+		dependant(this, actualIndex)
+		if (actualIndex < 0 || actualIndex >= this[native].length) return undefined
+		return this[native][actualIndex]
 	}
 
 	push(...items: any[]) {
-		const oldLength = this.length
-		try { return this[original].push(...items) }
-		finally {
-			touched(this[RA], 'length', { type: 'bunch', method: 'push' })
-			touched(this[RA], anyProps)
-			for(let i = 0; i < items.length; i++)
-				touched(this[RA], i+oldLength)
+		const oldLength = this[native].length
+		try {
+			return this[native].push(...items)
+		} finally {
+			touched(
+				this,
+				{ type: 'bunch', method: 'push' },
+				range(oldLength, oldLength + items.length - 1, { length: true })
+			)
 		}
 	}
 
 	pop() {
-		if(this[original].length === 0) return undefined
-		try { return this[original].pop() }
-		finally {
-			touched(this[RA], 'length', { type: 'bunch', method: 'pop' })
-			touched(this[RA], anyProps)
-			touched(this[RA], this.length)
+		if (this[native].length === 0) return undefined
+		try {
+			return this[native].pop()
+		} finally {
+			touched(this, { type: 'bunch', method: 'pop' }, index(this[native].length))
 		}
 	}
 
 	shift() {
-		if(this[original].length === 0) return undefined
-		try { return this[original].shift() }
-		finally {
-			touched(this[RA], 'length', { type: 'bunch', method: 'shift' })
-			touched(this[RA], anyProps)
-			// Touch all indices that will shift down
-			touched(this[RA], allProps)
+		if (this[native].length === 0) return undefined
+		try {
+			return this[native].shift()
+		} finally {
+			touched(
+				this,
+				{ type: 'bunch', method: 'shift' },
+				range(0, this[native].length + 1, { length: true })
+			)
 		}
 	}
 
 	unshift(...items: any[]) {
-		try { return this[original].unshift(...items) }
-		finally {
-			touched(this[RA], 'length', { type: 'bunch', method: 'unshift' })
-			touched(this[RA], anyProps)
-			// Touch all existing indices that will shift up
-			touched(this[RA], allProps)
+		try {
+			return this[native].unshift(...items)
+		} finally {
+			touched(
+				this,
+				{ type: 'bunch', method: 'unshift' },
+				range(0, this[native].length - items.length, { length: true })
+			)
 		}
 	}
 
 	splice(start: number, deleteCount?: number, ...items: any[]) {
+		const oldLength = this[native].length
+		if (deleteCount === undefined) deleteCount = oldLength - start
 		try {
-			if(deleteCount === undefined) return this[original].splice(start)
-			return this[original].splice(start, deleteCount, ...items)
-		}
-		finally {
-		// Touch length change and all affected indices with a single allProps call
-			touched(this[RA], 'length', { type: 'bunch', method: 'splice' })
-			touched(this[RA], allProps)
-			touched(this[RA], anyProps)
+			if (deleteCount === undefined) return this[native].splice(start)
+			return this[native].splice(start, deleteCount, ...items)
+		} finally {
+			touched(
+				this,
+				{ type: 'bunch', method: 'splice' },
+				// TODO: edge cases
+				deleteCount === items.length
+					? range(start, start + deleteCount)
+					: range(start, oldLength + Math.max(items.length - deleteCount, 0), { length: true })
+			)
 		}
 	}
 
 	reverse() {
-		try { return this[original].reverse() }
-		finally {
-			// Touch all indices since they all change positions
-			touched(this[RA], allProps, { type: 'bunch', method: 'reverse' })
-			touched(this[RA], anyProps)
+		try {
+			return this[native].reverse()
+		} finally {
+			touched(this, { type: 'bunch', method: 'reverse' }, range(0, this[native].length - 1))
 		}
 	}
 
 	sort(compareFn?: (a: any, b: any) => number) {
-		try { return this[original].sort(compareFn) as any }
-		finally {
-			// Touch all indices since they all change positions
-			touched(this[RA], allProps, { type: 'bunch', method: 'sort' })
-			touched(this[RA], anyProps)
+		try {
+			return this[native].sort(compareFn) as any
+		} finally {
+			touched(this, { type: 'bunch', method: 'sort' }, range(0, this[native].length - 1))
 		}
 	}
 
 	fill(value: any, start?: number, end?: number) {
 		try {
-			if(start === undefined) return this[original].fill(value) as any
-			if(end === undefined) return this[original].fill(value, start) as any
-			return this[original].fill(value, start, end) as any
-		}
-		finally {
-			touched(this[RA], allProps, { type: 'bunch', method: 'fill' })
+			if (start === undefined) return this[native].fill(value) as any
+			if (end === undefined) return this[native].fill(value, start) as any
+			return this[native].fill(value, start, end) as any
+		} finally {
+			touched(this, { type: 'bunch', method: 'fill' }, range(0, this[native].length - 1))
 		}
 	}
 
 	copyWithin(target: number, start: number, end?: number) {
 		try {
-			if(end === undefined) return this[original].copyWithin(target, start) as any
-			return this[original].copyWithin(target, start, end) as any
-		}
-		finally {
-			touched(this[RA], allProps, { type: 'bunch', method: 'copyWithin' })
+			if (end === undefined) return this[native].copyWithin(target, start) as any
+			return this[native].copyWithin(target, start, end) as any
+		} finally {
+			touched(
+				this,
+				{ type: 'bunch', method: 'copyWithin' },
+				// TODO: calculate the range properly
+				range(0, this[native].length - 1)
+			)
 		}
 		// Touch all affected indices with a single allProps call
 	}
 
 	// Immutable versions of mutator methods
 	toReversed(): any[] {
-		dependant(this[RA], anyProps)
-		return this[original].toReversed()
+		dependant(this)
+		return this[native].toReversed()
 	}
 
 	toSorted(compareFn?: (a: any, b: any) => number): any[] {
-		dependant(this[RA], anyProps)
-		return this[original].toSorted(compareFn)
+		dependant(this)
+		return this[native].toSorted(compareFn)
 	}
 
 	toSpliced(start: number, deleteCount?: number, ...items: any[]): any[] {
-		dependant(this[RA], anyProps)
-		return deleteCount === undefined ?
-			this[original].toSpliced(start) :
-			this[original].toSpliced(start, deleteCount, ...items)
+		dependant(this)
+		return deleteCount === undefined
+			? this[native].toSpliced(start)
+			: this[native].toSpliced(start, deleteCount, ...items)
 	}
 
 	with(index: number, value: any): any[] {
-		dependant(this[RA], anyProps)
-		return this[original].with(index, value)
+		dependant(this)
+		return this[native].with(index, value)
 	}
 
 	// Iterator methods with reactivity tracking
 	entries() {
-		dependant(this[RA], anyProps)
-		return this[original].entries()
+		dependant(this)
+		return this[native].entries()
 	}
 
 	keys() {
-		dependant(this[RA], anyProps)
-		return this[original].keys()
+		dependant(this)
+		return this[native].keys()
 	}
 
 	values() {
-		dependant(this[RA], anyProps)
-		return this[original].values()
+		dependant(this)
+		return this[native].values()
 	}
 
 	[Symbol.iterator]() {
-		dependant(this[RA], anyProps)
-		return this[original][Symbol.iterator]()
+		dependant(this)
+		return this[native][Symbol.iterator]()
 	}
 
 	indexOf(searchElement: any, fromIndex?: number): number {
-		dependant(this[RA], anyProps)
-		return this[original].indexOf(searchElement, fromIndex)
+		dependant(this)
+		return this[native].indexOf(searchElement, fromIndex)
 	}
 
 	lastIndexOf(searchElement: any, fromIndex?: number): number {
-		dependant(this[RA], anyProps)
-		return this[original].lastIndexOf(searchElement, fromIndex)
+		dependant(this)
+		return this[native].lastIndexOf(searchElement, fromIndex)
 	}
 
 	includes(searchElement: any, fromIndex?: number): boolean {
-		dependant(this[RA], anyProps)
-		return this[original].includes(searchElement, fromIndex)
+		dependant(this)
+		return this[native].includes(searchElement, fromIndex)
 	}
 
-	find(predicate: (this: any, value: any, index: number, obj: any[]) => boolean, thisArg?: any): any {
-		dependant(this[RA], anyProps)
-		return this[original].find(predicate, thisArg)
+	find(
+		predicate: (this: any, value: any, index: number, obj: any[]) => boolean,
+		thisArg?: any
+	): any {
+		dependant(this)
+		return this[native].find(predicate, thisArg)
 	}
 
-	findIndex(predicate: (this: any, value: any, index: number, obj: any[]) => boolean, thisArg?: any): number {
-		dependant(this[RA], anyProps)
-		return this[original].findIndex(predicate, thisArg)
+	findIndex(
+		predicate: (this: any, value: any, index: number, obj: any[]) => boolean,
+		thisArg?: any
+	): number {
+		dependant(this)
+		return this[native].findIndex(predicate, thisArg)
 	}
 
 	flat(): any[] {
-		dependant(this[RA], anyProps)
-		return this[original].flat()
+		dependant(this)
+		return this[native].flat()
 	}
 
-	flatMap(callbackfn: (this: any, value: any, index: number, array: any[]) => any[], thisArg?: any): any[] {
-		dependant(this[RA], anyProps)
-		return this[original].flatMap(callbackfn, thisArg)
-	}
-
-	every(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): boolean {
-		dependant(this[RA], anyProps)
-		return this[original].every(callbackfn as any, thisArg)
+	flatMap(
+		callbackfn: (this: any, value: any, index: number, array: any[]) => any[],
+		thisArg?: any
+	): any[] {
+		dependant(this)
+		return this[native].flatMap(callbackfn, thisArg)
 	}
 
 	filter(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): any[] {
-		dependant(this[RA], anyProps)
-		return this[original].filter(callbackfn as any, thisArg)
+		dependant(this)
+		return this[native].filter(callbackfn as any, thisArg)
 	}
 
 	map(callbackfn: (value: any, index: number, array: any[]) => any, thisArg?: any): any[] {
-		dependant(this[RA], anyProps)
-		return this[original].map(callbackfn as any, thisArg)
+		dependant(this)
+		return this[native].map(callbackfn as any, thisArg)
 	}
 
-	reduce(callbackfn: (previousValue: any, currentValue: any, currentIndex: number, array: any[]) => any, initialValue?: any): any {
-		dependant(this[RA], anyProps)
-		if (arguments.length >= 2) return this[original].reduce(callbackfn as any, initialValue)
-		return (this[original] as any).reduce(callbackfn as any)
+	reduce(
+		callbackfn: (previousValue: any, currentValue: any, currentIndex: number, array: any[]) => any,
+		initialValue?: any
+	): any {
+		dependant(this)
+		return initialValue === undefined
+			? this[native].reduce(callbackfn as any)
+			: this[native].reduce(callbackfn as any, initialValue)
 	}
 
-	reduceRight(callbackfn: (previousValue: any, currentValue: any, currentIndex: number, array: any[]) => any, initialValue?: any): any {
-		dependant(this[RA], anyProps)
-		if (arguments.length >= 2) return this[original].reduceRight(callbackfn as any, initialValue)
-		return (this[original] as any).reduceRight(callbackfn as any)
+	reduceRight(
+		callbackfn: (previousValue: any, currentValue: any, currentIndex: number, array: any[]) => any,
+		initialValue?: any
+	): any {
+		dependant(this)
+		if (initialValue !== undefined) return this[native].reduceRight(callbackfn as any, initialValue)
+		return (this[native] as any).reduceRight(callbackfn as any)
 	}
 
 	slice(start?: number, end?: number): any[] {
-		dependant(this[RA], anyProps)
-		if (start === undefined && end === undefined) return this[original].slice()
-		if (end === undefined) return this[original].slice(start)
-		return this[original].slice(start, end)
+		for (const i of range(start || 0, end || this[native].length - 1)) dependant(this, i)
+		return start === undefined
+			? this[native].slice()
+			: end === undefined
+				? this[native].slice(start)
+				: this[native].slice(start, end)
 	}
 
 	concat(...items: any[]): any[] {
-		dependant(this[RA], anyProps)
-		return this[original].concat(...items)
+		dependant(this)
+		return this[native].concat(...items)
 	}
 
 	join(separator?: string): string {
-		dependant(this[RA], anyProps)
-		return this[original].join(separator as any)
+		dependant(this)
+		return this[native].join(separator as any)
 	}
 
 	forEach(callbackfn: (value: any, index: number, array: any[]) => void, thisArg?: any): void {
-		dependant(this[RA], anyProps)
-		this[original].forEach(callbackfn as any, thisArg)
+		dependant(this)
+		this[native].forEach(callbackfn as any, thisArg)
+	}
+
+	// TODO: re-implement for fun dependencies? (eg - every only check the first ones until it find some)
+	every(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): boolean {
+		dependant(this)
+		return this[native].every(callbackfn as any, thisArg)
 	}
 
 	some(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): boolean {
-		dependant(this[RA], anyProps)
-		return this[original].some(callbackfn as any, thisArg)
+		dependant(this)
+		return this[native].some(callbackfn as any, thisArg)
 	}
-
 }

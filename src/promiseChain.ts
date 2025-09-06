@@ -47,6 +47,7 @@ const promiseProxyHandler: ProxyHandler<ChainedFunction<any>> = {
 	},
 }
 const promiseForward = (target: any) => ({
+	// biome-ignore lint/suspicious/noThenProperty: This one is the whole point
 	then: forward('then', target),
 	catch: forward('catch', target),
 	finally: forward('finally', target),

@@ -107,7 +107,8 @@ export function Destroyable<
 		readonly [allocatedValues]: Allocated
 		constructor(...args: any[]) {
 			super(...args)
-			const allocated = (this[allocatedValues] = {} as Allocated)
+			const allocated = {} as Allocated
+			this[allocatedValues] = allocated
 			// @ts-expect-error `this` is an AbstractDestroyable
 			const myDestructor = destructorObj?.destructor ?? this[destructor]
 			if (!myDestructor) {

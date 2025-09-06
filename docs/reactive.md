@@ -1,31 +1,5 @@
 # Reactive Documentation
 
-### TODOcument
-
-- symbol-key properties are not reactive
-
-## Table of Contents
-
-1. [Introduction](#introduction)
-2. [Getting Started](#getting-started)
-3. [Core API](#core-api)
-4. [Effect System](#effect-system)
-   - [Basic Effects](#basic-effects)
-   - [Effect Cleanup](#effect-cleanup)
-   - [Effect Dependencies](#effect-dependencies)
-   - [Async Effects and the `dep` Parameter](#async-effects-and-the-dep-parameter)
-   - [Nested Effects](#nested-effects)
-   - [untracked()](#untracked)
-5. [Advanced Effects](#advanced-effects)
-6. [Evolution Tracking](#evolution-tracking)
-7. [Collections](#collections)
-8. [ReactiveArray](#reactivearray)
-9. [Class Reactivity](#class-reactivity)
-10. [Non-Reactive System](#non-reactive-system)
-11. [Computed Properties](#computed-properties)
-12. [Advanced Patterns](#advanced-patterns)
-13. [Debugging and Development](#debugging-and-development)
-14. [API Reference](#api-reference)
 
 ## Introduction
 
@@ -489,6 +463,94 @@ for (let i = 0; i < items.length; i++) {
 
 // Later, clean up all effects
 effectCleanups.forEach(cleanup => cleanup())
+```
+
+### Watch Function
+
+The `watch` function provides a more direct way to observe changes in reactive objects. It comes in two forms:
+
+#### Watch with Value Function
+
+```typescript
+const state = reactive({ count: 0, name: 'John' })
+
+const stop = watch(
+    () => state.count, // Value function
+    (newValue, oldValue) => {
+        console.log(`Count changed from ${oldValue} to ${newValue}`)
+    }
+)
+
+state.count = 5 // Triggers: "Count changed from 0 to 5"
+state.name = 'Jane' // No trigger (not watching name)
+```
+
+#### Watch Object Properties
+
+The second form of `watch` allows you to watch any property change on a reactive object:
+
+```typescript
+const user = reactive({ 
+    name: 'John', 
+    age: 30, 
+    email: 'john@example.com' 
+})
+
+const stop = watch(
+    user, // The reactive object to watch
+    () => {
+        console.log('Any property of user changed!')
+        console.log('Current user:', user)
+    }
+)
+
+user.name = 'Jane' // Triggers the callback
+user.age = 31      // Triggers the callback
+user.email = 'jane@example.com' // Triggers the callback
+```
+
+#### Use Cases
+
+**Object-level watching** is particularly useful for:
+
+- **Form validation**: Watch all form fields for changes
+- **Auto-save**: Save whenever any field in a document changes
+- **Logging**: Track all changes to a state object
+- **Dirty checking**: Detect if any property has been modified
+
+```typescript
+const form = reactive({
+    firstName: '',
+    lastName: '',
+    email: '',
+    isValid: false
+})
+
+const stop = watch(form, () => {
+    // Auto-save whenever any field changes
+    saveForm(form)
+    
+    // Update validation status
+    form.isValid = form.firstName && form.lastName && form.email
+})
+
+// Any change to firstName, lastName, or email will trigger auto-save
+form.firstName = 'John'
+form.lastName = 'Doe'
+form.email = 'john.doe@example.com'
+```
+
+#### Cleanup
+
+Both forms of `watch` return a cleanup function:
+
+```typescript
+const stop = watch(user, () => {
+    console.log('User changed')
+})
+
+// Later, stop watching
+stop()
 ```
 
 ## Evolution Tracking
@@ -1498,6 +1560,8 @@ stop()
 function reactive<T extends Record<PropertyKey, any>>(target: T): T
 function effect<T>(fn: (dep: DependencyFunction, ...args: any[]) => T, reaction?: (param: T) => (ScopedCallback | undefined | void), ...args: any[]): ScopedCallback
 function effect(fn: (dep: DependencyFunction, ...args: any[]) => (ScopedCallback | undefined | void), ...args: any[]): ScopedCallback
+function watch<T>(value: (dep: DependencyFunction) => T, changed: (value: T, oldValue?: T) => void): ScopedCallback
+function watch<T extends object>(value: T, changed: () => void): ScopedCallback
 function untracked(fn: () => ScopedCallback | undefined | void): void
 function unwrap<T>(proxy: T): T
 function isReactive(obj: any): boolean

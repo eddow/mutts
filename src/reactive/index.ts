@@ -1,21 +1,18 @@
 export {
-	computed,
 	effect,
-	untracked,
 	getState,
 	isNonReactive,
 	isReactive,
 	options as reactiveOptions,
-	Reactive,
 	ReactiveError,
 	reactive,
 	type ScopedCallback,
-	unreactive,
-	unwrap,
-	touched,
-	watch,
-	debugListeners
+	touched as touchedProperties,
+	touched1 as touchedProperty,
+	untracked,
+	unwrap
 } from './core'
+export { computed, watch, unreactive, Reactive } from './interface'
 
 import { ReactiveArray } from './array'
 import { registerNativeReactivity } from './core'

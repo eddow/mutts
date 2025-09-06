@@ -1,145 +1,139 @@
-import { dependant, reactive, touched } from './core'
+import { dependant, prototypeForwarding, reactive, touched, touched1 } from './core'
 
-const original = Symbol('original')
-const allProps = Symbol('all-props')
-// TODO: make a nuance anyProp vs allProp here too
+const native = Symbol('native')
+
 // TODO: [prototypeForwarding]
 
-export class ReactiveWeakMap<K extends object, V> extends WeakMap<K, V> {
-	declare readonly [original]: WeakMap<K, V>
-
-	constructor(originalMap: WeakMap<K, V>) {
-		super() // Creates empty WeakMap for prototype chain only
-		Object.defineProperty(this, original, {
-			value: originalMap,
-			enumerable: false,
-			configurable: false,
+export class ReactiveWeakMap<K extends object, V> {
+	declare readonly [native]: WeakMap<K, V>
+	declare readonly content: symbol
+	constructor(original: WeakMap<K, V>) {
+		Object.defineProperties(this, {
+			[native]: { value: original },
+			[prototypeForwarding]: { value: original },
+			content: { value: Symbol('content') },
+			[Symbol.toStringTag]: { value: 'ReactiveWeakMap' },
 		})
 	}
 
 	// Implement WeakMap interface methods with reactivity
 	delete(key: K): boolean {
-		const hadKey = this[original].has(key)
-		const result = this[original].delete(key)
+		const hadKey = this[native].has(key)
+		const result = this[native].delete(key)
 
-		if (hadKey) touched(this[original], key, { type: 'del', prop: key })
+		if (hadKey) touched1(this.content, { type: 'del', prop: key }, key)
 
 		return result
 	}
 
 	get(key: K): V | undefined {
-		dependant(this[original], key)
-		return reactive(this[original].get(key))
+		dependant(this.content, key)
+		return reactive(this[native].get(key))
 	}
 
 	has(key: K): boolean {
-		dependant(this[original], key)
-		return this[original].has(key)
+		dependant(this.content, key)
+		return this[native].has(key)
 	}
 
 	set(key: K, value: V): this {
 		// Trigger effects for the specific key
-		touched(this[original], key, { type: this[original].has(key) ? 'set' : 'add', prop: key })
-		this[original].set(key, value)
+		touched1(this.content, { type: this[native].has(key) ? 'set' : 'add', prop: key }, key)
+		this[native].set(key, value)
 
 		return this
 	}
-
-	[Symbol.toStringTag]: string = 'ReactiveWeakMap'
 }
 
-export class ReactiveMap<K, V> extends Map<K, V> {
-	declare readonly [original]: Map<K, V>
+export class ReactiveMap<K, V> {
+	declare readonly [native]: Map<K, V>
+	declare readonly content: symbol
 
-	constructor(originalMap: Map<K, V>) {
-		super()
-		Object.defineProperty(this, original, {
-			value: originalMap,
-			enumerable: false,
-			configurable: false,
+	constructor(original: Map<K, V>) {
+		Object.defineProperties(this, {
+			[native]: { value: original },
+			[prototypeForwarding]: { value: original },
+			content: { value: Symbol('content') },
+			[Symbol.toStringTag]: { value: 'ReactiveMap' },
 		})
 	}
 
 	// Implement Map interface methods with reactivity
 	get size(): number {
 		dependant(this, 'size') // The ReactiveMap instance still goes through proxy
-		return this[original].size
+		return this[native].size
 	}
 
 	clear(): void {
-		const hadEntries = this[original].size > 0
-		this[original].clear()
+		const hadEntries = this[native].size > 0
+		this[native].clear()
 
 		if (hadEntries) {
 			const evolution = { type: 'bunch', method: 'clear' } as const
 			// Clear triggers all effects since all keys are affected
-			touched(this, 'size', evolution)
-			touched(this[original], allProps, evolution)
+			touched1(this, evolution, 'size')
+			touched(this.content, evolution)
 		}
 	}
 
 	entries(): MapIterator<[K, V]> {
-		dependant(this[original], allProps)
-		return this[original].entries()
+		dependant(this.content)
+		return this[native].entries()
 	}
 
 	forEach(callbackfn: (value: V, key: K, map: Map<K, V>) => void, thisArg?: any): void {
-		dependant(this[original], allProps)
-		this[original].forEach(callbackfn, thisArg)
+		dependant(this.content)
+		this[native].forEach(callbackfn, thisArg)
 	}
 
 	keys(): MapIterator<K> {
-		dependant(this[original], allProps)
-		return this[original].keys()
+		dependant(this.content)
+		return this[native].keys()
 	}
 
 	values(): MapIterator<V> {
-		dependant(this[original], allProps)
-		return this[original].values()
+		dependant(this.content)
+		return this[native].values()
 	}
 
 	[Symbol.iterator](): MapIterator<[K, V]> {
-		dependant(this[original], allProps)
-		return this[original][Symbol.iterator]()
+		dependant(this.content)
+		return this[native][Symbol.iterator]()
 	}
-
-	[Symbol.toStringTag]: string = 'Map'
 
 	// Implement Map methods with reactivity
 	delete(key: K): boolean {
-		const hadKey = this[original].has(key)
-		const result = this[original].delete(key)
+		const hadKey = this[native].has(key)
+		const result = this[native].delete(key)
 
 		if (hadKey) {
 			const evolution = { type: 'del', prop: key } as const
-			touched(this[original], key, evolution)
-			touched(this[original], allProps)
-			touched(this, 'size', evolution)
+			touched1(this.content, evolution, key)
+			touched1(this, evolution, 'size')
 		}
 
 		return result
 	}
 
 	get(key: K): V | undefined {
-		dependant(this[original], key)
-		return reactive(this[original].get(key))
+		dependant(this.content, key)
+		return reactive(this[native].get(key))
 	}
 
 	has(key: K): boolean {
-		dependant(this[original], key)
-		return this[original].has(key)
+		dependant(this.content, key)
+		return this[native].has(key)
 	}
 
 	set(key: K, value: V): this {
-		const hadKey = this[original].has(key)
-		const oldValue = this[original].get(key)
-		this[original].set(key, value)
+		const hadKey = this[native].has(key)
+		const oldValue = this[native].get(key)
+		this[native].set(key, value)
 
 		if (!hadKey || oldValue !== value) {
 			const evolution = { type: hadKey ? 'set' : 'add', prop: key } as const
-			touched(this[original], key, evolution)
-			touched(this[original], allProps)
-			touched(this, 'size', evolution)
+			touched1(this.content, evolution, key)
+			touched1(this, evolution, 'size')
 		}
 
 		return this
