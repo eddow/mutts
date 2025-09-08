@@ -1,12 +1,14 @@
 // biome-ignore-all lint/suspicious/noConfusingVoidType: Type 'void' is not assignable to type 'ScopedCallback | undefined'.
 // Argument of type '() => void' is not assignable to parameter of type '(dep: DependencyFunction) => ScopedCallback | undefined'.
 
+import { Indexable } from "../indexable"
+
 
 export type DependencyFunction = <T>(cb: () => T) => T
 // TODO: proper async management, read when fn returns a promise and let the effect as "running",
 //  either to cancel the running one or to avoid running 2 in "parallel" and debounce the second one
 
-// TODO: deep watching
+// Deep watching implementation with lazy back-references
 
 export type ScopedCallback = () => void
 
@@ -33,6 +35,19 @@ const effectToReactiveObjects = new WeakMap<ScopedCallback, Set<object>>()
 // Track object -> proxy and proxy -> object relationships
 const objectToProxy = new WeakMap<object, object>()
 const proxyToObject = new WeakMap<object, object>()
+
+// Deep watching data structures
+// Track which objects contain which other objects (back-references)
+const objectParents = new WeakMap<object, Set<{parent: object, prop: PropertyKey}>>()
+
+// Track which objects have deep watchers
+const objectsWithDeepWatchers = new WeakSet<object>()
+
+// Track deep watchers per object
+const deepWatchers = new WeakMap<object, Set<ScopedCallback>>()
+
+// Track which effects are doing deep watching
+const effectToDeepWatchedObjects = new WeakMap<ScopedCallback, Set<object>>()
 
 // Track objects that should never be reactive
 export const nonReactiveObjects = new WeakSet<object>()
@@ -127,12 +142,7 @@ function raiseDeps(objectWatchers: Map<any, Set<ScopedCallback>>, ...keyChains: 
 }
 
 export function touched1(obj: any, evolution: Evolution, prop: any) {
-	obj = unwrap(obj)
-	addState(obj, evolution)
-	if (typeof prop !== 'symbol') {
-		const objectWatchers = watchers.get(obj)
-		if (objectWatchers) raiseDeps(objectWatchers, [allProps, prop])
-	}
+	touched(obj, evolution, [prop])
 }
 
 export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
@@ -142,6 +152,11 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 	if (objectWatchers) {
 		if (props) raiseDeps(objectWatchers, [allProps], props)
 		else raiseDeps(objectWatchers, objectWatchers.keys())
+	}
+	
+	// Bubble up changes if this object has deep watchers
+	if (objectsWithDeepWatchers.has(obj)) {
+		bubbleUpChange(obj, evolution)
 	}
 }
 
@@ -236,17 +251,97 @@ export function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T): 
 
 //#endregion
 
-function retyped(prop: PropertyKey) {
-	if (typeof prop !== 'string') return prop
-	const n = Number.parseFloat(prop as string)
-	return Number.isNaN(n) ? prop : n
+//#region deep watching
+
+/**
+ * Add a back-reference from child to parent
+ */
+function addBackReference(child: object, parent: object, prop: any) {
+	let parents = objectParents.get(child)
+	if (!parents) {
+		parents = new Set()
+		objectParents.set(child, parents)
+	}
+	parents.add({parent, prop})
 }
-// Only used for Array.length as it is hardcoded as a fake own property - but needed
+
+/**
+ * Remove a back-reference from child to parent
+ */
+function removeBackReference(child: object, parent: object, prop: any) {
+	const parents = objectParents.get(child)
+	if (parents) {
+		parents.delete({parent, prop})
+		if (parents.size === 0) {
+			objectParents.delete(child)
+		}
+	}
+}
+
+/**
+ * Check if an object needs back-references (has deep watchers or parents with deep watchers)
+ */
+function needsBackReferences(obj: object): boolean {
+	return objectsWithDeepWatchers.has(obj) || hasParentWithDeepWatchers(obj)
+}
+
+/**
+ * Check if an object has any parent with deep watchers
+ */
+function hasParentWithDeepWatchers(obj: object): boolean {
+	const parents = objectParents.get(obj)
+	if (!parents) return false
+	
+	for (const {parent} of parents) {
+		if (objectsWithDeepWatchers.has(parent)) return true
+		if (hasParentWithDeepWatchers(parent)) return true
+	}
+	return false
+}
+
+/**
+ * Bubble up changes through the back-reference chain
+ */
+function bubbleUpChange(changedObject: object, evolution: Evolution) {
+	const parents = objectParents.get(changedObject)
+	if (!parents) return
+	
+	for (const {parent} of parents) {
+		// Trigger deep watchers on parent
+		const parentDeepWatchers = deepWatchers.get(parent)
+		if (parentDeepWatchers) {
+			for (const watcher of parentDeepWatchers) {
+				hasEffect(watcher)
+			}
+		}
+		
+		// Continue bubbling up
+		bubbleUpChange(parent, evolution)
+	}
+}
+
+export function track1(obj: object, prop: any, oldVal: any, newValue: any){
+	// Manage back-references if this object has deep watchers
+	if (objectsWithDeepWatchers.has(obj)) {
+		// Remove old back-references
+		if (typeof oldVal === 'object' && oldVal !== null) {
+			removeBackReference(oldVal, obj, prop)
+		}
+		
+		// Add new back-references
+		if (typeof newValue === 'object' && newValue !== null) {
+			const reactiveValue = reactive(newValue)
+			addBackReference(reactiveValue, obj, prop)
+		}
+	}
+}
+
+//#endregion
+
 const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
 		// Check if this property is marked as unreactive
-		prop = retyped(prop)
 		function get() {
 			// For unreactive properties, bypass reactivity entirely
 			if (!(prop in obj)) return obj[prop]
@@ -262,11 +357,21 @@ const reactiveHandlers = {
 		const absent = !(prop in obj)
 		// Depend if...
 		if (!options.instanceMembers || Object.hasOwn(receiver, prop) || absent) dependant(obj, prop)
-		if (typeof prop === 'number' || absent) return obj[prop]
-		return reactive(get())
+		
+		const value = get()
+		if (typeof value === 'object' && value !== null) {
+			const reactiveValue = reactive(value)
+			
+			// Only create back-references if this object needs them
+			if (needsBackReferences(obj)) {
+				addBackReference(reactiveValue, obj, prop)
+			}
+			
+			return reactiveValue
+		}
+		return value
 	},
 	set(obj: any, prop: PropertyKey, value: any, receiver: any): boolean {
-		prop = retyped(prop)
 		function set(newValue: any) {
 			if (!(prop in obj)) return false
 			let browser = obj
@@ -285,10 +390,22 @@ const reactiveHandlers = {
 			if (!set(value)) (obj as any)[prop] = value
 			return true
 		}
+		// Really specific case for when Array is forwarder, in order to let it manage the reactivity
+		const isArrayCase = prototypeForwarding in obj &&
+			obj[prototypeForwarding] instanceof Array && (
+				!Number.isNaN(Number(prop)) || prop === 'length'
+			)
+		const newValue = unwrap(value)
+
+		if (isArrayCase) {
+			(obj as any)[prop] = newValue
+			return true
+		}
+
 
 		const oldVal = (obj as any)[prop]
-		const oldPresent = prop in obj || (typeof prop === 'number' && prop < receiver.length)
-		const newValue = unwrap(value)
+		const oldPresent = prop in obj
+		track1(obj, prop, oldVal, newValue)
 
 		if (oldVal !== newValue) {
 			if (!set(newValue)) (obj as any)[prop] = newValue
@@ -298,10 +415,23 @@ const reactiveHandlers = {
 		return true
 	},
 	deleteProperty(obj: any, prop: PropertyKey): boolean {
-		prop = retyped(prop)
 		if (!Object.hasOwn(obj, prop)) return false
+		
+		const oldVal = (obj as any)[prop]
+		
+		// Remove back-references if this object has deep watchers
+		if (objectsWithDeepWatchers.has(obj) && typeof oldVal === 'object' && oldVal !== null) {
+			removeBackReference(oldVal, obj, prop)
+		}
+		
 		delete (obj as any)[prop]
 		touched1(obj, { type: 'del', prop }, prop)
+		
+		// Bubble up changes if this object has deep watchers
+		if (objectsWithDeepWatchers.has(obj)) {
+			bubbleUpChange(obj, { type: 'del', prop })
+		}
+		
 		return true
 	},
 	getPrototypeOf(obj: any): object | null {
@@ -346,13 +476,8 @@ export function reactive<T>(anyTarget: T): T {
 }
 
 export function unwrap<T>(proxy: T): T {
-	// If it's not a proxy, return as-is
-	if (!proxyToObject.has(proxy as any)) {
-		return proxy
-	}
-
 	// Return the original object
-	return proxyToObject.get(proxy as any) as T
+	return proxyToObject.get(proxy as any) as T ?? proxy
 }
 
 export function isReactive(obj: any): boolean {
@@ -488,4 +613,130 @@ export function registerNativeReactivity(
 ) {
 	originalClass.prototype[nativeReactive] = reactiveClass
 	nonReactiveClass(reactiveClass)
+}
+
+/**
+ * Deep watch an object and all its nested properties
+ * @param target - The object to watch deeply
+ * @param callback - The callback to call when any nested property changes
+ * @param options - Options for the deep watch
+ * @returns A cleanup function to stop watching
+ */
+export function deepWatch<T extends object>(
+	target: T, 
+	callback: (value: T) => void,
+	options: { immediate?: boolean } = {}
+): () => void {
+	let hasRun = false
+	
+	// Create a wrapper callback that matches ScopedCallback signature
+	const wrappedCallback: ScopedCallback = () => callback(target)
+	
+	// Use the existing effect system to register dependencies
+	const stopEffect = effect((dep) => {
+		// Mark the target object as having deep watchers
+		objectsWithDeepWatchers.add(target)
+		
+		// Track which objects this effect is watching for cleanup
+		let effectObjects = effectToDeepWatchedObjects.get(wrappedCallback)
+		if (!effectObjects) {
+			effectObjects = new Set()
+			effectToDeepWatchedObjects.set(wrappedCallback, effectObjects)
+		}
+		effectObjects!.add(target)
+		
+		// Traverse the object graph and register dependencies
+		// This will re-run every time the effect runs, ensuring we catch all changes
+		const visited = new WeakSet()
+		function traverseAndTrack(obj: any, depth = 0) {
+			// Prevent infinite recursion and excessive depth
+			if (visited.has(obj) || !isObject(obj) || depth > 100) return
+			visited.add(obj)
+			
+			// Mark this object as having deep watchers
+			objectsWithDeepWatchers.add(obj)
+			effectObjects!.add(obj)
+			
+			// Traverse all properties to register dependencies
+			for (const key in obj) {
+				if (Object.prototype.hasOwnProperty.call(obj, key)) {
+					// Access the property to register dependency
+					const value = (obj as any)[key]
+					// Make the value reactive if it's an object
+					const reactiveValue = typeof value === 'object' && value !== null ? reactive(value) : value
+					traverseAndTrack(reactiveValue, depth + 1)
+				}
+			}
+			
+			// Also handle array indices and length
+			// Check for both native arrays and reactive arrays
+			if (Array.isArray(obj) || obj instanceof Array) {
+				// Access array length to register dependency on length changes
+				const length = obj.length
+				
+				// Access all current array elements to register dependencies
+				for (let i = 0; i < length; i++) {
+					// Access the array element to register dependency
+					const value = obj[i]
+					// Make the value reactive if it's an object
+					const reactiveValue = typeof value === 'object' && value !== null ? reactive(value) : value
+					traverseAndTrack(reactiveValue, depth + 1)
+				}
+			}
+		}
+		
+		// Traverse the target object to register all dependencies
+		// This will register dependencies on all current properties and array elements
+		traverseAndTrack(target)
+		
+		// Only call the callback if immediate is true or if it's not the first run
+		if (options.immediate || hasRun) {
+			callback(target)
+		}
+		hasRun = true
+	})
+	
+	// Return a cleanup function that properly removes deep watcher tracking
+	return () => {
+		// Stop the effect first
+		stopEffect()
+		
+		// Get the objects this effect was watching
+		const effectObjects = effectToDeepWatchedObjects.get(wrappedCallback)
+		if (effectObjects) {
+			// Remove deep watcher tracking from all objects this effect was watching
+			for (const obj of effectObjects) {
+				// Check if this object still has other deep watchers
+				const watchers = deepWatchers.get(obj)
+				if (watchers) {
+					// Remove this effect's callback from the watchers
+					watchers.delete(wrappedCallback)
+					
+					// If no more watchers, remove the object from deep watchers tracking
+					if (watchers.size === 0) {
+						deepWatchers.delete(obj)
+						objectsWithDeepWatchers.delete(obj)
+					}
+				} else {
+					// No watchers found, remove from deep watchers tracking
+					objectsWithDeepWatchers.delete(obj)
+				}
+			}
+			
+			// Clean up the tracking data
+			effectToDeepWatchedObjects.delete(wrappedCallback)
+		}
+	}
+}
+
+/**
+ * Check if an object is an object (not null, not primitive)
+ */
+function isObject(obj: any): obj is object {
+	return obj !== null && typeof obj === 'object'
+}
+
+(globalThis as any).mutts = {
+	deepWatchers,
+	watchers
 }

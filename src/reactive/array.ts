@@ -1,7 +1,12 @@
 import { Indexable } from '../indexable'
-import { dependant, prototypeForwarding, touched } from './core'
+import { dependant, prototypeForwarding, touched, track1 } from './core'
 
 const native = Symbol('native')
+const isArray = Array.isArray
+Array.isArray = ((value: any) =>
+	isArray(value) ||
+	(value instanceof Array && native in value)
+) as any
 class ReactiveBaseArray {
 	declare readonly [native]: any[]
 }
@@ -22,12 +27,13 @@ function* range(
 }
 export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 	get(i: number): any {
+		dependant(this, i)
 		return this[native][i]
 	},
 	set(i: number, value: any) {
 		const added = i >= this[native].length
 		this[native][i] = value
-		if (added) touched(this[native], { type: 'bunch', method: 'set' }, ['length'])
+		touched(this[native], { type: 'bunch', method: 'set' }, index(i, { length: added }))
 	},
 	getLength() {
 		dependant(this, 'length')

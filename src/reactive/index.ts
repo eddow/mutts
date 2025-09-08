@@ -1,4 +1,5 @@
 export {
+	deepWatch,
 	effect,
 	getState,
 	isNonReactive,
