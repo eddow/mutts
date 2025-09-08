@@ -23,9 +23,9 @@ A way to write classes that allow numeric indexes managed by a custom function -
 - Immutable data structures
 - Performance-optimized access patterns
 
-## [Cached](./src/cached.ts)
+## [Cached](./docs/cached.md)
 
-A decorator that provides automatic caching for getter methods with circular dependency detection. The `@cached` decorator ensures that expensive computations are only performed once per instance, with built-in protection against infinite recursion.
+A property-get decorator that provides automatic caching for getter methods with circular dependency detection. The `@cached` decorator ensures that expensive computations are only performed once per instance, with built-in protection against infinite recursion.
 
 **Key Features:**
 - Automatic result caching for getter methods
@@ -38,7 +38,7 @@ A decorator that provides automatic caching for getter methods with circular dep
 - Derived state calculations
 - Performance optimization for frequently accessed values
 
-## [Events](./src/events.ts)
+## [Events](./docs/events.md)
 
 A type-safe event system built around the `Eventful` class that provides a clean API for event handling with full TypeScript support.
 
@@ -55,7 +55,7 @@ A type-safe event system built around the `Eventful` class that provides a clean
 - Plugin systems
 - Observer pattern implementations
 
-## [PromiseChain](./src/promiseChain.ts)
+## [PromiseChain](./docs/promiseChain.md)
 
 A utility that transforms promises into chainable objects, allowing you to call methods directly on promise results without awaiting them first. It automatically handles promise resolution and method forwarding.
 
@@ -72,7 +72,7 @@ A utility that transforms promises into chainable objects, allowing you to call 
 - Reducing async/await boilerplate
 - Functional programming with promises
 
-## [Reactive](./src/reactive/)
+## [Reactive](./docs/reactive.md)
 
 A comprehensive reactivity system that provides fine-grained dependency tracking and automatic re-computation. Built on JavaScript Proxies with support for deep watching, computed values, and effect management.
 

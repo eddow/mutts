@@ -1,6 +1,6 @@
 export * from './cached'
 export * from './destroyable'
-export * from './events'
+export * from './eventful'
 export * from './indexable'
 export * from './reactive'
 export * from './utils'

@@ -63,14 +63,17 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 					callbacks.filter((c) => c !== cb)
 				)
 			}
+		} else {
+			// Remove all listeners for this event
+			this[events].delete(eventOrEvents)
 		}
 	}
-	public emit<EventType extends keyof Events>(
+	protected emit<EventType extends keyof Events>(
 		event: EventType,
 		...args: Parameters<Events[EventType]>
 	) {
 		const callbacks = this[events].get(event)
-		if (callbacks) for (const cb of callbacks) cb(...args)
-		for (const cb of this[hooks]) cb(event, ...args)
+		if (callbacks) for (const cb of callbacks) cb.apply(this, args)
+		for (const cb of this[hooks]) cb.call(this, event, ...args)
 	}
 }
