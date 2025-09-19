@@ -1,4 +1,4 @@
-import { effect, reactive } from './index'
+import { effect, reactive, unwrap } from './index'
 
 describe('ReactiveArray', () => {
 	describe('numeric index reactivity', () => {
@@ -233,7 +233,7 @@ describe('ReactiveArray', () => {
 
 			const removed = reactiveArray.splice(1, 2)
 			expect(effectCount).toBe(2)
-			expect(removed).toEqual([2, 3])
+			expect(unwrap(removed)).toEqual([2, 3])
 			expect(reactiveArray[1]).toBe(4)
 			expect(reactiveArray[2]).toBe(5)
 			expect(reactiveArray.length).toBe(3)
@@ -275,7 +275,7 @@ describe('ReactiveArray', () => {
 
 			const removed = reactiveArray.splice(1, 2, 10, 20)
 			expect(effectCount).toBe(2)
-			expect(removed).toEqual([2, 3])
+			expect(unwrap(removed)).toEqual([2, 3])
 			expect(reactiveArray[1]).toBe(10)
 			expect(reactiveArray[2]).toBe(20)
 			expect(reactiveArray.length).toBe(4)
@@ -313,7 +313,7 @@ describe('ReactiveArray', () => {
 
 			const removed = reactiveArray.splice(1)
 			expect(effectCount).toBe(2)
-			expect(removed).toEqual([2, 3, 4, 5])
+			expect(unwrap(removed)).toEqual([2, 3, 4, 5])
 			expect(reactiveArray.length).toBe(1)
 		})
 	})
@@ -620,17 +620,17 @@ describe('ReactiveArray', () => {
 			})
 
 			expect(effectCount).toBe(1)
-			expect(values).toEqual([1, 2, 3])
+			expect(unwrap(values)).toEqual([1, 2, 3])
 
 			// Modifying an element should trigger the effect
 			reactiveArray[0] = 100
 			expect(effectCount).toBe(2)
-			expect(values).toEqual([100, 2, 3])
+			expect(unwrap(values)).toEqual([100, 2, 3])
 
 			// Adding an element should trigger the effect
 			reactiveArray.push(4)
 			expect(effectCount).toBe(3)
-			expect(values).toEqual([100, 2, 3, 4])
+			expect(unwrap(values)).toEqual([100, 2, 3, 4])
 		})
 	})
 
@@ -733,15 +733,15 @@ describe('ReactiveArray', () => {
 				})
 
 				expect(runs).toBe(1)
-				expect(filtered).toEqual([2, 4])
+				expect(unwrap(filtered)).toEqual([2, 4])
 
 				ra[1] = 5
 				expect(runs).toBe(2)
-				expect(filtered).toEqual([4])
+				expect(unwrap(filtered)).toEqual([4])
 
 				ra.unshift(6)
 				expect(runs).toBe(3)
-				expect(filtered).toEqual([6, 4])
+				expect(unwrap(filtered)).toEqual([6, 4])
 			})
 
 			it('should track anyProps for map()', () => {
@@ -756,15 +756,15 @@ describe('ReactiveArray', () => {
 				})
 
 				expect(runs).toBe(1)
-				expect(mapped).toEqual([2, 4, 6])
+				expect(unwrap(mapped)).toEqual([2, 4, 6])
 
 				ra[1] = 5
 				expect(runs).toBe(2)
-				expect(mapped).toEqual([2, 10, 6])
+				expect(unwrap(mapped)).toEqual([2, 10, 6])
 
 				ra.push(4)
 				expect(runs).toBe(3)
-				expect(mapped).toEqual([2, 10, 6, 8])
+				expect(unwrap(mapped)).toEqual([2, 10, 6, 8])
 			})
 
 			it('should track anyProps for reduce()', () => {
@@ -825,15 +825,15 @@ describe('ReactiveArray', () => {
 				})
 
 				expect(runs).toBe(1)
-				expect(sliced).toEqual([2, 3])
+				expect(unwrap(sliced)).toEqual([2, 3])
 
 				ra[2] = 9
 				expect(runs).toBe(2)
-				expect(sliced).toEqual([2, 9])
+				expect(unwrap(sliced)).toEqual([2, 9])
 
 				ra.unshift(0)
 				expect(runs).toBe(3)
-				expect(sliced).toEqual([1, 2])
+				expect(unwrap(sliced)).toEqual([1, 2])
 			})
 
 			it('should track anyProps for concat()', () => {
@@ -845,7 +845,7 @@ describe('ReactiveArray', () => {
 				const extra = [3]
 				effect(() => {
 					runs++
-					concatenated = ra.concat(extra)
+					concatenated = unwrap(ra.concat(extra))
 				})
 
 				expect(runs).toBe(1)

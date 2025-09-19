@@ -2,6 +2,7 @@ import {
 	computed,
 	effect,
 	reactive,
+	ReactiveBase,
 	watch,
 } from './index'
 
@@ -265,6 +266,111 @@ describe('watch', () => {
 
 			stop()
 		})
+
+		it('should watch computed properties that return new objects (simplified)', () => {
+			// Simplified test: watching a computed property that returns a new object each time
+			// The bug occurs when modifying existing objects, not just adding new ones
+			@reactive
+			class TestClass {
+				public slots: { item: string; count: number }[] = []
+
+				addItem(item: string) {
+					this.slots.push({ item, count: 1 })
+				}
+
+				incrementCount(item: string) {
+					const slot = this.slots.find(s => s.item === item)
+					if (slot) slot.count++
+				}
+
+				//@computed
+				get summary(): { [k: string]: number } {
+					const result: { [k: string]: number } = {}
+					for (const slot of this.slots) {
+						result[slot.item] = slot.count
+					}
+					return result
+				}
+			}
+
+			const obj = new TestClass()
+			let callCount = 0
+
+			const stop = watch(
+				() => obj.summary,
+				() => callCount++,
+				{ deep: true }
+			)
+
+			expect(callCount).toBe(0)
+
+			// First change should trigger
+			obj.addItem('wood')
+			expect(callCount).toBe(1)
+
+			// Second change should trigger
+			obj.addItem('stone')
+			expect(callCount).toBe(2)
+
+			// Third change should trigger but doesn't (this is the bug)
+			// Modifying existing object property doesn't trigger the watch
+			obj.incrementCount('wood')
+			expect(callCount).toBe(3)
+
+			stop()
+		})
+
+		it('should watch computed properties that return new objects (with computed)', () => {
+			// This test shows the same issue but with @computed for comparison
+			@reactive
+			class TestClass {
+				public slots: { item: string; count: number }[] = []
+
+				addItem(item: string) {
+					this.slots.push({ item, count: 1 })
+				}
+
+				incrementCount(item: string) {
+					const slot = this.slots.find(s => s.item === item)
+					if (slot) slot.count++
+				}
+
+				@computed
+				get summary(): { [k: string]: number } {
+					const result: { [k: string]: number } = {}
+					for (const slot of this.slots) {
+						result[slot.item] = slot.count
+					}
+					return result
+				}
+			}
+
+			const obj = new TestClass()
+			let callCount = 0
+
+			// Watch the computed property that returns new objects
+			const stop = watch(
+				() => obj.summary,
+				() => callCount++,
+				{ deep: true }
+			)
+
+			expect(callCount).toBe(0)
+
+			// First change should trigger
+			obj.addItem('wood')
+			expect(callCount).toBe(1)
+
+			// Second change should trigger
+			obj.addItem('stone')
+			expect(callCount).toBe(2)
+
+			// Third change should trigger but doesn't (this is the bug)
+			obj.incrementCount('wood')
+			expect(callCount).toBe(3)
+
+			stop()
+		})
 	})
 
 	describe('watch object properties', () => {
@@ -450,6 +556,218 @@ describe('watch', () => {
 			state.length = 2
 			expect(callCount).toBe(1)
 
+			stop()
+		})
+
+		it('should watch nested object properties in arrays (simplified)', () => {
+			// This test demonstrates the core deep watch bug: nested object property changes in arrays
+			@reactive
+			class TestClass {
+				public items: { name: string; count: number }[] = []
+
+				addItem(name: string) {
+					this.items.push({ name, count: 1 })
+				}
+
+				incrementCount(name: string) {
+					const item = this.items.find(i => i.name === name)
+					if (item) item.count++
+				}
+			}
+
+			const obj = new TestClass()
+			let callCount = 0
+
+			const stop = watch(
+				() => obj.items,
+				() => callCount++,
+				{ deep: true }
+			)
+
+			expect(callCount).toBe(0)
+
+			// Adding new items works
+			obj.addItem('wood')
+			expect(callCount).toBe(1)
+
+			// But modifying existing object properties doesn't trigger deep watch
+			obj.incrementCount('wood')
+			expect(callCount).toBe(2) // This fails - deep watch doesn't detect nested property changes
+
+			stop()
+		})
+		it('should watch computed properties that return new objects (without computed)', () => {
+			// This test shows the same issue but with @computed for comparison
+			@reactive
+			class TestClass extends ReactiveBase {
+				public slots: { item: string; count: number }[] = []
+
+				addItem(item: string) {
+					this.slots.push({ item, count: 1 })
+				}
+
+				incrementCount(item: string) {
+					const slot = this.slots.find(s => s.item === item)
+					if (slot) slot.count++
+				}
+
+				get summary(): { [k: string]: number } {
+					const result: { [k: string]: number } = {}
+					for (const slot of this.slots) {
+						result[slot.item] = slot.count
+					}
+					return result
+				}
+			}
+
+			const obj = new TestClass()
+			let callCount = 0
+
+			// Watch the computed property that returns new objects
+			const stop = watch(
+				() => obj.summary,
+				() => callCount++,
+				{ deep: true }
+			)
+
+			expect(callCount).toBe(0)
+
+			// First change should trigger
+			obj.addItem('wood')
+			expect(callCount).toBe(1)
+
+			// Second change should trigger
+			obj.addItem('stone')
+			expect(callCount).toBe(2)
+
+			// Third change should trigger but doesn't (this is the bug)
+			obj.incrementCount('wood')
+			expect(callCount).toBe(3)
+
+			stop()
+		})
+
+		it('should watch nested object properties in objects (not arrays)', () => {
+			// Test if the issue is specific to arrays or also affects nested objects
+			@reactive
+			class TestClass {
+				public data: { wood: { count: number }; stone: { count: number } } = {
+					wood: { count: 1 },
+					stone: { count: 1 }
+				}
+
+				incrementCount(item: string) {
+					if (this.data[item as keyof typeof this.data]) {
+						this.data[item as keyof typeof this.data].count++
+					}
+				}
+			}
+
+			const obj = new TestClass()
+			let callCount = 0
+
+			const stop = watch(
+				() => obj.data,
+				() => callCount++,
+				{ deep: true }
+			)
+
+			expect(callCount).toBe(0)
+
+			// This should trigger the watch
+			obj.incrementCount('wood')
+			expect(callCount).toBe(1) // Does this work with nested objects?
+
+			stop()
+		})
+
+		it('should watch array property changes with direct access (not methods)', () => {
+			// Test if the issue is about method calls vs direct property access
+			@reactive
+			class TestClass {
+				public items: { name: string; count: number }[] = []
+			}
+
+			const obj = new TestClass()
+			let callCount = 0
+
+			const stop = watch(
+				() => obj.items,
+				() => callCount++,
+				{ deep: true }
+			)
+
+			expect(callCount).toBe(0)
+
+			// Add item directly (not through method)
+			obj.items.push({ name: 'wood', count: 1 })
+			expect(callCount).toBe(1)
+
+			// Modify property directly (not through method)
+			obj.items[0].count++
+			expect(callCount).toBe(2) // Does this work with direct access?
+
+			stop()
+		})
+
+		it('should watch array element access vs find method (hypothesis test)', () => {
+			// Test the hypothesis: find() method doesn't track individual elements
+			@reactive
+			class TestClass {
+				public items: { name: string; count: number }[] = []
+
+				addItem(name: string) {
+					this.items.push({ name, count: 1 })
+				}
+
+				// Method 1: Using find() - should fail
+				incrementWithFind(name: string) {
+					const item = this.items.find(i => i.name === name)
+					if (item) item.count++
+				}
+
+				// Method 2: Using direct index access - should work
+				incrementWithIndex(name: string) {
+					const index = this.items.findIndex(i => i.name === name)
+					if (index >= 0) this.items[index].count++
+				}
+			}
+
+			const obj = new TestClass()
+			obj.addItem('wood')
+			obj.addItem('stone')
+
+			let callCount = 0
+
+			const stop = watch(
+				() => obj.items,
+				() => callCount++,
+				{ deep: true }
+			)
+
+			expect(callCount).toBe(0)
+
+			// This should fail (find() doesn't track individual elements)
+			obj.incrementWithFind('wood')
+			expect(callCount).toBe(1) // This will likely fail
+
+			// This should work (direct index access tracks the element)
+			obj.incrementWithIndex('stone')
+			expect(callCount).toBe(2) // This should pass
+
+			stop()
+		})
+
+		it('should watch new added objects', () => {
+			const state = reactive({ x: null }) as any
+			let callCount = 0
+			const stop = watch(state, () => {
+				callCount++
+			}, { deep: true })
+			state.x = { y: 1 }
+			expect(callCount).toBe(1)
+			state.x.y = 2
+			expect(callCount).toBe(2)
 			stop()
 		})
 	})

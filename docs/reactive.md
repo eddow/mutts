@@ -444,6 +444,9 @@ import { options as reactiveOptions } from './reactive'
 // Set maximum effect chain depth
 reactiveOptions.maxEffectChain = 50
 
+// Set maximum deep watch traversal depth
+reactiveOptions.maxDeepWatchDepth = 200
+
 // Enable debug logging
 reactiveOptions.enter = (effect) => console.log('Entering effect:', effect)
 reactiveOptions.leave = (effect) => console.log('Leaving effect:', effect)
@@ -621,6 +624,61 @@ const stop = watch(form, () => {
 form.firstName = 'John'
 form.lastName = 'Doe'
 form.email = 'john.doe@example.com'
+```
+
+#### Deep Watching
+
+For both forms of `watch`, you can enable deep watching by passing `{ deep: true }` in the options:
+
+```typescript
+const state = reactive({
+    user: {
+        name: 'John',
+        profile: { age: 30 }
+    }
+})
+
+// Deep watch - triggers on nested property changes
+const stop = watch(state, () => {
+    console.log('Any nested property changed!')
+}, { deep: true })
+
+state.user.name = 'Jane'        // Triggers
+state.user.profile.age = 31     // Triggers (nested change)
+```
+
+**Deep Watching Behavior:**
+
+- **Unreactive objects are skipped**: Deep watching will not traverse into objects marked as unreactive using `@unreactive` or `unreactive()`
+- **Collections are handled specially**:
+  - **Arrays**: All elements and length changes are tracked
+  - **Sets**: All values are tracked (keys are not separate in Sets)
+  - **Maps**: All values are tracked (keys are not tracked separately)
+  - **WeakSet/WeakMap**: Cannot be deep watched (not iterable), only replacement triggers
+- **Circular references**: Handled safely with configurable depth limits (default: 100 levels)
+- **Performance**: Deep watching has higher overhead than shallow watching
+
+```typescript
+// Example with collections
+const state = reactive({
+    items: [1, 2, 3],
+    tags: new Set(['a', 'b']),
+    metadata: new Map([['key1', 'value1']])
+})
+
+const stop = watch(state, () => {
+    console.log('Collection changed')
+}, { deep: true })
+
+state.items.push(4)           // Triggers
+state.items[0] = 10           // Triggers
+state.tags.add('c')           // Triggers
+state.metadata.set('key2', 'value2') // Triggers
+
+// WeakSet/WeakMap only trigger on replacement
+const weakSet = new WeakSet()
+state.weakData = weakSet      // Triggers (replacement)
+// Changes to weakSet contents won't trigger (not trackable)
 ```
 
 #### Cleanup
@@ -1596,6 +1654,9 @@ reactiveOptions.chain = (caller, target) => {
 
 // Set maximum chain depth
 reactiveOptions.maxEffectChain = 50
+
+// Set maximum deep watch traversal depth
+reactiveOptions.maxDeepWatchDepth = 200
 ```
 
 ### Effect Stack Traces
@@ -1800,6 +1861,7 @@ export const options = {
     leave: (effect: EffectFunction) => {},
     chain: (caller: EffectFunction, target: EffectFunction) => {},
     maxEffectChain: 100,
+    maxDeepWatchDepth: 100,
     instanceMembers: true,
 } as const
 ```

@@ -78,7 +78,7 @@ export class ReactiveMap<K, V> {
 
 	entries(): MapIterator<[K, V]> {
 		dependant(this.content)
-		return this[native].entries()
+		return this[native].entries().map(([key, value]) => [key, reactive(value)])
 	}
 
 	forEach(callbackfn: (value: V, key: K, map: Map<K, V>) => void, thisArg?: any): void {
@@ -93,12 +93,21 @@ export class ReactiveMap<K, V> {
 
 	values(): MapIterator<V> {
 		dependant(this.content)
-		return this[native].values()
+		return this[native].values().map(value => reactive(value))
 	}
 
-	[Symbol.iterator](): MapIterator<[K, V]> {
+	[Symbol.iterator](): Iterator<[K, V]> {
 		dependant(this.content)
-		return this[native][Symbol.iterator]()
+		const nativeIterator = this[native][Symbol.iterator]()
+		return {
+			next() {
+				const result = nativeIterator.next()
+				if (result.done) {
+					return result
+				}
+				return { value: [result.value[0], reactive(result.value[1])], done: false }
+			}
+		}
 	}
 
 	// Implement Map methods with reactivity
@@ -128,9 +137,10 @@ export class ReactiveMap<K, V> {
 	set(key: K, value: V): this {
 		const hadKey = this[native].has(key)
 		const oldValue = this[native].get(key)
-		this[native].set(key, value)
+		const reactiveValue = reactive(value)
+		this[native].set(key, reactiveValue)
 
-		if (!hadKey || oldValue !== value) {
+		if (!hadKey || oldValue !== reactiveValue) {
 			const evolution = { type: hadKey ? 'set' : 'add', prop: key } as const
 			touched1(this.content, evolution, key)
 			touched1(this, evolution, 'size')

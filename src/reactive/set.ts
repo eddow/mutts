@@ -1,4 +1,4 @@
-import { dependant, prototypeForwarding, touched, touched1 } from './core'
+import { dependant, prototypeForwarding, reactive, touched, touched1 } from './core'
 
 const native = Symbol('native')
 
@@ -61,11 +61,12 @@ export class ReactiveSet<T> {
 
 	add(value: T): this {
 		const had = this[native].has(value)
-		this[native].add(value)
+		const reactiveValue = reactive(value)
+		this[native].add(reactiveValue)
 		if (!had) {
-			const evolution = { type: 'add', prop: value } as const
+			const evolution = { type: 'add', prop: reactiveValue } as const
 			// touch for value-specific and aggregate dependencies
-			touched1(this.content, evolution, value)
+			touched1(this.content, evolution, reactiveValue)
 			touched1(this, evolution, 'size')
 		}
 		return this
@@ -99,7 +100,7 @@ export class ReactiveSet<T> {
 
 	entries(): SetIterator<[T, T]> {
 		dependant(this.content)
-		return this[native].entries()
+		return this[native].entries().map(([key, value]) => [reactive(key), reactive(value)])
 	}
 
 	forEach(callbackfn: (value: T, value2: T, set: Set<T>) => void, thisArg?: any): void {
@@ -109,16 +110,25 @@ export class ReactiveSet<T> {
 
 	keys(): SetIterator<T> {
 		dependant(this.content)
-		return this[native].keys()
+		return this[native].keys().map(key => reactive(key))
 	}
 
 	values(): SetIterator<T> {
 		dependant(this.content)
-		return this[native].values()
+		return this[native].values().map(value => reactive(value))
 	}
 
-	[Symbol.iterator](): SetIterator<T> {
+	[Symbol.iterator](): Iterator<T> {
 		dependant(this.content)
-		return this[native][Symbol.iterator]()
+		const nativeIterator = this[native][Symbol.iterator]()
+		return {
+			next() {
+				const result = nativeIterator.next()
+				if (result.done) {
+					return result
+				}
+				return { value: reactive(result.value), done: false }
+			}
+		}
 	}
 }

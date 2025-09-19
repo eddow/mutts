@@ -122,6 +122,12 @@ export const options = {
 	 */
 	maxEffectChain: 100,
 	/**
+	 * Maximum depth for deep watching traversal
+	 * Used to prevent infinite recursion in circular references
+	 * @default 100
+	 */
+	maxDeepWatchDepth: 100,
+	/**
 	 * Only react on instance members modification (not inherited properties)
 	 * For instance, do not track class methods
 	 * @default true
@@ -342,6 +348,7 @@ export function track1(obj: object, prop: any, oldVal: any, newValue: any) {
 			addBackReference(reactiveValue, obj, prop)
 		}
 	}
+	return newValue
 }
 
 //#endregion
@@ -456,6 +463,7 @@ export function reactive<T>(anyTarget: T): T {
 		Object.defineProperty(Reactive, 'name', { value: `Reactive<${anyTarget.name}>` })
 		return Reactive as any
 	}
+	if(!anyTarget || typeof anyTarget !== 'object') return anyTarget
 	const target = anyTarget as any
 	// If target is already a proxy, return it
 	if (proxyToObject.has(target) || isNonReactive(target)) return target as T
@@ -661,9 +669,8 @@ export function registerNativeReactivity(
 export function deepWatch<T extends object>(
 	target: T,
 	callback: (value: T) => void,
-	options: { immediate?: boolean } = {}
+	{ immediate = false } = {}
 ): () => void {
-	let hasRun = false
 	if(typeof target !== 'object' || target === null)
 		throw new Error('Target of deep watching must be an object')
 	// Create a wrapper callback that matches ScopedCallback signature
@@ -687,7 +694,7 @@ export function deepWatch<T extends object>(
 		const visited = new WeakSet()
 		function traverseAndTrack(obj: any, depth = 0) {
 			// Prevent infinite recursion and excessive depth
-			if (visited.has(obj) || !isObject(obj) || depth > 100) return
+			if (visited.has(obj) || !isObject(obj) || depth > options.maxDeepWatchDepth) return
 			// Do not traverse into unreactive objects
 			if (isNonReactive(obj)) return
 			visited.add(obj)
@@ -753,10 +760,8 @@ export function deepWatch<T extends object>(
 		traverseAndTrack(target)
 
 		// Only call the callback if immediate is true or if it's not the first run
-		if (options.immediate || hasRun) {
-			callback(target)
-		}
-		hasRun = true
+		if (immediate) callback(target)
+		immediate = true
 
 		// Return a cleanup function that properly removes deep watcher tracking
 		return () => {
