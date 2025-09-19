@@ -875,4 +875,190 @@ describe('deep watch via watch({ deep: true })', () => {
 			stop()
 		})
 	})
+
+	describe('minimal deep watch failure example', () => {
+		it('MINIMAL: watch should detect array mutations', () => {
+			const state = reactive({
+				items: [1, 2, 3]
+			});
+
+			let callCount = 0;
+
+			// This is the minimal failing case
+			const stopWatch = watch(state, () => {
+				callCount++;
+			}, { immediate: true, deep: true });
+
+			expect(callCount).toBe(1); // Initial call
+
+			// This should trigger the watch but doesn't
+			state.items.push(4);
+			expect(callCount).toBe(2); // FAILS: Expected 2, Received 1
+
+			stopWatch();
+		});
+
+		it('MINIMAL: deep watch should detect array mutations', () => {
+			const state = reactive({
+				items: [1, 2, 3]
+			});
+
+			let callCount = 0;
+
+			// Even with deep: true, this fails
+			const stopWatch = watch(state, () => {
+				callCount++;
+			}, { immediate: true, deep: true });
+
+			expect(callCount).toBe(1); // Initial call
+
+			// This should trigger the deep watch but doesn't
+			state.items.push(4);
+			expect(callCount).toBe(2); // FAILS: Expected 2, Received 1
+
+			stopWatch();
+		});
+
+		it('COMPARISON: effect with length DOES detect array mutations', () => {
+			const state = reactive({
+				items: [1, 2, 3]
+			});
+
+			let effectCount = 0;
+
+			// This works - effect detects array mutations when we access length
+			const stopEffect = effect(() => {
+				effectCount++;
+				state.items.length; // Access the array length
+			});
+
+			expect(effectCount).toBe(1); // Initial call
+
+			// This DOES trigger the effect because push changes length
+			state.items.push(4);
+			expect(effectCount).toBe(2); // Should PASS
+
+			stopEffect();
+		});
+
+		it('DEBUG: what happens with just array access', () => {
+			const state = reactive({
+				items: [1, 2, 3]
+			});
+
+			let effectCount = 0;
+
+			// What happens when we just access the array reference?
+			const stopEffect = effect(() => {
+				effectCount++;
+				state.items; // Just access the array reference
+			});
+
+			expect(effectCount).toBe(1); // Initial call
+
+			// Does this trigger? It shouldn't, because we didn't access any properties
+			state.items.push(4);
+			expect(effectCount).toBe(1); // Should stay 1
+
+			stopEffect();
+		});
+	})
+
+	describe('deep watching Sets and Maps', () => {
+		it('should detect Set mutations with deep watch', () => {
+			const state = reactive({
+				mySet: new Set([1, 2, 3])
+			});
+
+			let callCount = 0;
+
+			const stopWatch = watch(state, () => {
+				callCount++;
+			}, { immediate: true, deep: true });
+
+			expect(callCount).toBe(1); // Initial call
+
+			// Test Set mutations
+			state.mySet.add(4);
+			expect(callCount).toBe(2); // Might fail
+
+			state.mySet.delete(1);
+			expect(callCount).toBe(3); // Might fail
+
+			stopWatch();
+		});
+
+		it('should detect Map mutations with deep watch', () => {
+			const state = reactive({
+				myMap: new Map([['a', 1], ['b', 2]])
+			});
+
+			let callCount = 0;
+
+			const stopWatch = watch(state, () => {
+				callCount++;
+			}, { immediate: true, deep: true });
+
+			expect(callCount).toBe(1); // Initial call
+
+			// Test Map mutations
+			state.myMap.set('c', 3);
+			expect(callCount).toBe(2); // Might fail
+
+			state.myMap.delete('a');
+			expect(callCount).toBe(3); // Might fail
+
+			stopWatch();
+		});
+
+		it('should detect Map value changes with deep watch', () => {
+			const state = reactive({
+				myMap: new Map([['a', 1], ['b', 2]])
+			});
+
+			let callCount = 0;
+
+			const stopWatch = watch(state, () => {
+				callCount++;
+			}, { immediate: true, deep: true });
+
+			expect(callCount).toBe(1); // Initial call
+
+			// Test Map value changes
+			state.myMap.set('a', 10);
+			expect(callCount).toBe(2); // Might fail
+
+			stopWatch();
+		});
+
+		it('should detect nested Set/Map mutations with deep watch', () => {
+			const state = reactive({
+				container: {
+					mySet: new Set([1, 2, 3]),
+					myMap: new Map([['x', 1], ['y', 2]])
+				}
+			});
+
+			let callCount = 0;
+
+			const stopWatch = watch(state, () => {
+				callCount++;
+			}, { immediate: true, deep: true });
+
+			expect(callCount).toBe(1); // Initial call
+
+			// Test nested Set mutations
+			state.container.mySet.add(4);
+			expect(callCount).toBe(2); // Might fail
+
+			// Test nested Map mutations
+			state.container.myMap.set('z', 3);
+			expect(callCount).toBe(3); // Might fail
+
+			stopWatch();
+		});
+
+		// Note: WeakSet and WeakMap cannot be deeply reactive because they don't support iteration
+		// They can only have shallow reactivity (tracking when the collection itself changes)
+	})
 })

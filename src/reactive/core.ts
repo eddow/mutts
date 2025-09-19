@@ -349,6 +349,7 @@ export function track1(obj: object, prop: any, oldVal: any, newValue: any) {
 const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
+		if(prop === nonReactiveMark) return false
 		// Check if this property is marked as unreactive
 		if (obj[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
 			return Reflect.get(obj, prop, receiver)
@@ -723,6 +724,28 @@ export function deepWatch<T extends object>(
 					traverseAndTrack(reactiveValue, depth + 1)
 				}
 			}
+			// Handle Set values (deep watch values only, not keys since Sets don't have separate keys)
+			else if (obj instanceof Set) {
+				// Access all Set values to register dependencies
+				for (const value of obj) {
+					// Make the value reactive if it's an object
+					const reactiveValue =
+						typeof value === 'object' && value !== null ? reactive(value) : value
+					traverseAndTrack(reactiveValue, depth + 1)
+				}
+			}
+			// Handle Map values (deep watch values only, not keys)
+			else if (obj instanceof Map) {
+				// Access all Map values to register dependencies
+				for (const [key, value] of obj) {
+					// Make the value reactive if it's an object
+					const reactiveValue =
+						typeof value === 'object' && value !== null ? reactive(value) : value
+					traverseAndTrack(reactiveValue, depth + 1)
+				}
+			}
+			// Note: WeakSet and WeakMap cannot be iterated, so we can't deep watch their contents
+			// They will only trigger when the collection itself is replaced
 		}
 
 		// Traverse the target object to register all dependencies
