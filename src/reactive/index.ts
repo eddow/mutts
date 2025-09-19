@@ -1,19 +1,19 @@
 export {
-	deepWatch,
 	effect,
 	getState,
 	isNonReactive,
 	isReactive,
 	options as reactiveOptions,
+	ReactiveBase,
 	ReactiveError,
 	reactive,
 	type ScopedCallback,
 	touched as touchedProperties,
 	touched1 as touchedProperty,
 	untracked,
-	unwrap
+	unwrap,
 } from './core'
-export { computed, watch, unreactive, Reactive } from './interface'
+export { computed, unreactive, watch } from './interface'
 
 import { ReactiveArray } from './array'
 import { registerNativeReactivity } from './core'

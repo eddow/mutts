@@ -1,14 +1,7 @@
 import {
 	computed,
-	deepWatch,
 	effect,
-	isNonReactive,
-	isReactive,
-	Reactive,
 	reactive,
-	unreactive,
-	untracked,
-	unwrap,
 	watch,
 } from './index'
 
@@ -276,10 +269,10 @@ describe('watch', () => {
 
 	describe('watch object properties', () => {
 		it('should watch any property change on a reactive object', () => {
-			const user = reactive({ 
-				name: 'John', 
-				age: 30, 
-				email: 'john@example.com' 
+			const user = reactive({
+				name: 'John',
+				age: 30,
+				email: 'john@example.com',
 			})
 			let callCount = 0
 			let lastUser: any
@@ -306,17 +299,17 @@ describe('watch', () => {
 			stop()
 		})
 		it('should watch nested object property changes', () => {
-			const state = reactive({ 
-				user: { 
-					name: 'John', 
-					profile: { age: 30 } 
-				} 
+			const state = reactive({
+				user: {
+					name: 'John',
+					profile: { age: 30 },
+				},
 			})
 			let callCount = 0
 
-			const stop = deepWatch(state, () => {
+			const stop = watch(state, () => {
 				callCount++
-			})
+			}, { deep: true })
 
 			state.user.name = 'Jane'
 			expect(callCount).toBe(1)
@@ -328,15 +321,15 @@ describe('watch', () => {
 		})
 
 		it('should watch array changes when object contains arrays', () => {
-			const state = reactive({ 
+			const state = reactive({
 				items: [1, 2, 3],
-				name: 'test'
+				name: 'test',
 			})
 			let callCount = 0
 
-			const stop = deepWatch(state, () => {
+			const stop = watch(state, () => {
 				callCount++
-			})
+			}, { deep: true })
 
 			state.items.push(4)
 			expect(callCount).toBe(1)
@@ -558,20 +551,20 @@ describe('watch', () => {
 	})
 })
 
-describe('deepWatch', () => {
+describe('deep watch via watch({ deep: true })', () => {
 	describe('basic deep watching functionality', () => {
 		it('should watch nested object property changes', () => {
-			const state = reactive({ 
-				user: { 
-					name: 'John', 
-					profile: { age: 30 } 
-				} 
+			const state = reactive({
+				user: {
+					name: 'John',
+					profile: { age: 30 },
+				},
 			})
 			let callCount = 0
 
-			const stop = deepWatch(state, () => {
+			const stop = watch(state, () => {
 				callCount++
-			})
+			}, { deep: true })
 
 			state.user.name = 'Jane'
 			expect(callCount).toBe(1)
@@ -583,15 +576,15 @@ describe('deepWatch', () => {
 		})
 
 		it('should watch array changes when object contains arrays', () => {
-			const state = reactive({ 
+			const state = reactive({
 				items: [1, 2, 3],
-				name: 'test'
+				name: 'test',
 			})
 			let callCount = 0
 
-			const stop = deepWatch(state, () => {
+			const stop = watch(state, () => {
 				callCount++
-			})
+			}, { deep: true })
 
 			state.items.push(4)
 			expect(callCount).toBe(1)
@@ -606,17 +599,17 @@ describe('deepWatch', () => {
 		})
 
 		it('should handle object replacement correctly', () => {
-			const state = reactive({ 
-				user: { 
-					name: 'John', 
-					profile: { age: 30 } 
-				} 
+			const state = reactive({
+				user: {
+					name: 'John',
+					profile: { age: 30 },
+				},
 			})
 			let callCount = 0
 
-			const stop = deepWatch(state, () => {
+			const stop = watch(state, () => {
 				callCount++
-			})
+			}, { deep: true })
 
 			// Replace the entire user object
 			state.user = { name: 'Jane', profile: { age: 25 } }
@@ -633,17 +626,21 @@ describe('deepWatch', () => {
 		})
 
 		it('should handle immediate option', () => {
-			const state = reactive({ 
-				user: { 
-					name: 'John', 
-					profile: { age: 30 } 
-				} 
+			const state = reactive({
+				user: {
+					name: 'John',
+					profile: { age: 30 },
+				},
 			})
 			let callCount = 0
 
-			const stop = deepWatch(state, () => {
-				callCount++
-			}, { immediate: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ immediate: true, deep: true }
+			)
 
 			// Should trigger immediately
 			expect(callCount).toBe(1)
@@ -655,22 +652,22 @@ describe('deepWatch', () => {
 		})
 
 		it('should handle multiple deep watchers on the same object', () => {
-			const state = reactive({ 
-				user: { 
-					name: 'John', 
-					profile: { age: 30 } 
-				} 
+			const state = reactive({
+				user: {
+					name: 'John',
+					profile: { age: 30 },
+				},
 			})
 			let watcher1Calls = 0
 			let watcher2Calls = 0
 
-			const stop1 = deepWatch(state, () => {
+			const stop1 = watch(state, () => {
 				watcher1Calls++
-			})
+			}, { deep: true })
 
-			const stop2 = deepWatch(state, () => {
+			const stop2 = watch(state, () => {
 				watcher2Calls++
-			})
+			}, { deep: true })
 
 			state.user.name = 'Jane'
 			expect(watcher1Calls).toBe(1)
@@ -685,17 +682,17 @@ describe('deepWatch', () => {
 		})
 
 		it('should stop watching when cleanup is called', () => {
-			const state = reactive({ 
-				user: { 
-					name: 'John', 
-					profile: { age: 30 } 
-				} 
+			const state = reactive({
+				user: {
+					name: 'John',
+					profile: { age: 30 },
+				},
 			})
 			let callCount = 0
 
-			const stop = deepWatch(state, () => {
+			const stop = watch(state, () => {
 				callCount++
-			})
+			}, { deep: true })
 
 			state.user.name = 'Jane'
 			expect(callCount).toBe(1)
@@ -711,9 +708,9 @@ describe('deepWatch', () => {
 			state.self = state // Create circular reference
 			let callCount = 0
 
-			const stop = deepWatch(state, () => {
+			const stop = watch(state, () => {
 				callCount++
-			})
+			}, { deep: true })
 
 			state.name = 'Jane'
 			expect(callCount).toBe(1)
@@ -722,22 +719,22 @@ describe('deepWatch', () => {
 		})
 
 		it('should handle deeply nested objects', () => {
-			const state = reactive({ 
-				level1: { 
-					level2: { 
-						level3: { 
-							level4: { 
-								value: 'deep' 
-							} 
-						} 
-					} 
-				} 
+			const state = reactive({
+				level1: {
+					level2: {
+						level3: {
+							level4: {
+								value: 'deep',
+							},
+						},
+					},
+				},
 			})
 			let callCount = 0
 
-			const stop = deepWatch(state, () => {
+			const stop = watch(state, () => {
 				callCount++
-			})
+			}, { deep: true })
 
 			state.level1.level2.level3.level4.value = 'deeper'
 			expect(callCount).toBe(1)
@@ -755,9 +752,9 @@ describe('deepWatch', () => {
 			}
 
 			let callCount = 0
-			const stop = deepWatch(state, () => {
+			const stop = watch(state, () => {
 				callCount++
-			})
+			}, { deep: true })
 
 			// Change one item
 			state.items[50].nested.value = 999
@@ -769,15 +766,15 @@ describe('deepWatch', () => {
 
 		it('should trigger deep watch when pushing objects to reactive array', () => {
 			const state = reactive({ items: [] as any[] })
-			
+
 			let callCount = 0
-			const stop = deepWatch(state, () => {
+			const stop = watch(state, () => {
 				callCount++
-			})
+			}, { deep: true })
 
 			// Push an object with nested properties
 			state.items.push({ id: 1, nested: { value: 'test' } })
-			
+
 			// This should trigger deep watch because we're adding a new object to the array
 			// If this fails, it means push() is not properly tracking deep changes
 			expect(callCount).toBe(1)
@@ -790,22 +787,22 @@ describe('deepWatch', () => {
 
 		it('should trigger deep watch when pushing nested objects to reactive array', () => {
 			const state = reactive({ items: [] as any[] })
-			
+
 			let callCount = 0
-			const stop = deepWatch(state, () => {
+			const stop = watch(state, () => {
 				callCount++
-			})
+			}, { deep: true })
 
 			// Push a nested object
-			state.items.push({ 
-				id: 1, 
-				data: { 
-					config: { 
-						enabled: true 
-					} 
-				} 
+			state.items.push({
+				id: 1,
+				data: {
+					config: {
+						enabled: true,
+					},
+				},
 			})
-			
+
 			// This should trigger deep watch because we're adding a deeply nested object
 			// If this fails, it means push() is not properly tracking deep changes for nested objects
 			expect(callCount).toBe(1)
@@ -818,9 +815,9 @@ describe('deepWatch', () => {
 			const state = reactive({ items: [] as any[] })
 
 			let callCount = 0
-			const stop = deepWatch(state, () => {
+			const stop = watch(state, () => {
 				callCount++
-			})
+			}, { deep: true })
 
 			expect(callCount).toBe(0)
 			state.items.push({ nested: { value: 0 } })
@@ -840,9 +837,9 @@ describe('deepWatch', () => {
 			const item = reactive({ value: 0 })
 
 			let callCount = 0
-			const stop = deepWatch(state, () => {
+			const stop = watch(state, () => {
 				callCount++
-			})
+			}, { deep: true })
 
 			expect(callCount).toBe(0)
 
@@ -859,18 +856,18 @@ describe('deepWatch', () => {
 		})
 
 		it('should handle non-reactive objects gracefully', () => {
-			const plainObject = { 
-				user: { 
-					name: 'John', 
-					profile: { age: 30 } 
-				} 
+			const plainObject = {
+				user: {
+					name: 'John',
+					profile: { age: 30 },
+				},
 			}
 			let callCount = 0
 
 			// This should not throw but also not trigger
-			const stop = deepWatch(plainObject, () => {
+			const stop = watch(plainObject as any, () => {
 				callCount++
-			})
+			}, { deep: true })
 
 			plainObject.user.name = 'Jane'
 			expect(callCount).toBe(0) // Should not trigger for non-reactive objects

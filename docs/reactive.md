@@ -230,6 +230,89 @@ stopEffect() // Stops the effect
 state.count = 10 // No longer triggers the effect
 ```
 
+### Automatic Effect Cleanup
+
+The reactive system provides **automatic cleanup** for effects, making memory management much easier. You **do not** have to call the cleanup function in most cases, but you **may** want to, especially if your effects have side effects like timers, DOM manipulation, or event listeners.
+
+#### How Automatic Cleanup Works
+
+1. **Parent-Child Independence**: When an effect is created inside another effect, it becomes a "child" of the parent effect. However, when the parent effect is cleaned up, child effects become independent and are NOT automatically cleaned up - they continue to run until they're garbage collected or explicitly cleaned up.
+
+2. **Garbage Collection Cleanup**: For top-level effects (not created inside other effects) and orphaned child effects, the system uses JavaScript's garbage collection to automatically clean them up when they're no longer referenced.
+
+#### Examples
+
+**Parent-Child Independence:**
+```typescript
+const state = reactive({ a: 1, b: 2 })
+
+const stopParent = effect(() => {
+    state.a
+    
+    // Child effect - becomes independent when parent is cleaned up
+    effect(() => {
+        state.b
+        return () => console.log('Child cleanup')
+    })
+    
+    return () => console.log('Parent cleanup')
+})
+
+// Only cleans up the parent - child becomes independent
+stopParent() // Logs: "Parent cleanup" (child continues running)
+```
+
+**Garbage Collection Cleanup:**
+```typescript
+const state = reactive({ value: 1 })
+
+// Top-level effect - automatically cleaned up via garbage collection
+effect(() => {
+    state.value
+    return () => console.log('GC cleanup')
+})
+
+// No explicit cleanup needed - will be cleaned up when garbage collected
+```
+
+**When You Should Store Cleanup Functions:**
+
+While cleanup is automatic, you should **store and remember** cleanup functions when your effects have side effects that need immediate cleanup:
+
+```typescript
+const state = reactive({ value: 1 })
+const activeEffects: (() => void)[] = []
+
+// Store cleanup functions for effects with side effects
+for (let i = 0; i < 3; i++) {
+    const stopEffect = effect(() => {
+        state.value
+        
+        // Side effect that needs immediate cleanup
+        const intervalId = setInterval(() => {
+            console.log(`Timer ${i} running`)
+        }, 1000)
+        
+        return () => {
+            clearInterval(intervalId) // Prevent memory leaks
+        }
+    })
+    
+    activeEffects.push(stopEffect)
+}
+
+// Clean up all effects when needed
+activeEffects.forEach(stop => stop())
+```
+
+**Key Points:**
+
+- **You do not have to call cleanup** - the system handles it automatically via garbage collection
+- **You may want to call cleanup** - especially for effects with side effects
+- **You have to store and remember cleanup** - when you need immediate control over when effects stop
+- **Child effects become independent** - when their parent effect is cleaned up, they continue running
+- **All effects use garbage collection** - as the primary cleanup mechanism
+
 ### Effect Dependencies
 
 Effects automatically track which reactive properties they access.
@@ -926,12 +1009,44 @@ effect(() => {
 
 ## Class Reactivity
 
-### `Reactive` Mixin
+### `@reactive` Decorator
 
-The `Reactive` mixin makes class instances automatically reactive.
+The `@reactive` decorator makes class instances automatically reactive. This is the recommended approach for adding reactivity to classes.
 
 ```typescript
-import { Reactive } from './reactive'
+import { reactive } from './reactive'
+
+@reactive
+class User {
+    name: string
+    age: number
+    
+    constructor(name: string, age: number) {
+        this.name = name
+        this.age = age
+    }
+    
+    updateAge(newAge: number) {
+        this.age = newAge
+    }
+}
+
+const user = new User("John", 30)
+
+effect(() => {
+    console.log(`User: ${user.name}, Age: ${user.age}`)
+})
+
+user.updateAge(31) // Triggers effect
+user.name = "Jane" // Triggers effect
+```
+
+### Functional Syntax
+
+You can also use the functional syntax for making classes reactive:
+
+```typescript
+import { reactive } from './reactive'
 
 class User {
     name: string
@@ -947,7 +1062,7 @@ class User {
     }
 }
 
-const ReactiveUser = Reactive(User)
+const ReactiveUser = reactive(User)
 const user = new ReactiveUser("John", 30)
 
 effect(() => {
@@ -958,7 +1073,57 @@ user.updateAge(31) // Triggers effect
 user.name = "Jane" // Triggers effect
 ```
 
-### Making Classes Reactive
+### `ReactiveBase` for Complex Inheritance
+
+For complex inheritance trees, especially when you need to solve constructor reactivity issues, extend `ReactiveBase`:
+
+```typescript
+import { ReactiveBase, reactive } from './reactive'
+
+class GameObject extends ReactiveBase {
+    id = 'game-object'
+    position = { x: 0, y: 0 }
+}
+
+class Entity extends GameObject {
+    health = 100
+}
+
+@reactive
+class Player extends Entity {
+    name = 'Player'
+    level = 1
+}
+
+const player = new Player()
+
+effect(() => {
+    console.log(`Player ${player.name} at (${player.position.x}, ${player.position.y})`)
+})
+
+player.position.x = 10 // Triggers effect
+player.health = 80     // Triggers effect
+```
+
+**Advantages of `ReactiveBase`:**
+
+1. **Constructor Reactivity**: Solves the issue where `this` in the constructor is not yet reactive
+2. **Inheritance Safety**: Prevents reactivity from being added to prototype chains in complex inheritance trees
+3. **No Side Effects**: The base class itself has no effect - it only enables proper reactivity when combined with `@reactive`
+
+### Choosing the Right Approach
+
+**Use `@reactive` decorator when:**
+- You have simple classes without complex inheritance
+- You want the cleanest, most modern syntax
+- You don't need to modify or use `this` in the constructor
+
+**Use `ReactiveBase` + `@reactive` when:**
+- You have complex inheritance trees (like game objects, UI components)
+- You need to modify or use `this` in the constructor
+- You want to prevent reactivity from being added to prototype chains
+
+### Making Existing Class Instances Reactive
 
 You can also make existing class instances reactive:
 
@@ -986,7 +1151,8 @@ reactiveCounter.increment() // Triggers effect
 Methods that modify properties automatically trigger effects:
 
 ```typescript
-class ShoppingCart extends Reactive() {
+@reactive
+class ShoppingCart {
     items: string[] = []
     
     addItem(item: string) {
@@ -1013,9 +1179,10 @@ cart.removeItem('Apple') // Triggers effect
 
 ### Inheritance Support
 
-The `Reactive` mixin works with inheritance:
+The `@reactive` decorator works with inheritance:
 
 ```typescript
+@reactive
 class Animal {
     species: string
     
@@ -1024,7 +1191,7 @@ class Animal {
     }
 }
 
-class Dog extends Reactive(Animal) {
+class Dog extends Animal {
     breed: string
     
     constructor(breed: string) {
@@ -1041,6 +1208,8 @@ effect(() => {
 
 dog.breed = 'Labrador' // Triggers effect
 ```
+
+**Note**: When using inheritance with the `@reactive` decorator, apply it to the base class. The decorator will automatically handle inheritance properly.
 
 ## Non-Reactive System
 
@@ -1075,6 +1244,7 @@ const reactiveInstance = reactive(instance) // Returns instance unchanged
 Mark class properties as non-reactive.
 
 ```typescript
+@reactive
 class User {
     @unreactive
     id: string = 'user-123'
@@ -1083,8 +1253,7 @@ class User {
     age: number = 30
 }
 
-const ReactiveUser = Reactive(User)
-const user = new ReactiveUser()
+const user = new User()
 
 effect(() => {
     console.log(user.name, user.age) // Tracks these
@@ -1115,7 +1284,7 @@ class Config {
     timeout: number = 5000
 }
 
-const ReactiveConfig = Reactive(Config)
+const ReactiveConfig = reactive(Config)
 const config = new ReactiveConfig()
 
 effect(() => {
@@ -1200,6 +1369,7 @@ class User {
 Creates computed properties that cache their values and only recompute when dependencies change.
 
 ```typescript
+@reactive
 class Calculator {
     @computed
     get area() {
@@ -1210,8 +1380,7 @@ class Calculator {
     height: number = 5
 }
 
-const ReactiveCalculator = Reactive(Calculator)
-const calc = new ReactiveCalculator()
+const calc = new Calculator()
 
 effect(() => {
     console.log('Area:', calc.area)
@@ -1389,6 +1558,7 @@ state.c = 30
 // Consider batching or using a single update method
 
 // 3. Avoid unnecessary reactivity
+@reactive
 class User {
     @unreactive
     private internalId = crypto.randomUUID() // Never changes
@@ -1587,8 +1757,9 @@ class ReactiveWeakMap<K extends object, V> extends WeakMap<K, V>
 class ReactiveSet<T> extends Set<T>
 class ReactiveWeakSet<T extends object> extends WeakSet<T>
 
-// Class mixin
-const Reactive: <Base extends new (...args: any[]) => any>(Base: Base) => Base
+// Class reactivity
+function reactive<T extends new (...args: any[]) => any>(target: T): T
+class ReactiveBase
 
 // Native reactivity
 function registerNativeReactivity(originalClass: new (...args: any[]) => any, reactiveClass: new (...args: any[]) => any): void

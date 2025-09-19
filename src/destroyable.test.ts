@@ -68,7 +68,9 @@ describe('Destroyable', () => {
 			DestroyableMyClass.destroy(obj)
 
 			expect(() => obj.name).toThrow(DestructionError)
-			expect(() => (obj.name = 'value')).toThrow(DestructionError)
+			expect(() => {
+				obj.name = 'value'
+			}).toThrow(DestructionError)
 		})
 	})
 

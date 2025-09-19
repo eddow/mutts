@@ -147,3 +147,14 @@ export function allocated<Allocated extends Record<PropertyKey, any>>(
 		},
 	})
 }
+
+export function callOnGC(cb: () => void) {
+	let called = false
+	const forward = () => {
+		if (called) return
+		called = true
+		cb()
+	}
+	fr.register(forward, cb, cb)
+	return forward
+}

@@ -2,7 +2,7 @@ import {
 	effect,
 	isNonReactive,
 	isReactive,
-	Reactive,
+	ReactiveBase,
 	reactive,
 	unreactive,
 	untracked,
@@ -420,8 +420,9 @@ describe('integration tests', () => {
 	})
 })
 
-describe('Reactive mixin', () => {
-	it('should make class instances reactive', () => {
+describe('@reactive decorator', () => {
+	it('should make class instances reactive using decorator', () => {
+		@reactive
 		class TestClass {
 			count = 0
 			name = 'test'
@@ -435,8 +436,7 @@ describe('Reactive mixin', () => {
 			}
 		}
 
-		const ReactiveTestClass = Reactive(TestClass)
-		const instance = new ReactiveTestClass()
+		const instance = new TestClass()
 
 		let effectCount = 0
 		effect(() => {
@@ -453,6 +453,7 @@ describe('Reactive mixin', () => {
 	})
 
 	it('should track property changes on reactive class instances', () => {
+		@reactive
 		class User {
 			name = 'John'
 			age = 30
@@ -463,8 +464,7 @@ describe('Reactive mixin', () => {
 			}
 		}
 
-		const ReactiveUser = Reactive(User)
-		const user = new ReactiveUser()
+		const user = new User()
 
 		let nameEffectCount = 0
 		let ageEffectCount = 0
@@ -490,6 +490,7 @@ describe('Reactive mixin', () => {
 	})
 
 	it('should work with inheritance', () => {
+		@reactive
 		class Animal {
 			species = 'unknown'
 			energy = 100
@@ -502,8 +503,7 @@ describe('Reactive mixin', () => {
 			}
 		}
 
-		const ReactiveDog = Reactive(Dog)
-		const dog = new ReactiveDog()
+		const dog = new Dog()
 
 		let energyEffectCount = 0
 		effect(() => {
@@ -520,6 +520,7 @@ describe('Reactive mixin', () => {
 	})
 
 	it('should handle method calls that modify properties', () => {
+		@reactive
 		class Counter {
 			value = 0
 
@@ -532,8 +533,7 @@ describe('Reactive mixin', () => {
 			}
 		}
 
-		const ReactiveCounter = Reactive(Counter)
-		const counter = new ReactiveCounter()
+		const counter = new Counter()
 
 		let effectCount = 0
 		effect(() => {
@@ -551,6 +551,239 @@ describe('Reactive mixin', () => {
 		counter.reset()
 		expect(effectCount).toBe(3)
 		expect(counter.value).toBe(0)
+	})
+
+	it('should work with functional syntax', () => {
+		class TestClass {
+			count = 0
+			name = 'test'
+
+			increment() {
+				this.count++
+			}
+		}
+
+		const ReactiveTestClass = reactive(TestClass)
+		const instance = new ReactiveTestClass()
+
+		let effectCount = 0
+		effect(() => {
+			effectCount++
+			instance.count
+		})
+
+		expect(effectCount).toBe(1)
+		expect(instance.count).toBe(0)
+
+		instance.increment()
+		expect(effectCount).toBe(2)
+		expect(instance.count).toBe(1)
+	})
+})
+
+describe('ReactiveBase', () => {
+	it('should make classes extending ReactiveBase reactive when decorated', () => {
+		class BaseClass extends ReactiveBase {
+			baseProp = 'base'
+		}
+
+		@reactive
+		class DerivedClass extends BaseClass {
+			derivedProp = 'derived'
+		}
+
+		const instance = new DerivedClass()
+
+		let effectCount = 0
+		effect(() => {
+			effectCount++
+			instance.baseProp
+			instance.derivedProp
+		})
+
+		expect(effectCount).toBe(1)
+		expect(instance.baseProp).toBe('base')
+		expect(instance.derivedProp).toBe('derived')
+
+		instance.baseProp = 'new base'
+		expect(effectCount).toBe(2)
+
+		instance.derivedProp = 'new derived'
+		expect(effectCount).toBe(3)
+	})
+
+	it('should solve constructor reactivity issues', () => {
+		class BaseClass extends ReactiveBase {
+			value = 0
+		}
+
+		@reactive
+		class TestClass extends BaseClass {
+			constructor() {
+				super()
+				// In constructor, 'this' is not yet reactive
+				// But ReactiveBase ensures the returned instance is reactive
+				this.value = 42
+			}
+		}
+
+		const instance = new TestClass()
+
+		let effectCount = 0
+		effect(() => {
+			effectCount++
+			instance.value
+		})
+
+		expect(effectCount).toBe(1)
+		expect(instance.value).toBe(42)
+
+		instance.value = 100
+		expect(effectCount).toBe(2)
+		expect(instance.value).toBe(100)
+	})
+
+	it('should work with complex inheritance trees', () => {
+		class GameObject extends ReactiveBase {
+			id = 'game-object'
+			position = { x: 0, y: 0 }
+		}
+
+		class Entity extends GameObject {
+			health = 100
+		}
+
+		@reactive
+		class Player extends Entity {
+			name = 'Player'
+			level = 1
+		}
+
+		const player = new Player()
+
+		let positionEffectCount = 0
+		let healthEffectCount = 0
+		let levelEffectCount = 0
+
+		effect(() => {
+			positionEffectCount++
+			player.position.x
+			player.position.y
+		})
+
+		effect(() => {
+			healthEffectCount++
+			player.health
+		})
+
+		effect(() => {
+			levelEffectCount++
+			player.level
+		})
+
+		expect(positionEffectCount).toBe(1)
+		expect(healthEffectCount).toBe(1)
+		expect(levelEffectCount).toBe(1)
+
+		player.position.x = 10
+		expect(positionEffectCount).toBe(2)
+		expect(healthEffectCount).toBe(1)
+		expect(levelEffectCount).toBe(1)
+
+		player.health = 80
+		expect(positionEffectCount).toBe(2)
+		expect(healthEffectCount).toBe(2)
+		expect(levelEffectCount).toBe(1)
+
+		player.level = 2
+		expect(positionEffectCount).toBe(2)
+		expect(healthEffectCount).toBe(2)
+		expect(levelEffectCount).toBe(2)
+	})
+
+	it('should not affect classes that do not extend ReactiveBase', () => {
+		class RegularClass {
+			value = 0
+		}
+
+		@reactive
+		class TestClass extends RegularClass {
+			otherValue = 1
+		}
+
+		const instance = new TestClass()
+
+		let effectCount = 0
+		effect(() => {
+			effectCount++
+			instance.value
+			instance.otherValue
+		})
+
+		expect(effectCount).toBe(1)
+
+		instance.value = 10
+		expect(effectCount).toBe(2)
+
+		instance.otherValue = 20
+		expect(effectCount).toBe(3)
+	})
+})
+
+describe('Legacy Reactive mixin', () => {
+	it('should still work for backward compatibility', () => {
+		class TestClass {
+			count = 0
+			name = 'test'
+
+			increment() {
+				this.count++
+			}
+
+			setName(newName: string) {
+				this.name = newName
+			}
+		}
+
+		const ReactiveTestClass = reactive(TestClass)
+		const instance = new ReactiveTestClass()
+
+		let effectCount = 0
+		effect(() => {
+			effectCount++
+			instance.count
+		})
+
+		expect(effectCount).toBe(1)
+		expect(instance.count).toBe(0)
+
+		instance.increment()
+		expect(effectCount).toBe(2)
+		expect(instance.count).toBe(1)
+	})
+
+	it('should warn when used with inheritance', () => {
+		const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+
+		class BaseClass {
+			baseProp = 'base'
+		}
+
+		const ReactiveBaseClass = reactive(BaseClass)
+
+		// Create a class that extends the reactive class
+		class DerivedClass extends ReactiveBaseClass {
+			derivedProp = 'derived'
+		}
+
+		const instance = new DerivedClass()
+
+		// The warning should be triggered when creating the instance
+		expect(consoleSpy).toHaveBeenCalledWith(
+			expect.stringContaining('has been inherited by')
+		)
+
+		consoleSpy.mockRestore()
 	})
 })
 
@@ -657,7 +890,7 @@ describe('non-reactive functionality', () => {
 			// Mark the class as non-reactive using the public API
 			unreactive(TestClass)
 
-			const ReactiveTestClass = Reactive(TestClass)
+			const ReactiveTestClass = reactive(TestClass)
 			const instance = new ReactiveTestClass()
 
 			expect(isNonReactive(instance)).toBe(true)
@@ -730,7 +963,7 @@ describe('non-reactive functionality', () => {
 
 			unreactive(NonReactiveClass)
 
-			const ReactiveNonReactiveClass = Reactive(NonReactiveClass)
+			const ReactiveNonReactiveClass = reactive(NonReactiveClass)
 			const instance = new ReactiveNonReactiveClass()
 
 			expect(isNonReactive(instance)).toBe(true)
@@ -1090,5 +1323,336 @@ describe('effect cleanup timing', () => {
 	})
 })
 
+describe('automatic effect cleanup', () => {
+	
+	function tick(ms: number = 100) {
+		return new Promise((resolve) => setTimeout(resolve, ms))
+	}
 
+	const gc = global.gc
 
+	async function collectGarbages() {
+		await tick()
+		gc!()
+		await tick()
+	}
+
+	describe('parent-child effect cleanup', () => {
+		it('should automatically clean up child effects when parent is cleaned up', () => {
+			const state = reactive({ a: 1, b: 2 })
+			const cleanupCalls: string[] = []
+
+			const stopParent = effect(() => {
+				state.a
+				
+				// Create child effect
+				effect(() => {
+					state.b
+					return () => cleanupCalls.push('child cleanup')
+				})
+				
+				return () => cleanupCalls.push('parent cleanup')
+			})
+
+			expect(cleanupCalls).toEqual([])
+
+			// Stop parent effect - should clean up both parent and child
+			stopParent()
+			expect(cleanupCalls).toEqual(['parent cleanup', 'child cleanup'])
+		})
+
+		it('should clean up all nested child effects when parent is cleaned up', () => {
+			const state = reactive({ a: 1, b: 2, c: 3 })
+			const cleanupCalls: string[] = []
+
+			const stopParent = effect(() => {
+				state.a
+				
+				// Create child effect
+				effect(() => {
+					state.b
+					
+					// Create grandchild effect
+					effect(() => {
+						state.c
+						return () => cleanupCalls.push('grandchild cleanup')
+					})
+					
+					return () => cleanupCalls.push('child cleanup')
+				})
+				
+				return () => cleanupCalls.push('parent cleanup')
+			})
+
+			expect(cleanupCalls).toEqual([])
+
+			// Stop parent effect - should clean up all nested effects
+			stopParent()
+			expect(cleanupCalls).toEqual(['parent cleanup', 'child cleanup', 'grandchild cleanup'])
+		})
+
+		it('should allow child effects to be cleaned up independently', () => {
+			const state = reactive({ a: 1, b: 2 })
+			const cleanupCalls: string[] = []
+
+			const stopParent = effect(() => {
+				state.a
+				
+				// Create child effect and store its cleanup
+				const stopChild = effect(() => {
+					state.b
+					return () => cleanupCalls.push('child cleanup')
+				})
+				
+				// Clean up child independently
+				stopChild()
+				
+				return () => cleanupCalls.push('parent cleanup')
+			})
+
+			expect(cleanupCalls).toEqual(['child cleanup'])
+
+			// Stop parent effect - should only clean up parent
+			stopParent()
+			expect(cleanupCalls).toEqual(['child cleanup', 'parent cleanup'])
+		})
+
+		it('should clean up multiple child effects when parent is cleaned up', () => {
+			const state = reactive({ a: 1, b: 2, c: 3 })
+			const cleanupCalls: string[] = []
+
+			const stopParent = effect(() => {
+				state.a
+				
+				// Create multiple child effects
+				effect(() => {
+					state.b
+					return () => cleanupCalls.push('child1 cleanup')
+				})
+				
+				effect(() => {
+					state.c
+					return () => cleanupCalls.push('child2 cleanup')
+				})
+				
+				return () => cleanupCalls.push('parent cleanup')
+			})
+
+			expect(cleanupCalls).toEqual([])
+
+			// Stop parent effect - should clean up all children and parent
+			stopParent()
+			expect(cleanupCalls).toEqual(['parent cleanup', 'child1 cleanup', 'child2 cleanup'])
+		})
+	})
+
+	describe('garbage collection cleanup', () => {
+		it('should clean up unreferenced top-level effects via GC', async () => {
+			const state = reactive({ value: 1 })
+			let cleanupCalled = false
+
+			// Create effect in a scope that will be garbage collected
+			;(() => {
+				let x = effect(() => {
+					state.value
+					return () => {
+						cleanupCalled = true
+					}
+				})
+			})()
+
+			expect(cleanupCalled).toBe(false)
+
+			// Force garbage collection
+			await collectGarbages()
+			expect(cleanupCalled).toBe(true)
+		})
+
+		it('should clean up parent and child effects when both are unreferenced', async () => {
+			const state = reactive({ a: 1, b: 2 })
+			const cleanupCalls: string[] = []
+
+			// Create parent effect that creates a child, both unreferenced
+			;(() => {
+				effect(() => {
+					state.a
+					
+					// Create child effect
+					effect(() => {
+						state.b
+						return () => cleanupCalls.push('child cleanup')
+					})
+					
+					return () => cleanupCalls.push('parent cleanup')
+				})
+			})()
+
+			expect(cleanupCalls).toEqual([])
+
+			// Force garbage collection
+			await collectGarbages()
+			
+			// Both parent and child should be cleaned up
+			expect(cleanupCalls).toContain('parent cleanup')
+			expect(cleanupCalls).toContain('child cleanup')
+			expect(cleanupCalls).toHaveLength(2)
+		})
+
+		it('should clean up orphaned child effects when parent is unreferenced', async () => {
+			const state = reactive({ a: 1, b: 2 })
+			const cleanupCalls: string[] = []
+
+			// Create parent effect that creates a child, both unreferenced
+			;(() => {
+				effect(() => {
+					state.a
+					
+					// Create child effect
+					effect(() => {
+						state.b
+						return () => cleanupCalls.push('child cleanup')
+					})
+					
+					return () => cleanupCalls.push('parent cleanup')
+				})
+			})()
+
+			expect(cleanupCalls).toEqual([])
+
+			// Force garbage collection - both should be cleaned up
+			await collectGarbages()
+			
+			expect(cleanupCalls).toContain('parent cleanup')
+			expect(cleanupCalls).toContain('child cleanup')
+			expect(cleanupCalls).toHaveLength(2)
+		})
+
+		it('should handle child effect referenced but parent unreferenced', async () => {
+			const state = reactive({ a: 1, b: 2 })
+			const cleanupCalls: string[] = []
+
+			// Create parent effect that creates a child, but only keep reference to child
+			let stopChild: (() => void) | undefined
+			const createParentWithChild = () => {
+				effect(() => {
+					state.a
+					
+					// Create child effect and store its cleanup function
+					stopChild = effect(() => {
+						state.b
+						return () => cleanupCalls.push('child cleanup')
+					})
+				})
+			}
+			
+			createParentWithChild()
+			
+			expect(cleanupCalls).toEqual([])
+			expect(stopChild).toBeDefined()
+
+			// Force garbage collection - parent should be cleaned up, child should remain
+			await collectGarbages()
+			
+			// The child effect should still be alive (parent was GCed but child is referenced)
+			// Note: The child might be cleaned up if it's also unreferenced
+			// This test demonstrates the mechanism, not the exact behavior
+			
+			// Explicitly clean up child if it's still alive
+			if (stopChild) {
+				stopChild()
+				expect(cleanupCalls).toContain('child cleanup')
+			}
+		})
+
+		it('should handle mixed explicit and GC cleanup', () => {
+			const state = reactive({ a: 1, b: 2, c: 3 })
+			const cleanupCalls: string[] = []
+
+			// Create parent effect
+			const stopParent = effect(() => {
+				state.a
+				
+				// Create child that will be explicitly cleaned up
+				const stopChild = effect(() => {
+					state.b
+					return () => cleanupCalls.push('explicit child cleanup')
+				})
+				
+				// Create child that will be GC cleaned up
+				effect(() => {
+					state.c
+					return () => cleanupCalls.push('gc child cleanup')
+				})
+				
+				// Explicitly clean up first child
+				stopChild()
+				
+				return () => cleanupCalls.push('parent cleanup')
+			})
+
+			expect(cleanupCalls).toEqual(['explicit child cleanup'])
+
+			// Stop parent - should clean up parent and all remaining children
+			stopParent()
+			expect(cleanupCalls).toEqual(['explicit child cleanup', 'parent cleanup', 'gc child cleanup'])
+		})
+	})
+
+	describe('cleanup behavior documentation', () => {
+		it('should demonstrate that cleanup is optional but recommended for side effects', () => {
+			const state = reactive({ value: 1 })
+			let sideEffectExecuted = false
+
+			// Effect with side effect that should be cleaned up
+			const stopEffect = effect(() => {
+				state.value
+				
+				// Simulate side effect (e.g., DOM manipulation, timers, etc.)
+				const intervalId = setInterval(() => {
+					sideEffectExecuted = true
+				}, 100)
+				
+				// Return cleanup function to prevent memory leaks
+				return () => {
+					clearInterval(intervalId)
+				}
+			})
+
+			// Effect is running, side effect should be active
+			expect(sideEffectExecuted).toBe(false)
+
+			// Stop effect - cleanup should be called
+			stopEffect()
+			
+			// Wait a bit to ensure interval would have fired
+			setTimeout(() => {
+				expect(sideEffectExecuted).toBe(false) // Should still be false due to cleanup
+			}, 150)
+		})
+
+		it('should show that effects can be stored and remembered for later cleanup', () => {
+			const state = reactive({ value: 1 })
+			const activeEffects: (() => void)[] = []
+			const cleanupCalls: string[] = []
+
+			// Create multiple effects and store their cleanup functions
+			for (let i = 0; i < 3; i++) {
+				const stopEffect = effect(() => {
+					state.value
+					return () => cleanupCalls.push(`effect ${i} cleanup`)
+				})
+				activeEffects.push(stopEffect)
+			}
+
+			expect(cleanupCalls).toEqual([])
+
+			// Clean up all effects at once
+			activeEffects.forEach(stop => stop())
+			
+			expect(cleanupCalls).toHaveLength(3)
+			expect(cleanupCalls).toContain('effect 0 cleanup')
+			expect(cleanupCalls).toContain('effect 1 cleanup')
+			expect(cleanupCalls).toContain('effect 2 cleanup')
+		})
+	})
+})

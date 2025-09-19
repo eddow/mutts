@@ -1,16 +1,6 @@
-const events = Symbol('events')
-const hooks = Symbol('hooks')
 export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
-	constructor() {
-		Object.defineProperty(this, events, {
-			...Object.getOwnPropertyDescriptor(Eventful.prototype, events)!,
-			enumerable: false,
-			writable: false,
-			configurable: false,
-		})
-	}
-	protected readonly [events] = new Map<keyof Events, ((...args: any[]) => void)[]>()
-	protected readonly [hooks] = [] as ((...args: any[]) => void)[]
+	readonly #events = new Map<keyof Events, ((...args: any[]) => void)[]>()
+	readonly #hooks = [] as ((...args: any[]) => void)[]
 
 	public hook(
 		cb: <EventType extends keyof Events>(
@@ -18,9 +8,9 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 			...args: Parameters<Events[EventType]>
 		) => void
 	): () => void {
-		if (!this[hooks].includes(cb)) this[hooks].push(cb)
+		if (!this.#hooks.includes(cb)) this.#hooks.push(cb)
 		return () => {
-			this[hooks].splice(this[hooks].indexOf(cb), 1)
+			this.#hooks.splice(this.#hooks.indexOf(cb), 1)
 		}
 	}
 
@@ -35,10 +25,10 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 				this.on(e, eventOrEvents[e]!)
 			}
 		} else if (cb !== undefined) {
-			let callbacks = this[events].get(eventOrEvents)
+			let callbacks = this.#events.get(eventOrEvents)
 			if (!callbacks) {
 				callbacks = []
-				this[events].set(eventOrEvents, callbacks)
+				this.#events.set(eventOrEvents, callbacks)
 			}
 			callbacks.push(cb)
 		}
@@ -56,24 +46,24 @@ export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
 				this.off(e, eventOrEvents[e])
 			}
 		} else if (cb !== null && cb !== undefined) {
-			const callbacks = this[events].get(eventOrEvents)
+			const callbacks = this.#events.get(eventOrEvents)
 			if (callbacks) {
-				this[events].set(
+				this.#events.set(
 					eventOrEvents,
 					callbacks.filter((c) => c !== cb)
 				)
 			}
 		} else {
 			// Remove all listeners for this event
-			this[events].delete(eventOrEvents)
+			this.#events.delete(eventOrEvents)
 		}
 	}
-	protected emit<EventType extends keyof Events>(
+	public emit<EventType extends keyof Events>(
 		event: EventType,
 		...args: Parameters<Events[EventType]>
 	) {
-		const callbacks = this[events].get(event)
+		const callbacks = this.#events.get(event)
 		if (callbacks) for (const cb of callbacks) cb.apply(this, args)
-		for (const cb of this[hooks]) cb.call(this, event, ...args)
+		for (const cb of this.#hooks) cb.call(this, event, ...args)
 	}
 }

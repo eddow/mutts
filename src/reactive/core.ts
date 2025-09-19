@@ -1,14 +1,16 @@
 // biome-ignore-all lint/suspicious/noConfusingVoidType: Type 'void' is not assignable to type 'ScopedCallback | undefined'.
 // Argument of type '() => void' is not assignable to parameter of type '(dep: DependencyFunction) => ScopedCallback | undefined'.
 
-import { Indexable } from "../indexable"
-
+import { Indexable } from '../indexable'
 
 export type DependencyFunction = <T>(cb: () => T) => T
 // TODO: proper async management, read when fn returns a promise and let the effect as "running",
 //  either to cancel the running one or to avoid running 2 in "parallel" and debounce the second one
 
-// Deep watching implementation with lazy back-references
+// TODO Auto add cleanup to `parent` effect cleanup ? + case for watch and warning on no parent + no return
+// Idea: on GC of effect, call it
+
+// TODO: watch on callback + watch-return-value ?
 
 export type ScopedCallback = () => void
 
@@ -38,7 +40,7 @@ const proxyToObject = new WeakMap<object, object>()
 
 // Deep watching data structures
 // Track which objects contain which other objects (back-references)
-const objectParents = new WeakMap<object, Set<{parent: object, prop: PropertyKey}>>()
+const objectParents = new WeakMap<object, Set<{ parent: object; prop: PropertyKey }>>()
 
 // Track which objects have deep watchers
 const objectsWithDeepWatchers = new WeakSet<object>()
@@ -153,7 +155,7 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 		if (props) raiseDeps(objectWatchers, [allProps], props)
 		else raiseDeps(objectWatchers, objectWatchers.keys())
 	}
-	
+
 	// Bubble up changes if this object has deep watchers
 	if (objectsWithDeepWatchers.has(obj)) {
 		bubbleUpChange(obj, evolution)
@@ -181,6 +183,7 @@ export function getState(obj: any) {
 }
 
 export function dependant(obj: any, prop: any = allProps) {
+	// TODO: avoid depending on property get?
 	obj = unwrap(obj)
 	if (activeEffect && (typeof prop !== 'symbol' || prop === allProps)) {
 		let objectWatchers = watchers.get(obj)
@@ -207,6 +210,8 @@ export function dependant(obj: any, prop: any = allProps) {
 
 // Stack of active effects to handle nested effects
 let activeEffect: ScopedCallback | undefined
+// Parent effect used for lifecycle/cleanup relationships (can diverge later)
+let parentEffect: ScopedCallback | undefined
 
 // Track currently executing effects to prevent re-execution
 // These are all the effects triggered under `activeEffect`
@@ -238,14 +243,17 @@ function hasEffect(effect: ScopedCallback) {
 	}
 }
 
-export function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T): T {
+export function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T, keepParent?: true): T {
 	if (getRoot(effect) === getRoot(activeEffect)) return fn()
 	const oldActiveEffect = activeEffect
+	const oldParentEffect = parentEffect
 	activeEffect = effect
+	if(!keepParent) parentEffect = effect
 	try {
 		return fn()
 	} finally {
 		activeEffect = oldActiveEffect
+		parentEffect = oldParentEffect
 	}
 }
 
@@ -262,7 +270,7 @@ function addBackReference(child: object, parent: object, prop: any) {
 		parents = new Set()
 		objectParents.set(child, parents)
 	}
-	parents.add({parent, prop})
+	parents.add({ parent, prop })
 }
 
 /**
@@ -271,7 +279,7 @@ function addBackReference(child: object, parent: object, prop: any) {
 function removeBackReference(child: object, parent: object, prop: any) {
 	const parents = objectParents.get(child)
 	if (parents) {
-		parents.delete({parent, prop})
+		parents.delete({ parent, prop })
 		if (parents.size === 0) {
 			objectParents.delete(child)
 		}
@@ -291,8 +299,8 @@ function needsBackReferences(obj: object): boolean {
 function hasParentWithDeepWatchers(obj: object): boolean {
 	const parents = objectParents.get(obj)
 	if (!parents) return false
-	
-	for (const {parent} of parents) {
+
+	for (const { parent } of parents) {
 		if (objectsWithDeepWatchers.has(parent)) return true
 		if (hasParentWithDeepWatchers(parent)) return true
 	}
@@ -305,8 +313,8 @@ function hasParentWithDeepWatchers(obj: object): boolean {
 function bubbleUpChange(changedObject: object, evolution: Evolution) {
 	const parents = objectParents.get(changedObject)
 	if (!parents) return
-	
-	for (const {parent} of parents) {
+
+	for (const { parent } of parents) {
 		// Trigger deep watchers on parent
 		const parentDeepWatchers = deepWatchers.get(parent)
 		if (parentDeepWatchers) {
@@ -314,20 +322,20 @@ function bubbleUpChange(changedObject: object, evolution: Evolution) {
 				hasEffect(watcher)
 			}
 		}
-		
+
 		// Continue bubbling up
 		bubbleUpChange(parent, evolution)
 	}
 }
 
-export function track1(obj: object, prop: any, oldVal: any, newValue: any){
+export function track1(obj: object, prop: any, oldVal: any, newValue: any) {
 	// Manage back-references if this object has deep watchers
 	if (objectsWithDeepWatchers.has(obj)) {
 		// Remove old back-references
 		if (typeof oldVal === 'object' && oldVal !== null) {
 			removeBackReference(oldVal, obj, prop)
 		}
-		
+
 		// Add new back-references
 		if (typeof newValue === 'object' && newValue !== null) {
 			const reactiveValue = reactive(newValue)
@@ -342,73 +350,47 @@ const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
 		// Check if this property is marked as unreactive
-		function get() {
-			// For unreactive properties, bypass reactivity entirely
-			if (!(prop in obj)) return obj[prop]
-			let browser = obj
-			let pD = Object.getOwnPropertyDescriptor(browser, prop)
-			while (!pD && browser !== Object.prototype) {
-				browser = Object.getPrototypeOf(browser)
-				pD = Object.getOwnPropertyDescriptor(browser, prop)
-			}
-			return pD?.get ? pD.get.call(receiver) : obj[prop]
-		}
-		if (obj[unreactiveProperties]?.has(prop) || typeof prop === 'symbol') return get()
+		if (obj[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
+			return Reflect.get(obj, prop, receiver)
 		const absent = !(prop in obj)
 		// Depend if...
 		if (!options.instanceMembers || Object.hasOwn(receiver, prop) || absent) dependant(obj, prop)
-		
-		const value = get()
+
+		const value = Reflect.get(obj, prop, receiver)
 		if (typeof value === 'object' && value !== null) {
 			const reactiveValue = reactive(value)
-			
+
 			// Only create back-references if this object needs them
 			if (needsBackReferences(obj)) {
 				addBackReference(reactiveValue, obj, prop)
 			}
-			
+
 			return reactiveValue
 		}
 		return value
 	},
 	set(obj: any, prop: PropertyKey, value: any, receiver: any): boolean {
-		function set(newValue: any) {
-			if (!(prop in obj)) return false
-			let browser = obj
-			let pD = Object.getOwnPropertyDescriptor(browser, prop)
-			while (!pD && browser !== Object.prototype) {
-				browser = Object.getPrototypeOf(browser)
-				pD = Object.getOwnPropertyDescriptor(browser, prop)
-			}
-			if (!pD?.set) return false
-			pD.set.call(receiver, newValue)
-			return true
-		}
-
 		// Check if this property is marked as unreactive
-		if (obj[unreactiveProperties]?.has(prop)) {
-			if (!set(value)) (obj as any)[prop] = value
-			return true
-		}
+		if (obj[unreactiveProperties]?.has(prop))
+			return Reflect.set(obj, prop, value, receiver)
 		// Really specific case for when Array is forwarder, in order to let it manage the reactivity
-		const isArrayCase = prototypeForwarding in obj &&
-			obj[prototypeForwarding] instanceof Array && (
-				!Number.isNaN(Number(prop)) || prop === 'length'
-			)
+		const isArrayCase =
+			prototypeForwarding in obj &&
+			obj[prototypeForwarding] instanceof Array &&
+			(!Number.isNaN(Number(prop)) || prop === 'length')
 		const newValue = unwrap(value)
 
 		if (isArrayCase) {
-			(obj as any)[prop] = newValue
+			;(obj as any)[prop] = newValue
 			return true
 		}
-
 
 		const oldVal = (obj as any)[prop]
 		const oldPresent = prop in obj
 		track1(obj, prop, oldVal, newValue)
 
 		if (oldVal !== newValue) {
-			if (!set(newValue)) (obj as any)[prop] = newValue
+			Reflect.set(obj, prop, newValue, receiver)
 			// try to find a "generic" way to express that
 			touched1(obj, { type: oldPresent ? 'set' : 'add', prop }, prop)
 		}
@@ -416,22 +398,22 @@ const reactiveHandlers = {
 	},
 	deleteProperty(obj: any, prop: PropertyKey): boolean {
 		if (!Object.hasOwn(obj, prop)) return false
-		
+
 		const oldVal = (obj as any)[prop]
-		
+
 		// Remove back-references if this object has deep watchers
 		if (objectsWithDeepWatchers.has(obj) && typeof oldVal === 'object' && oldVal !== null) {
 			removeBackReference(oldVal, obj, prop)
 		}
-		
+
 		delete (obj as any)[prop]
 		touched1(obj, { type: 'del', prop }, prop)
-		
+
 		// Bubble up changes if this object has deep watchers
 		if (objectsWithDeepWatchers.has(obj)) {
 			bubbleUpChange(obj, { type: 'del', prop })
 		}
-		
+
 		return true
 	},
 	getPrototypeOf(obj: any): object | null {
@@ -445,16 +427,34 @@ const reactiveHandlers = {
 	},
 } as const
 
+const reactiveClasses = new WeakSet<Function>()
+export class ReactiveBase {
+	constructor() {
+		return reactiveClasses.has(new.target) ? reactive(this) : this
+	}
+}
+
 export function reactive<T>(anyTarget: T): T {
-	/*if(typeof anyTarget === 'function') { // Stage 3 decorator and legacy decorator
-		// @ts-expect-error - decorator, so `anyTarget` is the base class constructor
-		return class extends anyTarget {
+	if (typeof anyTarget === 'function') {
+		if(anyTarget.prototype instanceof ReactiveBase) {
+			reactiveClasses.add(anyTarget)
+			return anyTarget
+		}
+		//@ts-expect-error - anyTarget is a constructor function
+		class Reactive extends anyTarget {
 			constructor(...args: any[]) {
 				super(...args)
+				if(new.target !== Reactive && !reactiveClasses.has(new.target))
+					console.warn(
+						`${(anyTarget as any).name} has been inherited by ${this.constructor.name} that is not reactive.
+@reactive decorator must be applied to the leaf class OR classes have to extend ReactiveBase.`
+					)
 				return reactive(this)
 			}
 		}
-	}*/
+		Object.defineProperty(Reactive, 'name', { value: `Reactive<${anyTarget.name}>` })
+		return Reactive as any
+	}
 	const target = anyTarget as any
 	// If target is already a proxy, return it
 	if (proxyToObject.has(target) || isNonReactive(target)) return target as T
@@ -477,15 +477,19 @@ export function reactive<T>(anyTarget: T): T {
 
 export function unwrap<T>(proxy: T): T {
 	// Return the original object
-	return proxyToObject.get(proxy as any) as T ?? proxy
+	return (proxyToObject.get(proxy as any) as T) ?? proxy
 }
 
 export function isReactive(obj: any): boolean {
 	return proxyToObject.has(obj)
 }
 export function untracked(fn: () => ScopedCallback | undefined | void) {
-	withEffect(undefined, fn)
+	withEffect(undefined, fn, true)
 }
+
+// runEffect -> set<cleanup>
+const effectChildren = new WeakMap<ScopedCallback, Set<ScopedCallback>>()
+const fr = new FinalizationRegistry<() => void>((f) => f())
 
 /**
  * @param fn - The effect function to run - provides the cleaner
@@ -507,9 +511,8 @@ export function effect<Args extends any[]>(
 		}
 
 		options.enter(fn)
-		const reactionCleanup = withEffect(
-			effectStopped ? undefined : runEffect,
-			() => fn(dep, ...args)
+		const reactionCleanup = withEffect(effectStopped ? undefined : runEffect, () =>
+			fn(dep, ...args)
 		)
 		options.leave(fn)
 
@@ -541,7 +544,7 @@ export function effect<Args extends any[]>(
 	markWithRoot(runEffect, fn)
 
 	// Run the effect immediately
-	if(!batchedEffects) {
+	if (!batchedEffects) {
 		hasEffect(runEffect)
 	} else {
 		const oldBatchedEffects = batchedEffects
@@ -551,20 +554,52 @@ export function effect<Args extends any[]>(
 			batchedEffects = new Map([[fn, runEffect]])
 			runEffect()
 			batchedEffects.delete(fn)
-			for(const [root, effect] of batchedEffects!)
-				oldBatchedEffects.set(root, effect)
+			for (const [root, effect] of batchedEffects!) oldBatchedEffects.set(root, effect)
 		} finally {
 			batchedEffects = oldBatchedEffects
 		}
 	}
 
-	return (): void => {
+	const mainCleanup = (): void => {
 		effectStopped = true
 		if (cleanup) {
 			cleanup()
 			cleanup = null
 		}
+		// Invoke all child cleanups (recursive via subEffectCleanup calling its own mainCleanup)
+		const children = effectChildren.get(runEffect)
+		if (children) {
+			for (const childCleanup of children) childCleanup()
+			effectChildren.delete(runEffect)
+		}
+		
+		fr.unregister(mainCleanup)
 	}
+
+ 	// Only ROOT effects are registered for GC cleanup
+	if (!parentEffect) {
+		const callIfCollected = () => mainCleanup()
+		fr.register(callIfCollected, mainCleanup, callIfCollected)
+		return callIfCollected
+	}
+// TODO: parentEffect = last non-undefined activeEffect
+	// Register this effect to be cleaned up with the parent effect
+	let children = effectChildren.get(parentEffect)
+	if(!children) {
+		children = new Set()
+		effectChildren.set(parentEffect, children)
+	}
+	const parent = parentEffect
+	const subEffectCleanup = (): void => {
+		children.delete(subEffectCleanup)
+		if(children.size === 0) {
+			effectChildren.delete(parent)
+		}
+		// Execute this child effect cleanup (which triggers its own mainCleanup)
+		mainCleanup()
+	}
+	children.add(subEffectCleanup)
+	return subEffectCleanup
 }
 
 /**
@@ -623,20 +658,21 @@ export function registerNativeReactivity(
  * @returns A cleanup function to stop watching
  */
 export function deepWatch<T extends object>(
-	target: T, 
+	target: T,
 	callback: (value: T) => void,
 	options: { immediate?: boolean } = {}
 ): () => void {
 	let hasRun = false
-	
+	if(typeof target !== 'object' || target === null)
+		throw new Error('Target of deep watching must be an object')
 	// Create a wrapper callback that matches ScopedCallback signature
-	const wrappedCallback: ScopedCallback = () => callback(target)
-	
+	const wrappedCallback: ScopedCallback = markWithRoot(() => callback(target), callback)
+
 	// Use the existing effect system to register dependencies
-	const stopEffect = effect((dep) => {
+	return effect(() => {
 		// Mark the target object as having deep watchers
 		objectsWithDeepWatchers.add(target)
-		
+
 		// Track which objects this effect is watching for cleanup
 		let effectObjects = effectToDeepWatchedObjects.get(wrappedCallback)
 		if (!effectObjects) {
@@ -644,89 +680,90 @@ export function deepWatch<T extends object>(
 			effectToDeepWatchedObjects.set(wrappedCallback, effectObjects)
 		}
 		effectObjects!.add(target)
-		
+
 		// Traverse the object graph and register dependencies
 		// This will re-run every time the effect runs, ensuring we catch all changes
 		const visited = new WeakSet()
 		function traverseAndTrack(obj: any, depth = 0) {
 			// Prevent infinite recursion and excessive depth
 			if (visited.has(obj) || !isObject(obj) || depth > 100) return
+			// Do not traverse into unreactive objects
+			if (isNonReactive(obj)) return
 			visited.add(obj)
-			
+
 			// Mark this object as having deep watchers
 			objectsWithDeepWatchers.add(obj)
 			effectObjects!.add(obj)
-			
+
 			// Traverse all properties to register dependencies
 			for (const key in obj) {
-				if (Object.prototype.hasOwnProperty.call(obj, key)) {
+				if (Object.hasOwn(obj, key)) {
 					// Access the property to register dependency
 					const value = (obj as any)[key]
 					// Make the value reactive if it's an object
-					const reactiveValue = typeof value === 'object' && value !== null ? reactive(value) : value
+					const reactiveValue =
+						typeof value === 'object' && value !== null ? reactive(value) : value
 					traverseAndTrack(reactiveValue, depth + 1)
 				}
 			}
-			
+
 			// Also handle array indices and length
-			// Check for both native arrays and reactive arrays
+			// biome-ignore lint/suspicious/useIsArray: Check for both native arrays and reactive arrays
 			if (Array.isArray(obj) || obj instanceof Array) {
 				// Access array length to register dependency on length changes
 				const length = obj.length
-				
+
 				// Access all current array elements to register dependencies
 				for (let i = 0; i < length; i++) {
 					// Access the array element to register dependency
 					const value = obj[i]
 					// Make the value reactive if it's an object
-					const reactiveValue = typeof value === 'object' && value !== null ? reactive(value) : value
+					const reactiveValue =
+						typeof value === 'object' && value !== null ? reactive(value) : value
 					traverseAndTrack(reactiveValue, depth + 1)
 				}
 			}
 		}
-		
+
 		// Traverse the target object to register all dependencies
 		// This will register dependencies on all current properties and array elements
 		traverseAndTrack(target)
-		
+
 		// Only call the callback if immediate is true or if it's not the first run
 		if (options.immediate || hasRun) {
 			callback(target)
 		}
 		hasRun = true
-	})
-	
-	// Return a cleanup function that properly removes deep watcher tracking
-	return () => {
-		// Stop the effect first
-		stopEffect()
-		
-		// Get the objects this effect was watching
-		const effectObjects = effectToDeepWatchedObjects.get(wrappedCallback)
-		if (effectObjects) {
-			// Remove deep watcher tracking from all objects this effect was watching
-			for (const obj of effectObjects) {
-				// Check if this object still has other deep watchers
-				const watchers = deepWatchers.get(obj)
-				if (watchers) {
-					// Remove this effect's callback from the watchers
-					watchers.delete(wrappedCallback)
-					
-					// If no more watchers, remove the object from deep watchers tracking
-					if (watchers.size === 0) {
-						deepWatchers.delete(obj)
+
+		// Return a cleanup function that properly removes deep watcher tracking
+		return () => {
+			// Get the objects this effect was watching
+			const effectObjects = effectToDeepWatchedObjects.get(wrappedCallback)
+			if (effectObjects) {
+				// Remove deep watcher tracking from all objects this effect was watching
+				for (const obj of effectObjects) {
+					// Check if this object still has other deep watchers
+					const watchers = deepWatchers.get(obj)
+					if (watchers) {
+						// Remove this effect's callback from the watchers
+						watchers.delete(wrappedCallback)
+
+						// If no more watchers, remove the object from deep watchers tracking
+						if (watchers.size === 0) {
+							deepWatchers.delete(obj)
+							objectsWithDeepWatchers.delete(obj)
+						}
+					} else {
+						// No watchers found, remove from deep watchers tracking
 						objectsWithDeepWatchers.delete(obj)
 					}
-				} else {
-					// No watchers found, remove from deep watchers tracking
-					objectsWithDeepWatchers.delete(obj)
 				}
+
+				// Clean up the tracking data
+				effectToDeepWatchedObjects.delete(wrappedCallback)
 			}
-			
-			// Clean up the tracking data
-			effectToDeepWatchedObjects.delete(wrappedCallback)
 		}
-	}
+	})
 }
 
 /**
@@ -736,7 +773,7 @@ function isObject(obj: any): obj is object {
 	return obj !== null && typeof obj === 'object'
 }
 
-(globalThis as any).mutts = {
+;(globalThis as any).mutts = {
 	deepWatchers,
-	watchers
+	watchers,
 }

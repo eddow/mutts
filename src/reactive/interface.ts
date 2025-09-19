@@ -1,11 +1,25 @@
-import { DependencyFunction, ScopedCallback, dependant, effect, isNonReactive, markWithRoot, nonReactiveClass, nonReactiveMark, nonReactiveObjects, reactive, touched1, unreactiveProperties, untracked, withEffect } from "./core"
+import {
+	DependencyFunction,
+	dependant,
+	effect,
+	isNonReactive,
+	markWithRoot,
+	nonReactiveClass,
+	nonReactiveObjects,
+	ScopedCallback,
+	touched1,
+	unreactiveProperties,
+	untracked,
+	withEffect,
+	deepWatch,
+} from './core'
 
 //#region computed
 type ComputedFunction<T> = (dep: DependencyFunction) => T
 const computedCache = new WeakMap<ComputedFunction<any>, any>()
 function computedFunction<T>(getter: ComputedFunction<T>): T {
 	dependant(computedCache, getter)
-	if(computedCache.has(getter)) return computedCache.get(getter)
+	if (computedCache.has(getter)) return computedCache.get(getter)
 	withEffect(undefined, () => {
 		const stop = effect(
 			markWithRoot((dep) => {
@@ -78,15 +92,24 @@ function computedLegacy(
 //#region watch
 
 const unsetYet = Symbol('unset-yet')
+export interface WatchOptions {
+	immediate?: boolean
+	deep?: boolean
+}
 export function watch<T>(
 	value: (dep: DependencyFunction) => T,
 	changed: (value: T, oldValue?: T) => void,
-	options?: { immediate?: boolean }
+	options?: Omit<WatchOptions, 'deep'> & { deep?: false }
+): ScopedCallback
+export function watch<T extends object | any[]>(
+	value: (dep: DependencyFunction) => T,
+	changed: (value: T, oldValue?: T) => void,
+	options?: Omit<WatchOptions, 'deep'> & { deep: true }
 ): ScopedCallback
 export function watch<T extends object | any[]>(
 	value: T,
 	changed: (value: T) => void,
-	options?: { immediate?: boolean }
+	options?: WatchOptions
 ): ScopedCallback
 
 export function watch(
@@ -106,8 +129,10 @@ export function watch(
 function watchObject(
 	value: object,
 	changed: (value: object) => void,
-	{ immediate = false } = {}
+	{ immediate = false, deep = false } = {}
 ): ScopedCallback {
+	if (deep)
+		return deepWatch(value, changed, { immediate })
 	return effect(
 		markWithRoot(() => {
 			dependant(value)
@@ -116,13 +141,15 @@ function watchObject(
 		}, changed)
 	)
 }
+
 function watchCallBack<T>(
 	value: (dep: DependencyFunction) => T,
 	changed: (value: T, oldValue?: T) => void,
-	{ immediate = false } = {}
+	{ immediate = false, deep = false } = {}
 ): ScopedCallback {
 	let oldValue: T | typeof unsetYet = unsetYet
-	return effect(
+	let deepCleanup: ScopedCallback | undefined
+	const cbCleanup = effect(
 		markWithRoot((dep) => {
 			const newValue = value(dep)
 			if (oldValue !== newValue)
@@ -132,10 +159,21 @@ function watchCallBack<T>(
 							if (immediate) changed(newValue)
 						} else changed(newValue, oldValue)
 						oldValue = newValue
+						if(deep) {
+							if(deepCleanup) deepCleanup()
+							deepCleanup = deepWatch(
+								newValue as object,
+								markWithRoot((value) => changed(value as T, value as T), changed)
+							)
+						}
 					}, changed)
 				)
 		}, value)
 	)
+	return ()=> {
+		cbCleanup()
+		if(deepCleanup) deepCleanup()
+	}
 }
 
 //#endregion
@@ -177,10 +215,7 @@ export function unreactive<T>(target: new (...args: any[]) => T): new (...args: 
  */
 export function unreactive<T>(target: T): T
 
-export function unreactive(
-	target: any,
-	spec?: PropertyKey | ClassFieldDecoratorContext
-) {
+export function unreactive(target: any, spec?: PropertyKey | ClassFieldDecoratorContext) {
 	return typeof spec === 'object'
 		? unreactiveStage3(spec as ClassFieldDecoratorContext)
 		: spec !== undefined
@@ -212,32 +247,3 @@ function unreactiveStage3(context: ClassFieldDecoratorContext) {
 }
 
 //#endregion
-
-// TODO: Note - and in the documentation, that `Reactive` must be the last mixin applied!
-
-const classCache = new WeakMap<new (...args: any[]) => any, new (...args: any[]) => any>()
-/**
- * Mixin to have a class defining reactive objects
- * Note: creates a proxy per instance, not per prototype, so that instances can be `unwrap`-ed
- * @param target - The object to make reactive
- * @returns The reactive object
- */
-export const Reactive = <Base extends new (...args: any[]) => any>(Base: Base) => {
-	// Check cache first
-	const cache = classCache.get(Base)
-	if (cache) return cache as Base
-
-	// Create new Reactive class
-	const ReactiveClass = class Reactive extends Base {
-		constructor(...args: any[]) {
-			super(...args)
-			//biome-ignore lint/correctness/noConstructorReturn: This is the whole point of this mixin
-			return reactive(this)
-		}
-		[Symbol.toStringTag] = `Reactive<${Base.name}>`
-	}
-
-	// Cache the result
-	classCache.set(Base, ReactiveClass)
-	return ReactiveClass
-}

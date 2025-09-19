@@ -22,7 +22,6 @@ describe('Eventful', () => {
 	}
 
 	describe('basic functionality', () => {
-
 		it('should register and emit single events', () => {
 			const eventful = new TestEventful()
 			let callCount = 0
@@ -164,7 +163,7 @@ describe('Eventful', () => {
 			eventful.on({
 				userLogin: () => loginCount++,
 				dataUpdate: () => dataCount++,
-				error: () => errorCount++
+				error: () => errorCount++,
 			})
 
 			eventful.emit('userLogin', 'user123', new Date())
@@ -194,7 +193,7 @@ describe('Eventful', () => {
 
 			eventful.off({
 				userLogin: loginCallback,
-				dataUpdate: dataCallback
+				dataUpdate: dataCallback,
 			})
 
 			eventful.emit('userLogin', 'user123', new Date())
@@ -301,20 +300,14 @@ describe('Eventful', () => {
 			eventful.emit('userLogin', 'user123', new Date())
 			eventful.emit('dataUpdate', [1, 2, 3])
 
-			expect(events).toEqual([
-				'login1',
-				'login2',
-				'hook:userLogin',
-				'data1',
-				'hook:dataUpdate'
-			])
+			expect(events).toEqual(['login1', 'login2', 'hook:userLogin', 'data1', 'hook:dataUpdate'])
 		})
 	})
 
 	describe('edge cases', () => {
 		it('should handle emitting events with no listeners', () => {
 			const eventful = new TestEventful()
-			
+
 			// Should not throw
 			expect(() => {
 				eventful.emit('userLogin', 'user123', new Date())
@@ -324,7 +317,7 @@ describe('Eventful', () => {
 
 		it('should handle unsubscribing non-existent callbacks', () => {
 			const eventful = new TestEventful()
-			
+
 			// Should not throw
 			expect(() => {
 				eventful.off('simple', () => {})
@@ -334,7 +327,7 @@ describe('Eventful', () => {
 
 		it('should handle unsubscribing from non-existent events', () => {
 			const eventful = new TestEventful()
-			
+
 			// Should not throw
 			expect(() => {
 				eventful.off('nonExistentEvent' as any)
@@ -363,7 +356,7 @@ describe('Eventful', () => {
 	describe('type safety', () => {
 		it('should enforce correct parameter types', () => {
 			const eventful = new TestEventful()
-			
+
 			// These should compile without errors
 			eventful.on('userLogin', (userId: string, timestamp: Date) => {
 				expect(typeof userId).toBe('string')
