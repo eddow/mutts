@@ -1,3 +1,4 @@
+// biome-ignore-all lint: sandbox file
 /*function DeepBeforeConstructor<T extends new (...args: any[]) => any>(
 	target: T,
 	context: ClassDecoratorContext
@@ -56,7 +57,7 @@ function decoratorSupport(): 'stage3' | 'legacy' | false {
 	let rv: any
 	try {
 		// Test for Stage 3 decorator signature
-		const stage3Decorator = (target: any, context: any) => {
+		const stage3Decorator = (_target: any, context: any) => {
 			rv = context ? 'stage3' : 'legacy'
 		}
 		// @ts-ignore
@@ -65,7 +66,7 @@ function decoratorSupport(): 'stage3' | 'legacy' | false {
 
 		// If we get here, Stage 3 decorators are likely supported
 		return rv
-	} catch (e) {
+	} catch (_e) {
 		return false
 	}
 }

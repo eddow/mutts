@@ -110,12 +110,12 @@ export class ReactiveSet<T> {
 
 	keys(): SetIterator<T> {
 		dependant(this.content)
-		return this[native].keys().map(key => reactive(key))
+		return this[native].keys().map((key) => reactive(key))
 	}
 
 	values(): SetIterator<T> {
 		dependant(this.content)
-		return this[native].values().map(value => reactive(value))
+		return this[native].values().map((value) => reactive(value))
 	}
 
 	[Symbol.iterator](): Iterator<T> {
@@ -128,7 +128,7 @@ export class ReactiveSet<T> {
 					return result
 				}
 				return { value: reactive(result.value), done: false }
-			}
+			},
 		}
 	}
 }

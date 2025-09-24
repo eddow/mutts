@@ -1,38 +1,40 @@
 import {
-	DependencyFunction,
+	type DependencyFunction,
+	deepWatch,
 	dependant,
 	effect,
+	getRoot,
 	isNonReactive,
 	markWithRoot,
 	nonReactiveClass,
 	nonReactiveObjects,
-	ScopedCallback,
+	type ScopedCallback,
 	touched1,
 	unreactiveProperties,
 	untracked,
 	withEffect,
-	deepWatch,
 } from './core'
 
 //#region computed
 type ComputedFunction<T> = (dep: DependencyFunction) => T
 const computedCache = new WeakMap<ComputedFunction<any>, any>()
 function computedFunction<T>(getter: ComputedFunction<T>): T {
-	dependant(computedCache, getter)
-	if (computedCache.has(getter)) return computedCache.get(getter)
+	const key = getRoot(getter)
+	dependant(computedCache, key)
+	if (computedCache.has(key)) return computedCache.get(key)
 	withEffect(undefined, () => {
 		const stop = effect(
 			markWithRoot((dep) => {
-				if (computedCache.has(getter)) {
-					computedCache.delete(getter)
-					touched1(computedCache, { type: 'set', prop: getter }, getter)
+				if (computedCache.has(key)) {
+					computedCache.delete(key)
+					touched1(computedCache, { type: 'set', prop: key }, key)
 					stop()
 				}
-				computedCache.set(getter, getter(dep))
+				computedCache.set(key, getter(dep))
 			}, getter)
 		)
 	})
-	return computedCache.get(getter)
+	return computedCache.get(key)
 }
 
 /**
@@ -81,7 +83,7 @@ function computedLegacy(
 	if (original)
 		return {
 			get(this: any) {
-				return computedFunction(markWithRoot(() => original.call(this), original))
+				return computedFunction(() => original.call(this))
 			},
 			set: descriptor.set,
 		}
@@ -131,8 +133,7 @@ function watchObject(
 	changed: (value: object) => void,
 	{ immediate = false, deep = false } = {}
 ): ScopedCallback {
-	if (deep)
-		return deepWatch(value, changed, { immediate })
+	if (deep) return deepWatch(value, changed, { immediate })
 	return effect(
 		markWithRoot(() => {
 			dependant(value)
@@ -159,8 +160,8 @@ function watchCallBack<T>(
 							if (immediate) changed(newValue)
 						} else changed(newValue, oldValue)
 						oldValue = newValue
-						if(deep) {
-							if(deepCleanup) deepCleanup()
+						if (deep) {
+							if (deepCleanup) deepCleanup()
 							deepCleanup = deepWatch(
 								newValue as object,
 								markWithRoot((value) => changed(value as T, value as T), changed)
@@ -170,9 +171,9 @@ function watchCallBack<T>(
 				)
 		}, value)
 	)
-	return ()=> {
+	return () => {
 		cbCleanup()
-		if(deepCleanup) deepCleanup()
+		if (deepCleanup) deepCleanup()
 	}
 }
 

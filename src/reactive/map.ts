@@ -93,7 +93,7 @@ export class ReactiveMap<K, V> {
 
 	values(): MapIterator<V> {
 		dependant(this.content)
-		return this[native].values().map(value => reactive(value))
+		return this[native].values().map((value) => reactive(value))
 	}
 
 	[Symbol.iterator](): Iterator<[K, V]> {
@@ -105,8 +105,11 @@ export class ReactiveMap<K, V> {
 				if (result.done) {
 					return result
 				}
-				return { value: [result.value[0], reactive(result.value[1])], done: false }
-			}
+				return {
+					value: [result.value[0], reactive(result.value[1])],
+					done: false,
+				}
+			},
 		}
 	}
 

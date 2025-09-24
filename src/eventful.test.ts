@@ -292,7 +292,7 @@ describe('Eventful', () => {
 			eventful.on('dataUpdate', () => events.push('data1'))
 
 			// Register global hook
-			eventful.hook((event, ...args) => {
+			eventful.hook((event, ..._args) => {
 				events.push(`hook:${String(event)}`)
 			})
 

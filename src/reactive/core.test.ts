@@ -776,12 +776,10 @@ describe('Legacy Reactive mixin', () => {
 			derivedProp = 'derived'
 		}
 
-		const instance = new DerivedClass()
+		const _instance = new DerivedClass()
 
 		// The warning should be triggered when creating the instance
-		expect(consoleSpy).toHaveBeenCalledWith(
-			expect.stringContaining('has been inherited by')
-		)
+		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('has been inherited by'))
 
 		consoleSpy.mockRestore()
 	})
@@ -1324,7 +1322,6 @@ describe('effect cleanup timing', () => {
 })
 
 describe('automatic effect cleanup', () => {
-	
 	function tick(ms: number = 100) {
 		return new Promise((resolve) => setTimeout(resolve, ms))
 	}
@@ -1344,13 +1341,13 @@ describe('automatic effect cleanup', () => {
 
 			const stopParent = effect(() => {
 				state.a
-				
+
 				// Create child effect
 				effect(() => {
 					state.b
 					return () => cleanupCalls.push('child cleanup')
 				})
-				
+
 				return () => cleanupCalls.push('parent cleanup')
 			})
 
@@ -1367,20 +1364,20 @@ describe('automatic effect cleanup', () => {
 
 			const stopParent = effect(() => {
 				state.a
-				
+
 				// Create child effect
 				effect(() => {
 					state.b
-					
+
 					// Create grandchild effect
 					effect(() => {
 						state.c
 						return () => cleanupCalls.push('grandchild cleanup')
 					})
-					
+
 					return () => cleanupCalls.push('child cleanup')
 				})
-				
+
 				return () => cleanupCalls.push('parent cleanup')
 			})
 
@@ -1397,16 +1394,16 @@ describe('automatic effect cleanup', () => {
 
 			const stopParent = effect(() => {
 				state.a
-				
+
 				// Create child effect and store its cleanup
 				const stopChild = effect(() => {
 					state.b
 					return () => cleanupCalls.push('child cleanup')
 				})
-				
+
 				// Clean up child independently
 				stopChild()
-				
+
 				return () => cleanupCalls.push('parent cleanup')
 			})
 
@@ -1423,18 +1420,18 @@ describe('automatic effect cleanup', () => {
 
 			const stopParent = effect(() => {
 				state.a
-				
+
 				// Create multiple child effects
 				effect(() => {
 					state.b
 					return () => cleanupCalls.push('child1 cleanup')
 				})
-				
+
 				effect(() => {
 					state.c
 					return () => cleanupCalls.push('child2 cleanup')
 				})
-				
+
 				return () => cleanupCalls.push('parent cleanup')
 			})
 
@@ -1453,7 +1450,7 @@ describe('automatic effect cleanup', () => {
 
 			// Create effect in a scope that will be garbage collected
 			;(() => {
-				let x = effect(() => {
+				const _x = effect(() => {
 					state.value
 					return () => {
 						cleanupCalled = true
@@ -1476,13 +1473,13 @@ describe('automatic effect cleanup', () => {
 			;(() => {
 				effect(() => {
 					state.a
-					
+
 					// Create child effect
 					effect(() => {
 						state.b
 						return () => cleanupCalls.push('child cleanup')
 					})
-					
+
 					return () => cleanupCalls.push('parent cleanup')
 				})
 			})()
@@ -1491,7 +1488,7 @@ describe('automatic effect cleanup', () => {
 
 			// Force garbage collection
 			await collectGarbages()
-			
+
 			// Both parent and child should be cleaned up
 			expect(cleanupCalls).toContain('parent cleanup')
 			expect(cleanupCalls).toContain('child cleanup')
@@ -1506,13 +1503,13 @@ describe('automatic effect cleanup', () => {
 			;(() => {
 				effect(() => {
 					state.a
-					
+
 					// Create child effect
 					effect(() => {
 						state.b
 						return () => cleanupCalls.push('child cleanup')
 					})
-					
+
 					return () => cleanupCalls.push('parent cleanup')
 				})
 			})()
@@ -1521,7 +1518,7 @@ describe('automatic effect cleanup', () => {
 
 			// Force garbage collection - both should be cleaned up
 			await collectGarbages()
-			
+
 			expect(cleanupCalls).toContain('parent cleanup')
 			expect(cleanupCalls).toContain('child cleanup')
 			expect(cleanupCalls).toHaveLength(2)
@@ -1536,7 +1533,7 @@ describe('automatic effect cleanup', () => {
 			const createParentWithChild = () => {
 				effect(() => {
 					state.a
-					
+
 					// Create child effect and store its cleanup function
 					stopChild = effect(() => {
 						state.b
@@ -1544,19 +1541,19 @@ describe('automatic effect cleanup', () => {
 					})
 				})
 			}
-			
+
 			createParentWithChild()
-			
+
 			expect(cleanupCalls).toEqual([])
 			expect(stopChild).toBeDefined()
 
 			// Force garbage collection - parent should be cleaned up, child should remain
 			await collectGarbages()
-			
+
 			// The child effect should still be alive (parent was GCed but child is referenced)
 			// Note: The child might be cleaned up if it's also unreferenced
 			// This test demonstrates the mechanism, not the exact behavior
-			
+
 			// Explicitly clean up child if it's still alive
 			if (stopChild) {
 				stopChild()
@@ -1571,22 +1568,22 @@ describe('automatic effect cleanup', () => {
 			// Create parent effect
 			const stopParent = effect(() => {
 				state.a
-				
+
 				// Create child that will be explicitly cleaned up
 				const stopChild = effect(() => {
 					state.b
 					return () => cleanupCalls.push('explicit child cleanup')
 				})
-				
+
 				// Create child that will be GC cleaned up
 				effect(() => {
 					state.c
 					return () => cleanupCalls.push('gc child cleanup')
 				})
-				
+
 				// Explicitly clean up first child
 				stopChild()
-				
+
 				return () => cleanupCalls.push('parent cleanup')
 			})
 
@@ -1606,12 +1603,12 @@ describe('automatic effect cleanup', () => {
 			// Effect with side effect that should be cleaned up
 			const stopEffect = effect(() => {
 				state.value
-				
+
 				// Simulate side effect (e.g., DOM manipulation, timers, etc.)
 				const intervalId = setInterval(() => {
 					sideEffectExecuted = true
 				}, 100)
-				
+
 				// Return cleanup function to prevent memory leaks
 				return () => {
 					clearInterval(intervalId)
@@ -1623,7 +1620,7 @@ describe('automatic effect cleanup', () => {
 
 			// Stop effect - cleanup should be called
 			stopEffect()
-			
+
 			// Wait a bit to ensure interval would have fired
 			setTimeout(() => {
 				expect(sideEffectExecuted).toBe(false) // Should still be false due to cleanup
@@ -1647,8 +1644,8 @@ describe('automatic effect cleanup', () => {
 			expect(cleanupCalls).toEqual([])
 
 			// Clean up all effects at once
-			activeEffects.forEach(stop => stop())
-			
+			activeEffects.forEach((stop) => stop())
+
 			expect(cleanupCalls).toHaveLength(3)
 			expect(cleanupCalls).toContain('effect 0 cleanup')
 			expect(cleanupCalls).toContain('effect 1 cleanup')

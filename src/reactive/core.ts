@@ -1,17 +1,12 @@
 // biome-ignore-all lint/suspicious/noConfusingVoidType: Type 'void' is not assignable to type 'ScopedCallback | undefined'.
 // Argument of type '() => void' is not assignable to parameter of type '(dep: DependencyFunction) => ScopedCallback | undefined'.
 
-import { Indexable } from '../indexable'
-
 export type DependencyFunction = <T>(cb: () => T) => T
 // TODO: proper async management, read when fn returns a promise and let the effect as "running",
 //  either to cancel the running one or to avoid running 2 in "parallel" and debounce the second one
 
-// TODO Auto add cleanup to `parent` effect cleanup ? + case for watch and warning on no parent + no return
-// Idea: on GC of effect, call it
-
-// TODO: watch on callback + watch-return-value ?
-
+// TODO: generic "batch" forcing even if not in an effect (perhaps when calling a reactive' function ?)
+// example: storage will make 2 modifications (add slot, modify count), they could raise 2 effects
 export type ScopedCallback = () => void
 
 export type PropEvolution = {
@@ -75,7 +70,10 @@ const rootFunction = Symbol('root-function')
  */
 export function markWithRoot<T extends Function>(fn: T, root: Function): T {
 	// Mark fn with the new root
-	return Object.defineProperty(fn, rootFunction, { value: getRoot(root), writable: false })
+	return Object.defineProperty(fn, rootFunction, {
+		value: getRoot(root),
+		writable: false,
+	})
 }
 
 /**
@@ -83,7 +81,7 @@ export function markWithRoot<T extends Function>(fn: T, root: Function): T {
  * @param fn - The function to get the root from
  * @returns The root function, or the function itself if no root exists
  */
-function getRoot<T extends Function | undefined>(fn: T): T {
+export function getRoot<T extends Function | undefined>(fn: T): T {
 	return (fn as any)?.[rootFunction] || fn
 }
 
@@ -249,12 +247,16 @@ function hasEffect(effect: ScopedCallback) {
 	}
 }
 
-export function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T, keepParent?: true): T {
+export function withEffect<T>(
+	effect: ScopedCallback | undefined,
+	fn: () => T,
+	keepParent?: true
+): T {
 	if (getRoot(effect) === getRoot(activeEffect)) return fn()
 	const oldActiveEffect = activeEffect
 	const oldParentEffect = parentEffect
 	activeEffect = effect
-	if(!keepParent) parentEffect = effect
+	if (!keepParent) parentEffect = effect
 	try {
 		return fn()
 	} finally {
@@ -356,7 +358,7 @@ export function track1(obj: object, prop: any, oldVal: any, newValue: any) {
 const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
-		if(prop === nonReactiveMark) return false
+		if (prop === nonReactiveMark) return false
 		// Check if this property is marked as unreactive
 		if (obj[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
 			return Reflect.get(obj, prop, receiver)
@@ -379,11 +381,11 @@ const reactiveHandlers = {
 	},
 	set(obj: any, prop: PropertyKey, value: any, receiver: any): boolean {
 		// Check if this property is marked as unreactive
-		if (obj[unreactiveProperties]?.has(prop))
-			return Reflect.set(obj, prop, value, receiver)
+		if (obj[unreactiveProperties]?.has(prop)) return Reflect.set(obj, prop, value, receiver)
 		// Really specific case for when Array is forwarder, in order to let it manage the reactivity
 		const isArrayCase =
 			prototypeForwarding in obj &&
+			// biome-ignore lint/suspicious/useIsArray: This is the whole point here
 			obj[prototypeForwarding] instanceof Array &&
 			(!Number.isNaN(Number(prop)) || prop === 'length')
 		const newValue = unwrap(value)
@@ -433,18 +435,23 @@ const reactiveHandlers = {
 		Object.setPrototypeOf(obj, proto)
 		return true
 	},
+	ownKeys(obj: any): (string | symbol)[] {
+		dependant(obj, allProps)
+		return Reflect.ownKeys(obj)
+	},
 } as const
 
 const reactiveClasses = new WeakSet<Function>()
 export class ReactiveBase {
 	constructor() {
+		// biome-ignore lint/correctness/noConstructorReturn: This is the whole point here
 		return reactiveClasses.has(new.target) ? reactive(this) : this
 	}
 }
 
 export function reactive<T>(anyTarget: T): T {
 	if (typeof anyTarget === 'function') {
-		if(anyTarget.prototype instanceof ReactiveBase) {
+		if (anyTarget.prototype instanceof ReactiveBase) {
 			reactiveClasses.add(anyTarget)
 			return anyTarget
 		}
@@ -452,18 +459,21 @@ export function reactive<T>(anyTarget: T): T {
 		class Reactive extends anyTarget {
 			constructor(...args: any[]) {
 				super(...args)
-				if(new.target !== Reactive && !reactiveClasses.has(new.target))
+				if (new.target !== Reactive && !reactiveClasses.has(new.target))
 					console.warn(
 						`${(anyTarget as any).name} has been inherited by ${this.constructor.name} that is not reactive.
 @reactive decorator must be applied to the leaf class OR classes have to extend ReactiveBase.`
 					)
+				// biome-ignore lint/correctness/noConstructorReturn: This is the whole point here
 				return reactive(this)
 			}
 		}
-		Object.defineProperty(Reactive, 'name', { value: `Reactive<${anyTarget.name}>` })
+		Object.defineProperty(Reactive, 'name', {
+			value: `Reactive<${anyTarget.name}>`,
+		})
 		return Reactive as any
 	}
-	if(!anyTarget || typeof anyTarget !== 'object') return anyTarget
+	if (!anyTarget || typeof anyTarget !== 'object') return anyTarget
 	const target = anyTarget as any
 	// If target is already a proxy, return it
 	if (proxyToObject.has(target) || isNonReactive(target)) return target as T
@@ -581,27 +591,27 @@ export function effect<Args extends any[]>(
 			for (const childCleanup of children) childCleanup()
 			effectChildren.delete(runEffect)
 		}
-		
+
 		fr.unregister(mainCleanup)
 	}
 
- 	// Only ROOT effects are registered for GC cleanup
+	// Only ROOT effects are registered for GC cleanup
 	if (!parentEffect) {
 		const callIfCollected = () => mainCleanup()
 		fr.register(callIfCollected, mainCleanup, callIfCollected)
 		return callIfCollected
 	}
-// TODO: parentEffect = last non-undefined activeEffect
+	// TODO: parentEffect = last non-undefined activeEffect
 	// Register this effect to be cleaned up with the parent effect
 	let children = effectChildren.get(parentEffect)
-	if(!children) {
+	if (!children) {
 		children = new Set()
 		effectChildren.set(parentEffect, children)
 	}
 	const parent = parentEffect
 	const subEffectCleanup = (): void => {
 		children.delete(subEffectCleanup)
-		if(children.size === 0) {
+		if (children.size === 0) {
 			effectChildren.delete(parent)
 		}
 		// Execute this child effect cleanup (which triggers its own mainCleanup)
@@ -671,8 +681,8 @@ export function deepWatch<T extends object>(
 	callback: (value: T) => void,
 	{ immediate = false } = {}
 ): () => void {
-	if(typeof target !== 'object' || target === null)
-		throw new Error('Target of deep watching must be an object')
+	if (target === null || target === undefined) return target
+	if (typeof target !== 'object') throw new Error('Target of deep watching must be an object')
 	// Create a wrapper callback that matches ScopedCallback signature
 	const wrappedCallback: ScopedCallback = markWithRoot(() => callback(target), callback)
 
@@ -704,7 +714,8 @@ export function deepWatch<T extends object>(
 			effectObjects!.add(obj)
 
 			// Traverse all properties to register dependencies
-			for (const key in obj) {
+			// unwrap to avoid kicking dependency
+			for (const key in unwrap(obj)) {
 				if (Object.hasOwn(obj, key)) {
 					// Access the property to register dependency
 					const value = (obj as any)[key]
@@ -744,7 +755,7 @@ export function deepWatch<T extends object>(
 			// Handle Map values (deep watch values only, not keys)
 			else if (obj instanceof Map) {
 				// Access all Map values to register dependencies
-				for (const [key, value] of obj) {
+				for (const [_key, value] of obj) {
 					// Make the value reactive if it's an object
 					const reactiveValue =
 						typeof value === 'object' && value !== null ? reactive(value) : value

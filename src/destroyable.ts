@@ -3,13 +3,13 @@ const fr = new FinalizationRegistry<() => void>((f) => f())
 export const destructor = Symbol('destructor')
 export const allocatedValues = Symbol('allocated')
 export class DestructionError extends Error {
-	static throw<T = void>(msg: string) {
+	static throw<_T = void>(msg: string) {
 		return () => {
 			throw new DestructionError(msg)
 		}
 	}
 	constructor(msg: string) {
-		super('Object is destroyed')
+		super(`Object is destroyed. ${msg}`)
 		this.name = 'DestroyedAccessError'
 	}
 }
@@ -65,7 +65,9 @@ export function Destroyable<
 
 export function Destroyable<
 	Allocated extends Record<PropertyKey, any> = Record<PropertyKey, any>,
->(): abstract new () => (AbstractDestroyable<Allocated> & { [allocatedValues]: Allocated }) & {
+>(): abstract new () => (AbstractDestroyable<Allocated> & {
+	[allocatedValues]: Allocated
+}) & {
 	destroy(obj: any): boolean
 	isDestroyable(obj: any): boolean
 }
@@ -124,7 +126,7 @@ export function Destroyable<
 }
 
 const forwardProperties = Symbol('forwardProperties')
-export function allocated<Allocated extends Record<PropertyKey, any>>(
+export function allocated<_Allocated extends Record<PropertyKey, any>>(
 	target: any,
 	propertyKey: PropertyKey
 ) {
@@ -132,6 +134,7 @@ export function allocated<Allocated extends Record<PropertyKey, any>>(
 	if (!forwarding[forwardProperties]) {
 		forwarding[forwardProperties] = []
 		//const superConstructor = Object.getPrototypeOf(target).constructor
+		// TODO: something was "en cours", but I don't remember what
 		forwarding.constructor = () => {
 			debugger
 		}

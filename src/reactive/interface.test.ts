@@ -1,10 +1,4 @@
-import {
-	computed,
-	effect,
-	reactive,
-	ReactiveBase,
-	watch,
-} from './index'
+import { computed, effect, reactive, watch } from './index'
 
 describe('computed', () => {
 	it('returns computed value and caches it', () => {
@@ -279,7 +273,7 @@ describe('watch', () => {
 				}
 
 				incrementCount(item: string) {
-					const slot = this.slots.find(s => s.item === item)
+					const slot = this.slots.find((s) => s.item === item)
 					if (slot) slot.count++
 				}
 
@@ -331,7 +325,7 @@ describe('watch', () => {
 				}
 
 				incrementCount(item: string) {
-					const slot = this.slots.find(s => s.item === item)
+					const slot = this.slots.find((s) => s.item === item)
 					if (slot) slot.count++
 				}
 
@@ -413,9 +407,13 @@ describe('watch', () => {
 			})
 			let callCount = 0
 
-			const stop = watch(state, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 
 			state.user.name = 'Jane'
 			expect(callCount).toBe(1)
@@ -433,9 +431,13 @@ describe('watch', () => {
 			})
 			let callCount = 0
 
-			const stop = watch(state, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 
 			state.items.push(4)
 			expect(callCount).toBe(1)
@@ -570,7 +572,7 @@ describe('watch', () => {
 				}
 
 				incrementCount(name: string) {
-					const item = this.items.find(i => i.name === name)
+					const item = this.items.find((i) => i.name === name)
 					if (item) item.count++
 				}
 			}
@@ -599,7 +601,7 @@ describe('watch', () => {
 		it('should watch computed properties that return new objects (without computed)', () => {
 			// This test shows the same issue but with @computed for comparison
 			@reactive
-			class TestClass extends ReactiveBase {
+			class TestClass {
 				public slots: { item: string; count: number }[] = []
 
 				addItem(item: string) {
@@ -607,7 +609,7 @@ describe('watch', () => {
 				}
 
 				incrementCount(item: string) {
-					const slot = this.slots.find(s => s.item === item)
+					const slot = this.slots.find((s) => s.item === item)
 					if (slot) slot.count++
 				}
 
@@ -653,7 +655,7 @@ describe('watch', () => {
 			class TestClass {
 				public data: { wood: { count: number }; stone: { count: number } } = {
 					wood: { count: 1 },
-					stone: { count: 1 }
+					stone: { count: 1 },
 				}
 
 				incrementCount(item: string) {
@@ -722,13 +724,13 @@ describe('watch', () => {
 
 				// Method 1: Using find() - should fail
 				incrementWithFind(name: string) {
-					const item = this.items.find(i => i.name === name)
+					const item = this.items.find((i) => i.name === name)
 					if (item) item.count++
 				}
 
 				// Method 2: Using direct index access - should work
 				incrementWithIndex(name: string) {
-					const index = this.items.findIndex(i => i.name === name)
+					const index = this.items.findIndex((i) => i.name === name)
 					if (index >= 0) this.items[index].count++
 				}
 			}
@@ -761,9 +763,13 @@ describe('watch', () => {
 		it('should watch new added objects', () => {
 			const state = reactive({ x: null }) as any
 			let callCount = 0
-			const stop = watch(state, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 			state.x = { y: 1 }
 			expect(callCount).toBe(1)
 			state.x.y = 2
@@ -880,9 +886,13 @@ describe('deep watch via watch({ deep: true })', () => {
 			})
 			let callCount = 0
 
-			const stop = watch(state, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 
 			state.user.name = 'Jane'
 			expect(callCount).toBe(1)
@@ -900,9 +910,13 @@ describe('deep watch via watch({ deep: true })', () => {
 			})
 			let callCount = 0
 
-			const stop = watch(state, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 
 			state.items.push(4)
 			expect(callCount).toBe(1)
@@ -925,9 +939,13 @@ describe('deep watch via watch({ deep: true })', () => {
 			})
 			let callCount = 0
 
-			const stop = watch(state, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 
 			// Replace the entire user object
 			state.user = { name: 'Jane', profile: { age: 25 } }
@@ -979,13 +997,21 @@ describe('deep watch via watch({ deep: true })', () => {
 			let watcher1Calls = 0
 			let watcher2Calls = 0
 
-			const stop1 = watch(state, () => {
-				watcher1Calls++
-			}, { deep: true })
+			const stop1 = watch(
+				state,
+				() => {
+					watcher1Calls++
+				},
+				{ deep: true }
+			)
 
-			const stop2 = watch(state, () => {
-				watcher2Calls++
-			}, { deep: true })
+			const stop2 = watch(
+				state,
+				() => {
+					watcher2Calls++
+				},
+				{ deep: true }
+			)
 
 			state.user.name = 'Jane'
 			expect(watcher1Calls).toBe(1)
@@ -1008,9 +1034,13 @@ describe('deep watch via watch({ deep: true })', () => {
 			})
 			let callCount = 0
 
-			const stop = watch(state, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 
 			state.user.name = 'Jane'
 			expect(callCount).toBe(1)
@@ -1026,9 +1056,13 @@ describe('deep watch via watch({ deep: true })', () => {
 			state.self = state // Create circular reference
 			let callCount = 0
 
-			const stop = watch(state, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 
 			state.name = 'Jane'
 			expect(callCount).toBe(1)
@@ -1050,9 +1084,13 @@ describe('deep watch via watch({ deep: true })', () => {
 			})
 			let callCount = 0
 
-			const stop = watch(state, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 
 			state.level1.level2.level3.level4.value = 'deeper'
 			expect(callCount).toBe(1)
@@ -1070,9 +1108,13 @@ describe('deep watch via watch({ deep: true })', () => {
 			}
 
 			let callCount = 0
-			const stop = watch(state, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 
 			// Change one item
 			state.items[50].nested.value = 999
@@ -1086,9 +1128,13 @@ describe('deep watch via watch({ deep: true })', () => {
 			const state = reactive({ items: [] as any[] })
 
 			let callCount = 0
-			const stop = watch(state, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 
 			// Push an object with nested properties
 			state.items.push({ id: 1, nested: { value: 'test' } })
@@ -1107,9 +1153,13 @@ describe('deep watch via watch({ deep: true })', () => {
 			const state = reactive({ items: [] as any[] })
 
 			let callCount = 0
-			const stop = watch(state, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 
 			// Push a nested object
 			state.items.push({
@@ -1133,9 +1183,13 @@ describe('deep watch via watch({ deep: true })', () => {
 			const state = reactive({ items: [] as any[] })
 
 			let callCount = 0
-			const stop = watch(state, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 
 			expect(callCount).toBe(0)
 			state.items.push({ nested: { value: 0 } })
@@ -1155,9 +1209,13 @@ describe('deep watch via watch({ deep: true })', () => {
 			const item = reactive({ value: 0 })
 
 			let callCount = 0
-			const stop = watch(state, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 
 			expect(callCount).toBe(0)
 
@@ -1183,9 +1241,13 @@ describe('deep watch via watch({ deep: true })', () => {
 			let callCount = 0
 
 			// This should not throw but also not trigger
-			const stop = watch(plainObject as any, () => {
-				callCount++
-			}, { deep: true })
+			const stop = watch(
+				plainObject as any,
+				() => {
+					callCount++
+				},
+				{ deep: true }
+			)
 
 			plainObject.user.name = 'Jane'
 			expect(callCount).toBe(0) // Should not trigger for non-reactive objects
@@ -1197,184 +1259,217 @@ describe('deep watch via watch({ deep: true })', () => {
 	describe('minimal deep watch failure example', () => {
 		it('MINIMAL: watch should detect array mutations', () => {
 			const state = reactive({
-				items: [1, 2, 3]
-			});
+				items: [1, 2, 3],
+			})
 
-			let callCount = 0;
+			let callCount = 0
 
 			// This is the minimal failing case
-			const stopWatch = watch(state, () => {
-				callCount++;
-			}, { immediate: true, deep: true });
+			const stopWatch = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ immediate: true, deep: true }
+			)
 
-			expect(callCount).toBe(1); // Initial call
+			expect(callCount).toBe(1) // Initial call
 
 			// This should trigger the watch but doesn't
-			state.items.push(4);
-			expect(callCount).toBe(2); // FAILS: Expected 2, Received 1
+			state.items.push(4)
+			expect(callCount).toBe(2) // FAILS: Expected 2, Received 1
 
-			stopWatch();
-		});
+			stopWatch()
+		})
 
 		it('MINIMAL: deep watch should detect array mutations', () => {
 			const state = reactive({
-				items: [1, 2, 3]
-			});
+				items: [1, 2, 3],
+			})
 
-			let callCount = 0;
+			let callCount = 0
 
 			// Even with deep: true, this fails
-			const stopWatch = watch(state, () => {
-				callCount++;
-			}, { immediate: true, deep: true });
+			const stopWatch = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ immediate: true, deep: true }
+			)
 
-			expect(callCount).toBe(1); // Initial call
+			expect(callCount).toBe(1) // Initial call
 
 			// This should trigger the deep watch but doesn't
-			state.items.push(4);
-			expect(callCount).toBe(2); // FAILS: Expected 2, Received 1
+			state.items.push(4)
+			expect(callCount).toBe(2) // FAILS: Expected 2, Received 1
 
-			stopWatch();
-		});
+			stopWatch()
+		})
 
 		it('COMPARISON: effect with length DOES detect array mutations', () => {
 			const state = reactive({
-				items: [1, 2, 3]
-			});
+				items: [1, 2, 3],
+			})
 
-			let effectCount = 0;
+			let effectCount = 0
 
 			// This works - effect detects array mutations when we access length
 			const stopEffect = effect(() => {
-				effectCount++;
-				state.items.length; // Access the array length
-			});
+				effectCount++
+				state.items.length // Access the array length
+			})
 
-			expect(effectCount).toBe(1); // Initial call
+			expect(effectCount).toBe(1) // Initial call
 
 			// This DOES trigger the effect because push changes length
-			state.items.push(4);
-			expect(effectCount).toBe(2); // Should PASS
+			state.items.push(4)
+			expect(effectCount).toBe(2) // Should PASS
 
-			stopEffect();
-		});
+			stopEffect()
+		})
 
 		it('DEBUG: what happens with just array access', () => {
 			const state = reactive({
-				items: [1, 2, 3]
-			});
+				items: [1, 2, 3],
+			})
 
-			let effectCount = 0;
+			let effectCount = 0
 
 			// What happens when we just access the array reference?
 			const stopEffect = effect(() => {
-				effectCount++;
-				state.items; // Just access the array reference
-			});
+				effectCount++
+				state.items // Just access the array reference
+			})
 
-			expect(effectCount).toBe(1); // Initial call
+			expect(effectCount).toBe(1) // Initial call
 
 			// Does this trigger? It shouldn't, because we didn't access any properties
-			state.items.push(4);
-			expect(effectCount).toBe(1); // Should stay 1
+			state.items.push(4)
+			expect(effectCount).toBe(1) // Should stay 1
 
-			stopEffect();
-		});
+			stopEffect()
+		})
 	})
 
 	describe('deep watching Sets and Maps', () => {
 		it('should detect Set mutations with deep watch', () => {
 			const state = reactive({
-				mySet: new Set([1, 2, 3])
-			});
+				mySet: new Set([1, 2, 3]),
+			})
 
-			let callCount = 0;
+			let callCount = 0
 
-			const stopWatch = watch(state, () => {
-				callCount++;
-			}, { immediate: true, deep: true });
+			const stopWatch = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ immediate: true, deep: true }
+			)
 
-			expect(callCount).toBe(1); // Initial call
+			expect(callCount).toBe(1) // Initial call
 
 			// Test Set mutations
-			state.mySet.add(4);
-			expect(callCount).toBe(2); // Might fail
+			state.mySet.add(4)
+			expect(callCount).toBe(2) // Might fail
 
-			state.mySet.delete(1);
-			expect(callCount).toBe(3); // Might fail
+			state.mySet.delete(1)
+			expect(callCount).toBe(3) // Might fail
 
-			stopWatch();
-		});
+			stopWatch()
+		})
 
 		it('should detect Map mutations with deep watch', () => {
 			const state = reactive({
-				myMap: new Map([['a', 1], ['b', 2]])
-			});
+				myMap: new Map([
+					['a', 1],
+					['b', 2],
+				]),
+			})
 
-			let callCount = 0;
+			let callCount = 0
 
-			const stopWatch = watch(state, () => {
-				callCount++;
-			}, { immediate: true, deep: true });
+			const stopWatch = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ immediate: true, deep: true }
+			)
 
-			expect(callCount).toBe(1); // Initial call
+			expect(callCount).toBe(1) // Initial call
 
 			// Test Map mutations
-			state.myMap.set('c', 3);
-			expect(callCount).toBe(2); // Might fail
+			state.myMap.set('c', 3)
+			expect(callCount).toBe(2) // Might fail
 
-			state.myMap.delete('a');
-			expect(callCount).toBe(3); // Might fail
+			state.myMap.delete('a')
+			expect(callCount).toBe(3) // Might fail
 
-			stopWatch();
-		});
+			stopWatch()
+		})
 
 		it('should detect Map value changes with deep watch', () => {
 			const state = reactive({
-				myMap: new Map([['a', 1], ['b', 2]])
-			});
+				myMap: new Map([
+					['a', 1],
+					['b', 2],
+				]),
+			})
 
-			let callCount = 0;
+			let callCount = 0
 
-			const stopWatch = watch(state, () => {
-				callCount++;
-			}, { immediate: true, deep: true });
+			const stopWatch = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ immediate: true, deep: true }
+			)
 
-			expect(callCount).toBe(1); // Initial call
+			expect(callCount).toBe(1) // Initial call
 
 			// Test Map value changes
-			state.myMap.set('a', 10);
-			expect(callCount).toBe(2); // Might fail
+			state.myMap.set('a', 10)
+			expect(callCount).toBe(2) // Might fail
 
-			stopWatch();
-		});
+			stopWatch()
+		})
 
 		it('should detect nested Set/Map mutations with deep watch', () => {
 			const state = reactive({
 				container: {
 					mySet: new Set([1, 2, 3]),
-					myMap: new Map([['x', 1], ['y', 2]])
-				}
-			});
+					myMap: new Map([
+						['x', 1],
+						['y', 2],
+					]),
+				},
+			})
 
-			let callCount = 0;
+			let callCount = 0
 
-			const stopWatch = watch(state, () => {
-				callCount++;
-			}, { immediate: true, deep: true });
+			const stopWatch = watch(
+				state,
+				() => {
+					callCount++
+				},
+				{ immediate: true, deep: true }
+			)
 
-			expect(callCount).toBe(1); // Initial call
+			expect(callCount).toBe(1) // Initial call
 
 			// Test nested Set mutations
-			state.container.mySet.add(4);
-			expect(callCount).toBe(2); // Might fail
+			state.container.mySet.add(4)
+			expect(callCount).toBe(2) // Might fail
 
 			// Test nested Map mutations
-			state.container.myMap.set('z', 3);
-			expect(callCount).toBe(3); // Might fail
+			state.container.myMap.set('z', 3)
+			expect(callCount).toBe(3) // Might fail
 
-			stopWatch();
-		});
+			stopWatch()
+		})
 
 		// Note: WeakSet and WeakMap cannot be deeply reactive because they don't support iteration
 		// They can only have shallow reactivity (tracking when the collection itself changes)

@@ -40,7 +40,14 @@
 			},
 			"security": {},
 			"correctness": {
-				"noUnusedImports": "off"
+				"noUnusedImports": {
+					"level": "info",
+					"fix": "safe"
+				},
+				"noUnusedFunctionParameters": {
+					"level": "info",
+					"fix": "safe"
+				}
 			},
 			"nursery": {}
 		}

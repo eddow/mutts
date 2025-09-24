@@ -1,9 +1,10 @@
 import { Indexable } from '../indexable'
-import { dependant, prototypeForwarding, reactive, touched, track1 } from './core'
+import { dependant, prototypeForwarding, reactive, touched } from './core'
 
 const native = Symbol('native')
 const isArray = Array.isArray
 Array.isArray = ((value: any) =>
+	// biome-ignore lint/suspicious/useIsArray: We are defining it
 	isArray(value) || (value instanceof Array && native in value)) as any
 class ReactiveBaseArray {
 	declare readonly [native]: any[]
@@ -42,7 +43,11 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 		try {
 			this[native].length = value
 		} finally {
-			touched(this[native], { type: 'set', prop: 'length' }, range(oldLength, value, { length: true }))
+			touched(
+				this[native],
+				{ type: 'set', prop: 'length' },
+				range(oldLength, value, { length: true })
+			)
 		}
 	},
 }) {
@@ -114,17 +119,19 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 	splice(start: number, deleteCount?: number, ...items: any[]) {
 		const oldLength = this[native].length
 		if (deleteCount === undefined) deleteCount = oldLength - start
-			try {
-				if (deleteCount === undefined) return reactive(this[native].splice(start))
-				return reactive(this[native].splice(start, deleteCount, ...items))
-			} finally {
+		try {
+			if (deleteCount === undefined) return reactive(this[native].splice(start))
+			return reactive(this[native].splice(start, deleteCount, ...items))
+		} finally {
 			touched(
 				this,
 				{ type: 'bunch', method: 'splice' },
 				// TODO: edge cases
 				deleteCount === items.length
 					? range(start, start + deleteCount)
-					: range(start, oldLength + Math.max(items.length - deleteCount, 0), { length: true })
+					: range(start, oldLength + Math.max(items.length - deleteCount, 0), {
+							length: true,
+						})
 			)
 		}
 	}
@@ -206,7 +213,7 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 
 	values() {
 		dependant(this)
-		return this[native].values().map(value => reactive(value))
+		return this[native].values().map((value) => reactive(value))
 	}
 
 	[Symbol.iterator]() {
@@ -219,7 +226,7 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 					return result
 				}
 				return { value: reactive(result.value), done: false }
-			}
+			},
 		}
 	}
 
@@ -282,9 +289,10 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 		initialValue?: any
 	): any {
 		dependant(this)
-		const result = initialValue === undefined
-			? this[native].reduce(callbackfn as any)
-			: this[native].reduce(callbackfn as any, initialValue)
+		const result =
+			initialValue === undefined
+				? this[native].reduce(callbackfn as any)
+				: this[native].reduce(callbackfn as any, initialValue)
 		return reactive(result)
 	}
 
@@ -293,9 +301,10 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 		initialValue?: any
 	): any {
 		dependant(this)
-		const result = initialValue !== undefined 
-			? this[native].reduceRight(callbackfn as any, initialValue)
-			: (this[native] as any).reduceRight(callbackfn as any)
+		const result =
+			initialValue !== undefined
+				? this[native].reduceRight(callbackfn as any, initialValue)
+				: (this[native] as any).reduceRight(callbackfn as any)
 		return reactive(result)
 	}
 

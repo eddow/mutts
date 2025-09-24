@@ -153,11 +153,7 @@ describe('Indexable', () => {
 		it('should enforce getAt method implementation', () => {
 			const AbstractIndexable = Indexable<number>()
 			//@ts-expect-error Should be abstract
-			class Invalid extends AbstractIndexable {
-				constructor() {
-					super()
-				}
-			}
+			class Invalid extends AbstractIndexable {}
 
 			// JavaScript doesn't enforce abstract methods at runtime
 			// So instantiation won't throw, but calling the missing method will
