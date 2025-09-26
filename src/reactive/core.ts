@@ -32,7 +32,6 @@ const effectToReactiveObjects = new WeakMap<ScopedCallback, Set<object>>()
 // Track object -> proxy and proxy -> object relationships
 const objectToProxy = new WeakMap<object, object>()
 const proxyToObject = new WeakMap<object, object>()
-
 // Deep watching data structures
 // Track which objects contain which other objects (back-references)
 const objectParents = new WeakMap<object, Set<{ parent: object; prop: PropertyKey }>>()
@@ -48,6 +47,21 @@ const effectToDeepWatchedObjects = new WeakMap<ScopedCallback, Set<object>>()
 
 // Track objects that should never be reactive
 export const nonReactiveObjects = new WeakSet<object>()
+
+// Track effects per reactive object and property
+const watchers = new WeakMap<object, Map<any, Set<ScopedCallback>>>()
+
+export const profileInfo: any = {
+	objectToProxy,
+	proxyToObject,
+	effectToReactiveObjects,
+	watchers,
+	objectParents,
+	objectsWithDeepWatchers,
+	deepWatchers,
+	effectToDeepWatchedObjects,
+	nonReactiveObjects,
+}
 // Track native reactivity
 const nativeReactive = Symbol('native-reactive')
 
@@ -131,13 +145,12 @@ export const options = {
 	 * @default true
 	 */
 	instanceMembers: true,
+	// biome-ignore lint/suspicious/noConsole: This is the whole point here
+	warn: (...args: any[]) => console.warn(args),
 }
 // biome-ignore-end lint/correctness/noUnusedFunctionParameters: Interface declaration with empty defaults
 
 //#region evolution
-
-// Track effects per reactive object and property
-const watchers = new WeakMap<object, Map<any, Set<ScopedCallback>>>()
 
 function raiseDeps(objectWatchers: Map<any, Set<ScopedCallback>>, ...keyChains: Iterable<any>[]) {
 	for (const keys of keyChains)
@@ -223,7 +236,6 @@ let batchedEffects: Map<Function, ScopedCallback> | undefined
 
 // Track which sub-effects have been executed to prevent infinite loops
 // These are all the effects triggered under `activeEffect` and all their sub-effects
-
 function hasEffect(effect: ScopedCallback) {
 	const root = getRoot(effect)
 
@@ -325,11 +337,7 @@ function bubbleUpChange(changedObject: object, evolution: Evolution) {
 	for (const { parent } of parents) {
 		// Trigger deep watchers on parent
 		const parentDeepWatchers = deepWatchers.get(parent)
-		if (parentDeepWatchers) {
-			for (const watcher of parentDeepWatchers) {
-				hasEffect(watcher)
-			}
-		}
+		if (parentDeepWatchers) for (const watcher of parentDeepWatchers) hasEffect(watcher)
 
 		// Continue bubbling up
 		bubbleUpChange(parent, evolution)
@@ -460,7 +468,7 @@ export function reactive<T>(anyTarget: T): T {
 			constructor(...args: any[]) {
 				super(...args)
 				if (new.target !== Reactive && !reactiveClasses.has(new.target))
-					console.warn(
+					options.warn(
 						`${(anyTarget as any).name} has been inherited by ${this.constructor.name} that is not reactive.
 @reactive decorator must be applied to the leaf class OR classes have to extend ReactiveBase.`
 					)
@@ -631,6 +639,11 @@ function nonReactive<T extends object[]>(...obj: T): T[0] {
 }
 
 /**
+ * Set of functions to test if an object is immutable
+ */
+export const immutables = new Set<(tested: any) => boolean>()
+
+/**
  * Check if an object is marked as non-reactive (for testing purposes)
  * @param obj - The object to check
  * @returns true if the object is marked as non-reactive
@@ -644,6 +657,9 @@ export function isNonReactive(obj: any): boolean {
 
 	// Check if the object has the non-reactive symbol
 	if (obj[nonReactiveMark]) return true
+
+	// Check if the object is immutable
+	if (Array.from(immutables).some((fn) => fn(obj))) return true
 
 	return false
 }
@@ -810,9 +826,4 @@ export function deepWatch<T extends object>(
  */
 function isObject(obj: any): obj is object {
 	return obj !== null && typeof obj === 'object'
-}
-
-;(globalThis as any).mutts = {
-	deepWatchers,
-	watchers,
 }

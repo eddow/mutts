@@ -1,9 +1,11 @@
 export {
 	effect,
 	getState,
+	immutables,
 	isNonReactive,
 	isReactive,
 	options as reactiveOptions,
+	profileInfo,
 	ReactiveBase,
 	ReactiveError,
 	reactive,
@@ -13,7 +15,7 @@ export {
 	untracked,
 	unwrap,
 } from './core'
-export { computed, unreactive, watch } from './interface'
+export { computed, invalidateComputed, unreactive, watch } from './interface'
 
 import { ReactiveArray } from './array'
 import { registerNativeReactivity } from './core'

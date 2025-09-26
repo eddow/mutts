@@ -8,29 +8,50 @@ import {
 	markWithRoot,
 	nonReactiveClass,
 	nonReactiveObjects,
+	options,
 	type ScopedCallback,
 	touched1,
 	unreactiveProperties,
 	untracked,
+	unwrap,
 	withEffect,
 } from './core'
 
 //#region computed
+let computedInvalidations: (() => void)[] | undefined
+/**
+ * When used in a computed property computation, it will register the callback to be called when the computed property is invalidated
+ * @param cb - The callback to register
+ * @param warn - Whether to warn if used outside of a computed property
+ */
+export function invalidateComputed(cb: () => void, warn = true) {
+	if (computedInvalidations) computedInvalidations.push(cb)
+	else if (warn) options.warn('Using `invalidateComputed` outside of a computed property')
+}
 type ComputedFunction<T> = (dep: DependencyFunction) => T
 const computedCache = new WeakMap<ComputedFunction<any>, any>()
 function computedFunction<T>(getter: ComputedFunction<T>): T {
 	const key = getRoot(getter)
+	let invalidations: (() => void)[] = []
 	dependant(computedCache, key)
 	if (computedCache.has(key)) return computedCache.get(key)
 	withEffect(undefined, () => {
 		const stop = effect(
 			markWithRoot((dep) => {
+				const oldCI = computedInvalidations
 				if (computedCache.has(key)) {
+					for (const cb of invalidations) cb()
+					invalidations = []
 					computedCache.delete(key)
 					touched1(computedCache, { type: 'set', prop: key }, key)
 					stop()
-				}
-				computedCache.set(key, getter(dep))
+				} else
+					try {
+						computedInvalidations = invalidations
+						computedCache.set(key, getter(dep))
+					} finally {
+						computedInvalidations = oldCI
+					}
 			}, getter)
 		)
 	})
@@ -61,29 +82,46 @@ export function computed(
 	return descriptor
 		? computedLegacy(target, spec as string | symbol, descriptor)
 		: spec !== undefined
-			? computedStage3(spec as ClassAccessorDecoratorContext)
+			? computedStage3(target, spec as ClassAccessorDecoratorContext)
 			: computedFunction(target)
 }
-function computedStage3(context: ClassAccessorDecoratorContext) {
+function computedStage3(_target: any, context: ClassAccessorDecoratorContext) {
+	const computers = new WeakMap<any, () => any>()
 	return {
 		get(this: any) {
-			return computedFunction(markWithRoot(() => context.access.get(this), context.access.get))
+			if (!computers.has(this)) {
+				computers.set(this, () => context.access.get(this))
+			}
+			return computedFunction(computers.get(this)!)
 		},
 		set(this: any, value: any) {
 			context.access.set(this, value)
 		},
 	}
 }
+
 function computedLegacy(
 	_target: any,
 	_propertyKey: string | symbol,
 	descriptor: PropertyDescriptor
 ) {
 	const original = descriptor.get
+	const computers = new WeakMap<any, () => any>()
 	if (original)
 		return {
 			get(this: any) {
-				return computedFunction(() => original.call(this))
+				if (!computers.has(this)) {
+					computers.set(
+						this,
+						Object.defineProperties(() => original.call(this), {
+							name: {
+								value: `${String(_target.constructor.name)}.${String(_propertyKey)}`,
+							},
+						})
+					)
+				}
+				return computedFunction(computers.get(this)!)
+				//return computedFunction(() => original.call(this))
 			},
 			set: descriptor.set,
 		}
@@ -186,6 +224,7 @@ function watchCallBack<T>(
  * @param obj - The object to mark as non-reactive
  */
 function deepNonReactive<T>(obj: T): T {
+	obj = unwrap(obj)
 	if (isNonReactive(obj)) return obj
 	nonReactiveObjects.add(obj as object)
 	for (const key in obj) deepNonReactive(obj[key])
@@ -248,3 +287,7 @@ function unreactiveStage3(context: ClassFieldDecoratorContext) {
 }
 
 //#endregion
+
+import { profileInfo } from './core'
+
+Object.assign(profileInfo, { computedCache })
