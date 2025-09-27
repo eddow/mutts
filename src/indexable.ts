@@ -64,13 +64,13 @@ export function Indexable<Items, Base extends abstract new (...args: any[]) => a
 		}
 	}
 
-	abstract class Indexable extends base {
+	abstract class Indexable extends (base as Base) {
 		[x: number]: Items
 	}
 
 	Object.setPrototypeOf(
 		Indexable.prototype,
-		new Proxy(base.prototype, {
+		new Proxy((base as Base).prototype, {
 			//@ts-expect-error
 			[Symbol.toStringTag]: 'MutTs Indexable',
 			get(target, prop, receiver) {

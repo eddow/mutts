@@ -7,6 +7,7 @@ import {
 	isNonReactive,
 	markWithRoot,
 	nonReactiveClass,
+	nonReactiveMark,
 	nonReactiveObjects,
 	options,
 	type ScopedCallback,
@@ -40,6 +41,7 @@ function computedFunction<T>(getter: ComputedFunction<T>): T {
 			markWithRoot((dep) => {
 				const oldCI = computedInvalidations
 				if (computedCache.has(key)) {
+					// This should *not* be called in the cleanup chain, as its effects would be lost and cleaned-up
 					for (const cb of invalidations) cb()
 					invalidations = []
 					computedCache.delete(key)
@@ -226,7 +228,15 @@ function watchCallBack<T>(
 function deepNonReactive<T>(obj: T): T {
 	obj = unwrap(obj)
 	if (isNonReactive(obj)) return obj
-	nonReactiveObjects.add(obj as object)
+	try {
+		Object.defineProperty(obj as object, nonReactiveMark, {
+			value: true,
+			writable: false,
+			enumerable: false,
+			configurable: true,
+		})
+	} catch {}
+	if (!(nonReactiveMark in (obj as object))) nonReactiveObjects.add(obj as object)
 	for (const key in obj) deepNonReactive(obj[key])
 	return obj
 }

@@ -2,24 +2,128 @@
   "name": "mutts",
   "description": "Modern UTility TS: A collection of TypeScript utilities",
   "version": "1.0.0",
-  "main": "src/index.ts",
-  "scripts": {
-    "test": "node --expose-gc node_modules/.bin/jest",
-    "biome": "biome check --write src",
-    "stage3": "tsx --tsconfig tsconfig.stage3.json src/decorator.ts",
-    "legacy": "tsx --tsconfig tsconfig.json src/decorator.ts"
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "source": "./src/index.ts",
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js",
+      "script": "./dist/mutts.umd.min.js"
+    },
+    "./reactive": {
+      "types": "./dist/reactive/index.d.ts",
+      "source": "./src/reactive/index.ts",
+      "import": "./dist/reactive/index.esm.js",
+      "require": "./dist/reactive/index.js"
+    },
+    "./reactive/collections": {
+      "types": "./dist/reactive/collections.d.ts",
+      "source": "./src/reactive/collections.ts",
+      "import": "./dist/reactive/collections.esm.js",
+      "require": "./dist/reactive/collections.js"
+    },
+    "./cached": {
+      "types": "./dist/cached.d.ts",
+      "source": "./src/cached.ts",
+      "import": "./dist/cached.esm.js",
+      "require": "./dist/cached.js"
+    },
+    "./eventful": {
+      "types": "./dist/eventful.d.ts",
+      "source": "./src/eventful.ts",
+      "import": "./dist/eventful.esm.js",
+      "require": "./dist/eventful.js"
+    },
+    "./indexable": {
+      "types": "./dist/indexable.d.ts",
+      "source": "./src/indexable.ts",
+      "import": "./dist/indexable.esm.js",
+      "require": "./dist/indexable.js"
+    },
+    "./promiseChain": {
+      "types": "./dist/promiseChain.d.ts",
+      "source": "./src/promiseChain.ts",
+      "import": "./dist/promiseChain.esm.js",
+      "require": "./dist/promiseChain.js"
+    },
+    "./destroyable": {
+      "types": "./dist/destroyable.d.ts",
+      "source": "./src/destroyable.ts",
+      "import": "./dist/destroyable.esm.js",
+      "require": "./dist/destroyable.js"
+    },
+    "./umd": {
+      "browser": "./dist/mutts.umd.js"
+    },
+    "./umd.min": {
+      "browser": "./dist/mutts.umd.min.js"
+    }
   },
-  "keywords": [],
-  "author": "",
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "docs"
+  ],
+  "scripts": {
+    "build:js": "rollup -c",
+    "build": "npm run build:js",
+    "build:watch": "rollup -c --watch",
+    "prepublishOnly": "npm run build",
+    "test": "node --expose-gc node_modules/.bin/jest",
+    "test:stage2": "TSCONFIG=tsconfig.stage2.json node --expose-gc node_modules/.bin/jest --testPathPatterns=decorator",
+    "test:stage3": "TSCONFIG=tsconfig.stage3.json node --expose-gc node_modules/.bin/jest --testPathPatterns=decorator",
+    "test:decorator": "node --expose-gc node_modules/.bin/jest src/decorator.test.ts",
+    "biome": "biome check --write src",
+    "sandbox:stage2": "tsc --project tsconfig.stage2.json --outDir ./temp && node ./temp/sandbox/decorator.js",
+    "sandbox:stage3": "tsc --project tsconfig.stage3.json --outDir ./temp && node ./temp/sandbox/decorator.js"
+  },
+  "keywords": [
+    "typescript",
+    "utilities",
+    "reactive",
+    "caching",
+    "events",
+    "promise",
+    "proxy",
+    "decorators",
+    "indexable",
+    "computed",
+    "effects",
+    "state-management"
+  ],
+  "author": "eddow",
   "license": "ISC",
-  "dependencies": {
-    "typescript": "^5.8.3"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eddow/mutts.git"
+  },
+  "homepage": "https://github.com/eddow/mutts#readme",
+  "bugs": {
+    "url": "https://github.com/eddow/mutts/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=16.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.6",
+    "@rollup/plugin-commonjs": "^28.0.6",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^12.1.4",
     "@types/jest": "^30.0.0",
     "jest": "^30.0.4",
+    "rollup": "^4.52.2",
+    "rollup-plugin-dts": "^6.2.3",
+    "rollup-plugin-typescript2": "^0.36.0",
     "ts-jest": "^29.4.0",
-    "tsx": "^4.20.4"
+    "ts-node": "^10.9.2",
+    "tslib": "^2.8.1",
+    "tsx": "^4.20.4",
+    "typescript": "^5.8.3"
   }
 }

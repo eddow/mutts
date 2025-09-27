@@ -1,4 +1,12 @@
-import { dependant, prototypeForwarding, reactive, touched, touched1 } from './core'
+import {
+	dependant,
+	makeReactiveEntriesIterator,
+	makeReactiveIterator,
+	prototypeForwarding,
+	reactive,
+	touched,
+	touched1,
+} from './core'
 
 const native = Symbol('native')
 
@@ -76,9 +84,9 @@ export class ReactiveMap<K, V> {
 		}
 	}
 
-	entries(): MapIterator<[K, V]> {
+	entries(): Generator<[K, V]> {
 		dependant(this.content)
-		return this[native].entries().map(([key, value]) => [key, reactive(value)])
+		return makeReactiveEntriesIterator(this[native].entries())
 	}
 
 	forEach(callbackfn: (value: V, key: K, map: Map<K, V>) => void, thisArg?: any): void {
@@ -91,9 +99,9 @@ export class ReactiveMap<K, V> {
 		return this[native].keys()
 	}
 
-	values(): MapIterator<V> {
+	values(): Generator<V> {
 		dependant(this.content)
-		return this[native].values().map((value) => reactive(value))
+		return makeReactiveIterator(this[native].values())
 	}
 
 	[Symbol.iterator](): Iterator<[K, V]> {

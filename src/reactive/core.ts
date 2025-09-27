@@ -45,8 +45,31 @@ const deepWatchers = new WeakMap<object, Set<ScopedCallback>>()
 // Track which effects are doing deep watching
 const effectToDeepWatchedObjects = new WeakMap<ScopedCallback, Set<object>>()
 
-// Track objects that should never be reactive
+// Track objects that should never be reactive and cannot be modified
 export const nonReactiveObjects = new WeakSet<object>()
+
+/**
+ * Converts an iterator to a generator that yields reactive values
+ */
+export function* makeReactiveIterator<T>(iterator: Iterator<T>): Generator<T> {
+	let result = iterator.next()
+	while (!result.done) {
+		yield reactive(result.value)
+		result = iterator.next()
+	}
+}
+
+/**
+ * Converts an iterator of key-value pairs to a generator that yields reactive key-value pairs
+ */
+export function* makeReactiveEntriesIterator<K, V>(iterator: Iterator<[K, V]>): Generator<[K, V]> {
+	let result = iterator.next()
+	while (!result.done) {
+		const [key, value] = result.value
+		yield [reactive(key), reactive(value)]
+		result = iterator.next()
+	}
+}
 
 // Track effects per reactive object and property
 const watchers = new WeakMap<object, Map<any, Set<ScopedCallback>>>()
@@ -146,7 +169,7 @@ export const options = {
 	 */
 	instanceMembers: true,
 	// biome-ignore lint/suspicious/noConsole: This is the whole point here
-	warn: (...args: any[]) => console.warn(args),
+	warn: (...args: any[]) => console.warn(...args),
 }
 // biome-ignore-end lint/correctness/noUnusedFunctionParameters: Interface declaration with empty defaults
 
@@ -532,19 +555,17 @@ export function effect<Args extends any[]>(
 
 	function runEffect() {
 		// Clear previous dependencies
-		if (cleanup) {
-			cleanup()
-			cleanup = null
-		}
+		cleanup?.()
 
 		options.enter(fn)
 		const reactionCleanup = withEffect(effectStopped ? undefined : runEffect, () =>
 			fn(dep, ...args)
-		)
+		) as undefined | ScopedCallback
 		options.leave(fn)
 
 		// Create cleanup function for next run
 		cleanup = () => {
+			cleanup = null
 			reactionCleanup?.()
 			// Remove this effect from all reactive objects it's watching
 			const effectObjects = effectToReactiveObjects.get(runEffect)
@@ -588,11 +609,9 @@ export function effect<Args extends any[]>(
 	}
 
 	const mainCleanup = (): void => {
+		if (effectStopped) return
 		effectStopped = true
-		if (cleanup) {
-			cleanup()
-			cleanup = null
-		}
+		cleanup?.()
 		// Invoke all child cleanups (recursive via subEffectCleanup calling its own mainCleanup)
 		const children = effectChildren.get(runEffect)
 		if (children) {
@@ -634,7 +653,17 @@ export function effect<Args extends any[]>(
  * @param obj - The object to mark as non-reactive
  */
 function nonReactive<T extends object[]>(...obj: T): T[0] {
-	for (const o of obj) nonReactiveObjects.add(o)
+	for (const o of obj) {
+		try {
+			Object.defineProperty(o, nonReactiveMark, {
+				value: true,
+				writable: false,
+				enumerable: false,
+				configurable: false,
+			})
+		} catch {}
+		if (!(nonReactiveMark in (o as object))) nonReactiveObjects.add(o as object)
+	}
 	return obj[0]
 }
 
@@ -696,8 +725,8 @@ export function deepWatch<T extends object>(
 	target: T,
 	callback: (value: T) => void,
 	{ immediate = false } = {}
-): () => void {
-	if (target === null || target === undefined) return target
+): (() => void) | undefined {
+	if (target === null || target === undefined) return undefined
 	if (typeof target !== 'object') throw new Error('Target of deep watching must be an object')
 	// Create a wrapper callback that matches ScopedCallback signature
 	const wrappedCallback: ScopedCallback = markWithRoot(() => callback(target), callback)

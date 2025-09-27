@@ -14,3 +14,31 @@ export function zip<T extends (readonly unknown[])[]>(...args: T): ElementTypes<
 
 	return result
 }
+
+const nativeConstructors = new Set<Function>([
+	Object,
+	Array,
+	Date,
+	Function,
+	Set,
+	Map,
+	WeakMap,
+	WeakSet,
+	Promise,
+	Error,
+	TypeError,
+	ReferenceError,
+	SyntaxError,
+	RangeError,
+	URIError,
+	EvalError,
+	Reflect,
+	Proxy,
+	RegExp,
+	String,
+	Number,
+	Boolean,
+] as Function[])
+export function isConstructor(fn: Function): boolean {
+	return nativeConstructors.has(fn) || fn.toString().startsWith('class ')
+}

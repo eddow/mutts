@@ -1,6 +1,6 @@
-export * from './cached'
 export * from './destroyable'
 export * from './eventful'
 export * from './indexable'
 export * from './reactive'
+export * from './std-decorators'
 export * from './utils'

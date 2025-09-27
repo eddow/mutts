@@ -1,8 +1,45 @@
 # Modern UTility TS
 
+[![npm version](https://badge.fury.io/js/mutts.svg)](https://badge.fury.io/js/mutts)
+[![GitHub](https://img.shields.io/github/license/eddow/mutts)](https://github.com/eddow/mutts/blob/main/LICENSE)
+
 Basically, just a bunch of utilities that have many versions on the web, but none fitting my needs, so that I re-created every time.
 
 With the advent of AI, I could finally manage to have something finished and complete.
+
+## Installation
+
+```bash
+npm install mutts
+```
+
+## Usage
+
+### Import from Built Modules
+
+```typescript
+// Import from built modules (recommended for production)
+import { reactive, effect } from 'mutts'
+import { reactive as reactiveCollections } from 'mutts/reactive/collections'
+import { Cached } from 'mutts/cached'
+import { Destroyable, allocated } from 'mutts/destroyable'
+```
+
+### Import from Source Files
+
+```typescript
+// Import directly from source TypeScript files (for development/custom builds)
+import { reactive, effect } from 'mutts/src/index'
+import { reactive as reactiveCollections } from 'mutts/src/reactive/collections'
+import { Cached } from 'mutts/src/cached'
+import { Destroyable, allocated } from 'mutts/src/destroyable'
+```
+
+**Note:** When importing from source files, you'll need to configure your build system (TypeScript, Vite, Webpack, etc.) to handle TypeScript compilation and module resolution. The source files are published alongside the built modules, so you can import directly from the `src` directory.
+
+## Repository
+
+This project is hosted on GitHub: [https://github.com/eddow/mutts](https://github.com/eddow/mutts)
 
 ## [Indexable](./docs/indexable.md)
 
@@ -71,6 +108,26 @@ A utility that transforms promises into chainable objects, allowing you to call 
 - Promise-based data processing pipelines
 - Reducing async/await boilerplate
 - Functional programming with promises
+
+## [Destroyable](./docs/destroyable.md)
+
+A comprehensive resource management system that provides automatic cleanup for objects with proper destructor handling. Integrates with JavaScript's `FinalizationRegistry` and supports modern resource management patterns including the upcoming `using` statement.
+
+**Key Features:**
+- **Automatic Resource Management**: Objects are automatically cleaned up when garbage collected
+- **Manual Destruction**: Explicit destruction with immediate cleanup
+- **Resource Tracking**: Properties can be marked with `@allocated` to be tracked in a separate allocation object
+- **Context Manager Integration**: Support for `Symbol.dispose` and context manager patterns
+- **Type Safety**: Full TypeScript support with proper type inference
+- **Destruction Safety**: Destroyed objects throw errors when accessed to prevent use-after-free bugs
+
+**Use Cases:**
+- Database connections and resource cleanup
+- File handle management
+- Network resource management
+- Memory management for large objects
+- Plugin systems with proper cleanup
+- Temporary resource management
 
 ## [Reactive](./docs/reactive.md)
 

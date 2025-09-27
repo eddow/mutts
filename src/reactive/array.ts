@@ -1,5 +1,12 @@
 import { Indexable } from '../indexable'
-import { dependant, prototypeForwarding, reactive, touched } from './core'
+import {
+	dependant,
+	makeReactiveEntriesIterator,
+	makeReactiveIterator,
+	prototypeForwarding,
+	reactive,
+	touched,
+} from './core'
 
 const native = Symbol('native')
 const isArray = Array.isArray
@@ -203,7 +210,7 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 	// Iterator methods with reactivity tracking
 	entries() {
 		dependant(this)
-		return this[native].entries().map(([index, value]) => [index, reactive(value)])
+		return makeReactiveEntriesIterator(this[native].entries())
 	}
 
 	keys() {
@@ -213,7 +220,7 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 
 	values() {
 		dependant(this)
-		return this[native].values().map((value) => reactive(value))
+		return makeReactiveIterator(this[native].values())
 	}
 
 	[Symbol.iterator]() {

@@ -4,6 +4,7 @@ import {
 	isReactive,
 	ReactiveBase,
 	reactive,
+	reactiveOptions,
 	unreactive,
 	untracked,
 	unwrap,
@@ -490,33 +491,41 @@ describe('@reactive decorator', () => {
 	})
 
 	it('should work with inheritance', () => {
-		@reactive
-		class Animal {
-			species = 'unknown'
-			energy = 100
-		}
-
-		class Dog extends Animal {
-			breed = 'mixed'
-			bark() {
-				this.energy -= 10
+		// Suppress the expected warning for this test
+		const originalWarn = reactiveOptions.warn
+		reactiveOptions.warn = () => {}
+		try {
+			@reactive
+			class Animal {
+				species = 'unknown'
+				energy = 100
 			}
+
+			class Dog extends Animal {
+				breed = 'mixed'
+				bark() {
+					this.energy -= 10
+				}
+			}
+
+			const dog = new Dog()
+
+			let energyEffectCount = 0
+			effect(() => {
+				energyEffectCount++
+				dog.energy
+			})
+
+			expect(energyEffectCount).toBe(1)
+			expect(dog.energy).toBe(100)
+
+			dog.bark()
+			expect(energyEffectCount).toBe(2)
+			expect(dog.energy).toBe(90)
+		} finally {
+			// Restore original warn function
+			reactiveOptions.warn = originalWarn
 		}
-
-		const dog = new Dog()
-
-		let energyEffectCount = 0
-		effect(() => {
-			energyEffectCount++
-			dog.energy
-		})
-
-		expect(energyEffectCount).toBe(1)
-		expect(dog.energy).toBe(100)
-
-		dog.bark()
-		expect(energyEffectCount).toBe(2)
-		expect(dog.energy).toBe(90)
 	})
 
 	it('should handle method calls that modify properties', () => {

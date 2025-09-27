@@ -1,7 +1,40 @@
-node_modules
-coverage
-.vscode
-jest.*
+# Source files (will be compiled to dist/)
+src/
+*.ts
+!*.d.ts
+
+# Development files
+.vscode/
+node_modules/
+.git/
 .gitignore
-biome.*
+.npmignore
+
+# Test files
 *.test.ts
+*.test.js
+jest.config.js
+
+# Development configs
+biome.json
+tsconfig.json
+tsconfig.stage3.json
+
+# Build artifacts (except dist/)
+*.log
+coverage/
+
+# Package manager files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# IDE files
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

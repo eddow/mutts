@@ -1,13 +1,21 @@
 {
 	"compilerOptions": {
 		"moduleResolution": "Node",
-		"target": "ESNext",
+		"target": "ES2020",
 		"module": "ESNext",
-		"lib": ["ESNext", "DOM"],
+		"lib": ["ES2023", "DOM"],
 		"declaration": false,
+		"declarationMap": false,
+		"sourceMap": true,
+		"outDir": "./dist",
+		"rootDir": "./src",
 		"experimentalDecorators": true,
 		"emitDecoratorMetadata": true,
-		"strict": true,
+		"strict": false,
+		"noImplicitAny": false,
+		"noImplicitReturns": false,
+		"noUnusedLocals": false,
+		"noUnusedParameters": false,
 		"esModuleInterop": true,
 		"skipLibCheck": true,
 		"forceConsistentCasingInFileNames": true,
@@ -16,5 +24,7 @@
 			"tslib": ["./node_modules/tslib/tslib.d.ts"],
 			"~/*": ["./packages/*"]
 		}
-	}
+	},
+	"include": ["src/**/*"],
+	"exclude": ["**/*.test.ts", "**/*.spec.ts", "node_modules", "dist"]
 }

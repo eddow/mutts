@@ -1,4 +1,12 @@
-import { dependant, prototypeForwarding, reactive, touched, touched1 } from './core'
+import {
+	dependant,
+	makeReactiveEntriesIterator,
+	makeReactiveIterator,
+	prototypeForwarding,
+	reactive,
+	touched,
+	touched1,
+} from './core'
 
 const native = Symbol('native')
 
@@ -98,9 +106,9 @@ export class ReactiveSet<T> {
 		return this[native].has(value)
 	}
 
-	entries(): SetIterator<[T, T]> {
+	entries(): Generator<[T, T]> {
 		dependant(this.content)
-		return this[native].entries().map(([key, value]) => [reactive(key), reactive(value)])
+		return makeReactiveEntriesIterator(this[native].entries())
 	}
 
 	forEach(callbackfn: (value: T, value2: T, set: Set<T>) => void, thisArg?: any): void {
@@ -108,14 +116,14 @@ export class ReactiveSet<T> {
 		this[native].forEach(callbackfn, thisArg)
 	}
 
-	keys(): SetIterator<T> {
+	keys(): Generator<T> {
 		dependant(this.content)
-		return this[native].keys().map((key) => reactive(key))
+		return makeReactiveIterator(this[native].keys())
 	}
 
-	values(): SetIterator<T> {
+	values(): Generator<T> {
 		dependant(this.content)
-		return this[native].values().map((value) => reactive(value))
+		return makeReactiveIterator(this[native].values())
 	}
 
 	[Symbol.iterator](): Iterator<T> {

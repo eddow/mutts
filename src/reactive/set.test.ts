@@ -1,5 +1,5 @@
 import { effect, reactive } from './index'
-import './index'
+import './collections'
 
 describe('ReactiveWeakSet', () => {
 	describe('reactive operations', () => {

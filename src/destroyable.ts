@@ -1,4 +1,4 @@
-// TODO: integrate with `with` keyword ?
+// Integrated with `using` statement via Symbol.dispose
 const fr = new FinalizationRegistry<() => void>((f) => f())
 export const destructor = Symbol('destructor')
 export const allocatedValues = Symbol('allocated')
@@ -21,9 +21,12 @@ const destroyedHandler = {
 
 abstract class AbstractDestroyable<Allocated> {
 	abstract [destructor](allocated: Allocated): void
+	[Symbol.dispose](): void {
+		this[destructor](this as unknown as Allocated)
+	}
 }
 
-interface Destructor<Allocated extends Record<PropertyKey, any> = Record<PropertyKey, any>> {
+interface Destructor<Allocated> {
 	destructor(allocated: Allocated): void
 }
 
@@ -31,7 +34,7 @@ export function Destroyable<
 	T extends new (
 		...args: any[]
 	) => any,
-	Allocated extends Record<PropertyKey, any> = Record<PropertyKey, any>,
+	Allocated extends Partial<typeof this>,
 >(
 	base: T,
 	destructorObj: Destructor<Allocated>
@@ -86,7 +89,7 @@ export function Destroyable<
 		base = class {} as T
 	}
 
-	return class Destroyable extends base {
+	return class Destroyable extends (base as T) {
 		static readonly destructors = new WeakMap<any, () => void>()
 		static destroy(obj: Destroyable) {
 			const destructor = Destroyable.destructors.get(obj)
@@ -126,18 +129,13 @@ export function Destroyable<
 }
 
 const forwardProperties = Symbol('forwardProperties')
-export function allocated<_Allocated extends Record<PropertyKey, any>>(
-	target: any,
-	propertyKey: PropertyKey
-) {
+export function allocated<
+	Key extends PropertyKey,
+	Allocated extends AbstractDestroyable<{ [key in Key]: any }>,
+>(target: Allocated, propertyKey: Key) {
 	const forwarding = target as { [forwardProperties]?: PropertyKey[] }
 	if (!forwarding[forwardProperties]) {
 		forwarding[forwardProperties] = []
-		//const superConstructor = Object.getPrototypeOf(target).constructor
-		// TODO: something was "en cours", but I don't remember what
-		forwarding.constructor = () => {
-			debugger
-		}
 	}
 	forwarding[forwardProperties].push(propertyKey)
 	// Make a get/set accessor that stores the value in the allocated object
@@ -160,4 +158,10 @@ export function callOnGC(cb: () => void) {
 	}
 	fr.register(forward, cb, cb)
 	return forward
+}
+
+// Context Manager Protocol for `with` statement integration
+export interface ContextManager<T = any> {
+	[Symbol.dispose](): void
+	value?: T
 }

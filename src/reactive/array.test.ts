@@ -1,4 +1,5 @@
 import { effect, reactive, unwrap } from './index'
+import './collections'
 
 describe('ReactiveArray', () => {
 	describe('numeric index reactivity', () => {

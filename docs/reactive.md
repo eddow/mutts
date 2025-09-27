@@ -655,7 +655,7 @@ state.user.profile.age = 31     // Triggers (nested change)
   - **Sets**: All values are tracked (keys are not separate in Sets)
   - **Maps**: All values are tracked (keys are not tracked separately)
   - **WeakSet/WeakMap**: Cannot be deep watched (not iterable), only replacement triggers
-- **Circular references**: Handled safely with configurable depth limits (default: 100 levels)
+- **Circular references**: Handled safely - There is also a configurable depth limit
 - **Performance**: Deep watching has higher overhead than shallow watching
 
 ```typescript
@@ -1702,179 +1702,373 @@ obj.y = 'new'
 delete obj.x
 ```
 
-### Common Pitfalls
-
-**1. Nested Effects**
-```typescript
-// ✅ Nested effects are supported with separate scopes
-effect(() => {
-    const innerEffect = effect(() => {
-        console.log('Inner effect')
-    })
-    
-    // Return cleanup function for the inner effect
-    return innerEffect
-})
-
-// ✅ Or create effects separately
-const innerEffect = effect(() => {
-    console.log('Inner effect')
-})
-
-effect(() => {
-    console.log('Outer effect')
-})
-```
-
-**2. Missing Dependencies**
-```typescript
-const state = reactive({ count: 0, multiplier: 2 })
-
-// ❌ Missing dependency on multiplier
-effect(() => {
-    console.log('Result:', state.count) // Only tracks count
-})
-
-// ✅ Include all dependencies
-effect(() => {
-    console.log('Result:', state.count * state.multiplier)
-})
-```
-
-**3. Infinite Loops**
-```typescript
-const state = reactive({ count: 0 })
-
-// ❌ This creates an infinite loop
-effect(() => {
-    state.count++ // Modifies dependency, triggers effect again
-})
-
-// ✅ Use proper patterns
-effect(() => {
-    if (state.count < 10) {
-        setTimeout(() => {
-            state.count++
-        }, 1000)
-    }
-})
-```
-
-**4. Memory Leaks**
-```typescript
-// ❌ Effect never cleaned up
-effect(() => {
-    const interval = setInterval(() => {
-        console.log('Tick')
-    }, 1000)
-})
-
-// ✅ Always clean up
-const stop = effect(() => {
-    const interval = setInterval(() => {
-        console.log('Tick')
-    }, 1000)
-    
-    return () => clearInterval(interval)
-})
-
-// Later...
-stop()
-```
-
 ## API Reference
 
-### Function Signatures
+### Decorators
+
+#### `@computed`
+
+Marks a class accessor as computed. The computed value will be cached and invalidated when dependencies change.
 
 ```typescript
-// Core functions
-function reactive<T extends Record<PropertyKey, any>>(target: T): T
-function effect<T>(fn: (dep: DependencyFunction, ...args: any[]) => T, reaction?: (param: T) => (ScopedCallback | undefined | void), ...args: any[]): ScopedCallback
-function effect(fn: (dep: DependencyFunction, ...args: any[]) => (ScopedCallback | undefined | void), ...args: any[]): ScopedCallback
-function watch<T>(value: (dep: DependencyFunction) => T, changed: (value: T, oldValue?: T) => void): ScopedCallback
-function watch<T extends object>(value: T, changed: () => void): ScopedCallback
-function untracked(fn: () => ScopedCallback | undefined | void): void
-function unwrap<T>(proxy: T): T
-function isReactive(obj: any): boolean
-function isNonReactive(obj: any): boolean
-
-// Evolution tracking
-function getState(obj: any): State
-function addState(obj: any, evolution: Evolution): void
-
-// Non-reactive system
-function unreactive<T>(target: T): T
-function unreactive(target: new (...args: any[]) => T): new (...args: any[]) => T
-
-// Computed properties
-function computed<T>(getter: ComputedFunction<T>): T
-function computed(target: any, desc: PropertyKey, descriptor: PropertyDescriptor): void
-function computed(target: undefined, desc: ClassAccessorDecoratorContext): void
-
-// Collections
-class ReactiveArray extends Array
-class ReactiveMap<K, V> extends Map<K, V>
-class ReactiveWeakMap<K extends object, V> extends WeakMap<K, V>
-class ReactiveSet<T> extends Set<T>
-class ReactiveWeakSet<T extends object> extends WeakSet<T>
-
-// Class reactivity
-function reactive<T extends new (...args: any[]) => any>(target: T): T
-class ReactiveBase
-
-// Native reactivity
-function registerNativeReactivity(originalClass: new (...args: any[]) => any, reactiveClass: new (...args: any[]) => any): void
-```
-
-### Type Definitions
-
-```typescript
-type EffectFunction = (dep: DependencyFunction) => void
-type ScopedCallback = () => void
-type ComputedFunction<T> = (dep: DependencyFunction) => T
-
-type PropEvolution = {
-    type: 'set' | 'del' | 'add'
-    prop: any
+class MyClass {
+  private _value = 0;
+  
+  @computed
+  get doubled() {
+    return this._value * 2;
+  }
 }
 
-type BunchEvolution = {
-    type: 'bunch'
-    method: string
+// Function usage
+function myExpensiveCalculus() {
+
 }
-
-type Evolution = PropEvolution | BunchEvolution
-
-type State = {
-    evolution: Evolution
-    next: State
-} | {}
-
-type DependencyFunction = <T>(cb: () => T) => T
+...
+const result = computed(myExpensiveCalculus);
 ```
 
-### Configuration Options
+**Use Cases:**
+- Caching expensive calculations
+- Derived state that depends on reactive values
+- Computed properties in classes
+- Performance optimization for frequently accessed values
+
+**Notes:**
+By how JS works, writing `computed(()=> ...)` will always be wrong, as the notation `()=> ...` internally is a `new Function(...)`.
+So, even if the return value is cached, it will never be used.
+
+#### `@unreactive`
+
+Marks a class property as non-reactive. The property change will not be tracked by the reactive system.
+
+Marks a class (and its descendants) as non-reactive.
 
 ```typescript
-export const options = {
-    enter: (effect: EffectFunction) => {},
-    leave: (effect: EffectFunction) => {},
-    chain: (caller: EffectFunction, target: EffectFunction) => {},
-    maxEffectChain: 100,
-    maxDeepWatchDepth: 100,
-    instanceMembers: true,
-} as const
+class MyClass {
+  @unreactive
+  private config = { theme: 'dark' };
+}
+
+// Class decorator usage
+@unreactive
+class NonReactiveClass {
+  // All instances will be non-reactive
+}
+
+// Function usage
+const nonReactiveObj = unreactive({ config: { theme: 'dark' } });
 ```
 
-### Error Types
+**Use Cases:**
+- Configuration objects that shouldn't trigger reactivity
+- Static data that never changes
+- Performance optimization for objects that don't need tracking
+- Third-party objects that shouldn't be made reactive
+
+### Core Functions
+
+#### `reactive<T>(target: T): T`
+
+Creates a reactive proxy of the target object. All property access and mutations will be tracked.
+
+**Use Cases:**
+- Converting plain objects to reactive objects
+- Making class instances reactive
+- Creating reactive arrays, maps, and sets
+- Setting up reactive state management
 
 ```typescript
-export class ReactiveError extends Error {
-    constructor(message: string)
-    name: "ReactiveError"
+const state = reactive({ count: 0, name: 'John' });
+const items = reactive([1, 2, 3]);
+const map = reactive(new Map([['key', 'value']]));
+```
+
+#### `effect(fn, ...args): ScopedCallback`
+
+Creates a reactive effect that runs when its dependencies change.
+
+**Use Cases:**
+- Side effects like DOM updates
+- Logging and debugging
+- Data synchronization
+- Cleanup operations
+
+```typescript
+const cleanup = effect((dep) => {
+  console.log('Count changed:', state.count);
+  return () => {
+    // Cleanup function
+  };
+});
+```
+
+#### `computed<T>(getter: ComputedFunction<T>): T`
+
+Creates a computed value that caches its result and recomputes when dependencies change.
+
+**Use Cases:**
+- Derived state calculations
+- Expensive computations
+- Data transformations
+- Conditional logic based on reactive state
+
+```typescript
+const result = computed(someExpensiveCalculus);
+```
+
+#### `watch(value, callback, options?): ScopedCallback`
+
+Watches a reactive value or function and calls a callback when it changes.
+
+**Use Cases:**
+- Reacting to specific value changes
+- Debugging reactive state
+- Side effects for specific properties
+- Data validation
+
+```typescript
+// Watch a specific value
+const stop = watch(() => state.count, (newVal, oldVal) => {
+  console.log(`Count changed from ${oldVal} to ${newVal}`);
+});
+
+// Watch an object with deep option
+const stopDeep = watch(state, (newState) => {
+  console.log('State changed:', newState);
+}, { deep: true, immediate: true });
+```
+
+#### `unwrap<T>(proxy: T): T`
+
+Returns the original object from a reactive proxy.
+
+**Use Cases:**
+- Accessing original object for serialization
+- Passing to non-reactive functions
+- Performance optimization
+- Debugging
+
+```typescript
+const original = unwrap(reactiveState);
+JSON.stringify(original); // Safe to serialize
+```
+
+#### `isReactive(obj: any): boolean`
+
+Checks if an object is a reactive proxy.
+
+**Use Cases:**
+- Type checking
+- Debugging
+- Conditional logic
+- Validation
+
+```typescript
+if (isReactive(obj)) {
+  console.log('Object is reactive');
 }
 ```
 
----
+#### `isNonReactive(obj: any): boolean`
 
-This documentation covers the complete reactive system. For specific examples and use cases, refer to the test files in the codebase.
+Checks if an object is marked as non-reactive.
+
+**Use Cases:**
+- Validation
+- Debugging
+- Conditional logic
+- Type checking
+
+```typescript
+if (isNonReactive(obj)) {
+  console.log('Object is non-reactive');
+}
+```
+
+#### `untracked(fn: () => void): void`
+
+Executes a function without tracking dependencies.
+
+**Use Cases:**
+- Performance optimization
+- Avoiding circular dependencies
+- Side effects that shouldn't trigger reactivity
+- Batch operations
+
+```typescript
+untracked(() => {
+  // This won't create dependencies
+  console.log('Untracked operation');
+});
+```
+
+#### `getState(obj)`
+
+Gets the current state of a reactive object. Used internally for tracking changes.
+
+**Use Cases:**
+- Debugging reactive state
+- Custom reactive implementations
+- State inspection
+
+#### `invalidateComputed(callback, warn?)`
+
+Registers a callback to be called when a computed property is invalidated.
+
+**Use Cases:**
+- Custom computed implementations
+- Cleanup operations
+- Performance monitoring
+
+```typescript
+const computed = computed(() => {
+  invalidateComputed(() => {
+    console.log('Computed invalidated');
+  });
+  return expensiveCalculation();
+});
+```
+
+### Configuration
+
+#### `reactiveOptions`
+
+Global options for the reactive system.
+
+**Properties:**
+- `enter(effect: Function)`: Called when an effect is entered
+- `leave(effect: Function)`: Called when an effect is left
+- `chain(target: Function, caller?: Function)`: Called when effects are chained
+- `maxEffectChain: number`: Maximum effect chain depth (default: 100)
+- `maxDeepWatchDepth: number`: Maximum deep watch traversal depth (default: 100)
+- `instanceMembers: boolean`: Only react on instance members (default: true)
+- `warn(...args: any[])`: Warning function (default: console.warn)
+
+**Use Cases:**
+- Debugging reactive behavior
+- Performance tuning
+- Custom logging
+- Error handling
+
+```typescript
+reactiveOptions.maxEffectChain = 50;
+reactiveOptions.enter = (effect) => console.log('Effect entered:', effect.name);
+```
+
+### Classes
+
+#### `ReactiveBase`
+
+Base class for reactive objects. When extended, instances are automatically made reactive.
+
+**Use Cases:**
+- Creating reactive classes
+- Automatic reactivity for class instances
+- Type safety for reactive objects
+
+```typescript
+class MyState extends ReactiveBase {
+  count = 0;
+  name = '';
+}
+
+const state = new MyState(); // Automatically reactive
+```
+
+#### `ReactiveError`
+
+Error class for reactive system errors.
+
+**Use Cases:**
+- Error handling in reactive code
+- Debugging reactive issues
+- Custom error types
+
+### Collections
+
+Collections (Array, Map, Set, WeakMap, WeakSet) can be automatically made reactive when passed to `reactive()`:
+
+```typescript
+const items = reactive([1, 2, 3]);
+items.push(4); // Triggers reactivity
+
+const map = reactive(new Map([['key', 'value']]));
+map.set('newKey', 'newValue'); // Triggers reactivity
+
+const set = reactive(new Set([1, 2, 3]));
+set.add(4); // Triggers reactivity
+```
+
+#### Automatic Collection Reactivity
+
+For applications that want collections to have full reactive behavior, you can import the collections module:
+
+```typescript
+import 'mutts/reactive/collections'
+
+// Collections still need to be wrapped with reactive()
+const arr = reactive([1, 2, 3]) // ReactiveArray
+const map = reactive(new Map()) // ReactiveMap
+const set = reactive(new Set()) // ReactiveSet
+const weakMap = reactive(new WeakMap()) // ReactiveWeakMap
+const weakSet = reactive(new WeakSet()) // ReactiveWeakSet
+
+effect(() => {
+    console.log('Array length:', arr.length)
+    console.log('Map size:', map.size)
+    console.log('Set size:', set.size)
+})
+
+arr.push(4) // Triggers effect
+map.set('key', 'value') // Triggers effect
+set.add('item') // Triggers effect
+```
+
+**Use Cases:**
+- Applications that primarily work with reactive collections
+- Global reactive state management
+- Ensuring collection methods (push, set, add, etc.) trigger reactivity
+- Performance optimization for collection-heavy applications
+
+**Note:** This module registers native collection types to use specialized reactive wrappers. Without importing this module, collections wrapped with `reactive()` will only have basic object reactivity - collection methods like `map.set()`, `array.push()`, etc. will not trigger effects. The `reactive()` wrapper is still required, but the collections module ensures proper reactive behavior for collection-specific operations.
+
+### Types
+
+#### `ScopedCallback`
+
+Type for effect cleanup functions.
+
+#### `DependencyFunction`
+
+Type for dependency tracking functions used in effects and computed values.
+
+#### `WatchOptions`
+
+Options for the watch function:
+- `immediate?: boolean`: Call callback immediately
+- `deep?: boolean`: Watch nested properties
+
+### Profile Information
+
+#### `profileInfo`
+
+Object containing internal reactive system state for debugging and profiling.
+
+**Properties:**
+- `objectToProxy`: WeakMap of original objects to their proxies
+- `proxyToObject`: WeakMap of proxies to their original objects
+- `effectToReactiveObjects`: WeakMap of effects to watched objects
+- `watchers`: WeakMap of objects to their property watchers
+- `objectParents`: WeakMap of objects to their parent relationships
+- `objectsWithDeepWatchers`: WeakSet of objects with deep watchers
+- `deepWatchers`: WeakMap of objects to their deep watchers
+- `effectToDeepWatchedObjects`: WeakMap of effects to deep watched objects
+- `nonReactiveObjects`: WeakSet of non-reactive objects
+- `computedCache`: WeakMap of computed functions to their cached values
+
+**Use Cases:**
+- Debugging reactive behavior
+- Performance profiling
+- Memory leak detection
+- System state inspection

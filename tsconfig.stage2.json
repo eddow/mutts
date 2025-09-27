@@ -2,9 +2,9 @@
 	"extends": "./tsconfig.json",
 	"compilerOptions": {
 		"rootDir": ".",
-		"experimentalDecorators": false,
-		"emitDecoratorMetadata": false,
-		"useDefineForClassFields": true
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true,
+		"useDefineForClassFields": false
 	},
 	"include": ["sandbox/decorator.ts"]
 }

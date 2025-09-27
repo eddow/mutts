@@ -1,4 +1,5 @@
 import { computed, effect, reactive, watch } from './index'
+import './collections'
 
 describe('computed', () => {
 	it('returns computed value and caches it', () => {
