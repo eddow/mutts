@@ -412,6 +412,144 @@ The property descriptor configuration is applied in the constructor after callin
 3. **No runtime changes**: Descriptor configuration is fixed at class definition time
 4. **Type safety**: TypeScript doesn't enforce descriptor constraints at compile time
 
+## Deprecated
+
+The `deprecated` decorator provides a way to mark methods, getters, setters, or classes as deprecated with optional custom warning messages.
+
+## API Reference
+
+### `@deprecated` / `@deprecated(message: string)`
+
+A decorator that can be applied to methods, getters, setters, or classes to mark them as deprecated.
+
+**Target:** Methods, getters, setters, classes
+
+**Parameters:**
+- `message` (optional): Custom deprecation message to display
+
+**Returns:** Modified method/getter/setter/class with deprecation warning
+
+**Throws:**
+- `Error`: If applied to an unsupported target
+
+## Usage Examples
+
+### Basic Deprecation
+
+```typescript
+import { deprecated } from './std-decorators'
+
+class API {
+  @deprecated
+  oldMethod() {
+    return 'old implementation'
+  }
+  
+  @deprecated
+  get oldValue() {
+    return 'deprecated value'
+  }
+}
+
+const api = new API()
+api.oldMethod() // Console: "API.oldMethod is deprecated"
+api.oldValue    // Console: "API.oldValue is deprecated"
+```
+
+### Custom Deprecation Messages
+
+```typescript
+import { deprecated } from './std-decorators'
+
+class API {
+  @deprecated('Use newMethod() instead')
+  oldMethod() {
+    return 'old implementation'
+  }
+  
+  @deprecated('This will be removed in v2.0')
+  get oldValue() {
+    return 'deprecated value'
+  }
+  
+  @deprecated('Use setNewValue() instead')
+  set oldValue(value: string) {
+    // deprecated setter
+  }
+}
+
+const api = new API()
+api.oldMethod() // Console: "API.oldMethod is deprecated: Use newMethod() instead"
+api.oldValue    // Console: "API.oldValue is deprecated: This will be removed in v2.0"
+api.oldValue = 'test' // Console: "API.oldValue is deprecated: Use setNewValue() instead"
+```
+
+### Class Deprecation
+
+```typescript
+import { deprecated } from './std-decorators'
+
+@deprecated('Use NewClass instead')
+class OldClass {
+  constructor() {}
+}
+
+new OldClass() // Console: "OldClass.constructor is deprecated: Use NewClass instead"
+```
+
+### Multiple Deprecation Messages
+
+```typescript
+import { deprecated } from './std-decorators'
+
+class API {
+  @deprecated('This will be removed in v2.0')
+  method1() {}
+  
+  @deprecated('Use the new API')
+  method2() {}
+  
+  @deprecated('Legacy support only')
+  method3() {}
+}
+```
+
+## Implementation Details
+
+### Warning Message Format
+
+The default warning message format is:
+```
+{ClassName}.{methodName} is deprecated
+```
+
+With custom message:
+```
+{ClassName}.{methodName} is deprecated: {customMessage}
+```
+
+### Console Output
+
+The decorator uses `console.warn()` to display deprecation messages. You can override the warning behavior by modifying the `deprecated.warn` function:
+
+```typescript
+import { deprecated } from './std-decorators'
+
+// Override the warning function
+deprecated.warn = (target, propertyKey, message?) => {
+  // Custom warning logic
+  alert(`${target.constructor.name}.${String(propertyKey)} is deprecated${message ? `: ${message}` : ''}`)
+}
+```
+
+## Best Practices
+
+1. **Provide clear alternatives**: Always include information about what to use instead
+2. **Include version information**: Mention when the deprecated feature will be removed
+3. **Use consistent messaging**: Follow a consistent format across your codebase
+4. **Document migration paths**: Provide clear upgrade instructions
+5. **Monitor usage**: Track which deprecated features are still being used
+
 ## Related
 
 - [JavaScript Decorators](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Decorators)

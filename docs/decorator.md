@@ -22,19 +22,19 @@ const myDecorator = decorator({
     // Handle class decoration
     return target
   },
-  method(name, original) {
+  method(original, name) {
     // Handle method decoration
     return function(...args) {
       return original.apply(this, args)
     }
   },
-  getter(name, original) {
+  getter(original, name) {
     // Handle getter decoration
     return function() {
       return original.call(this)
     }
   },
-  setter(name, original) {
+  setter(original, name) {
     // Handle setter decoration
     return function(value) {
       return original.call(this, value)
@@ -76,7 +76,7 @@ Wrap method calls:
 
 ```typescript
 const logged = decorator({
-  method(name, original) {
+  method(original, name) {
     return function(...args) {
       console.log(`Calling ${String(name)} with:`, args)
       return original.apply(this, args)
@@ -101,13 +101,13 @@ Wrap accessor calls:
 
 ```typescript
 const tracked = decorator({
-  getter(name, original) {
+  getter(original, name) {
     return function() {
       console.log(`Getting ${String(name)}`)
       return original.call(this)
     }
   },
-  setter(name, original) {
+  setter(original, name) {
     return function(value) {
       console.log(`Setting ${String(name)} to:`, value)
       return original.call(this, value)
@@ -145,12 +145,12 @@ const fullDecorator = decorator({
       static decorated = true
     }
   },
-  method(name, original) {
+  method(original, name) {
     return function(...args) {
       return `method: ${original.apply(this, args)}`
     }
   },
-  getter(name, original) {
+  getter(original, name) {
     return function() {
       return `get: ${original.call(this)}`
     }
@@ -191,13 +191,13 @@ const myDecorator = decorator({
 })
 ```
 
-When defining that handler, there is no type verification for a type conflict with other decorators signature, even if the types are strictly checked at runtime, the handler will never receive `(object, string)` as an argument in a stage2 environment for example (field decorator)
+When defining that handler, there is no type verification for a type conflict with other decorators signature, even if the types are strictly checked at runtime, the handler will never receive `(object, string)` as an argument in a legacy environment for example (field decorator)
 
 ## Fields
 
-Weirdly enough, there is no standard ways to decorate standard instance value fields. Stage2 and Stage3 have no intersection of data beside the name of the decorated field - and they both lack something important:
-- Stage2 decorators give access to the prototype but not to the instances
-- Stage 3 does the opposite: gives access to the instances (through `addInitializer`) but not to the class.
+Weirdly enough, there is no standard ways to decorate standard instance value fields. Legacy and Modern have no intersection of data beside the name of the decorated field - and they both lack something important:
+- Legacy decorators give access to the prototype but not to the instances
+- Modern does the opposite: gives access to the instances (through `addInitializer`) but not to the class.
 
 The best ways to go through with fields are :
 
@@ -254,7 +254,7 @@ The system automatically detects whether you're using Stage 2 or Stage 3 decorat
 import { detectDecoratorSupport } from 'mutts'
 
 const support = detectDecoratorSupport()
-console.log(support) // 'stage3' | 'stage2' | false
+console.log(support) // 'modern' | 'legacy' | false
 ```
 
 ## Type Safety

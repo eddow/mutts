@@ -55,6 +55,9 @@
       "import": "./dist/destroyable.esm.js",
       "require": "./dist/destroyable.js"
     },
+    "./src": {
+      "import": "./src/index.ts"
+    },
     "./umd": {
       "browser": "./dist/mutts.umd.js"
     },
@@ -74,12 +77,12 @@
     "build:watch": "rollup -c --watch",
     "prepublishOnly": "npm run build",
     "test": "node --expose-gc node_modules/.bin/jest",
-    "test:stage2": "TSCONFIG=tsconfig.stage2.json node --expose-gc node_modules/.bin/jest --testPathPatterns=decorator",
-    "test:stage3": "TSCONFIG=tsconfig.stage3.json node --expose-gc node_modules/.bin/jest --testPathPatterns=decorator",
+    "test:legacy": "TSCONFIG=tsconfig.legacy.json node --expose-gc node_modules/.bin/jest --testPathPatterns=decorator",
+    "test:modern": "TSCONFIG=tsconfig.modern.json node --expose-gc node_modules/.bin/jest --testPathPatterns=decorator",
     "test:decorator": "node --expose-gc node_modules/.bin/jest src/decorator.test.ts",
     "biome": "biome check --write src",
-    "sandbox:stage2": "tsc --project tsconfig.stage2.json --outDir ./temp && node ./temp/sandbox/decorator.js",
-    "sandbox:stage3": "tsc --project tsconfig.stage3.json --outDir ./temp && node ./temp/sandbox/decorator.js"
+    "sandbox:legacy": "tsc --project tsconfig.legacy.json --outDir ./temp && node ./temp/sandbox/decorator.js",
+    "sandbox:modern": "tsc --project tsconfig.modern.json --outDir ./temp && node ./temp/sandbox/decorator.js"
   },
   "keywords": [
     "typescript",

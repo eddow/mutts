@@ -1,25 +1,11 @@
 // Test the decorator system with all decorator types
-import { decorator, decoratorSupport } from './decorator'
+import { decorator } from './decorator'
 
 describe('Decorator System', () => {
-	describe('detectDecoratorSupport', () => {
-		it('should detect correct decorator support based on environment', () => {
-			const expectedSupport = process.env.TSCONFIG?.includes('stage3') ? 'stage3' : 'stage2'
-
-			if (process.env.TSCONFIG) {
-				expect(decoratorSupport).toBe(expectedSupport)
-				// biome-ignore lint/suspicious/noConsole: Test signal
-				console.log(`Expected: ${expectedSupport}, Actual: ${decoratorSupport}`)
-			}
-			// Test that the detection is working correctly
-			else expect(['stage3', 'stage2', false]).toContain(decoratorSupport)
-		})
-	})
-
 	describe('Method Decorators', () => {
 		it('should wrap method calls', () => {
 			const methodDecorator = decorator({
-				method(_name, original) {
+				method(original, _name) {
 					return function (this: any, ...args: any[]) {
 						return `wrapped: ${original.apply(this, args)}`
 					}
@@ -39,7 +25,7 @@ describe('Decorator System', () => {
 
 		it('should work with multiple methods', () => {
 			const methodDecorator = decorator({
-				method(name, original) {
+				method(original, name) {
 					return function (this: any, ...args: any[]) {
 						return `${String(name)}: ${original.apply(this, args)}`
 					}
@@ -106,7 +92,7 @@ describe('Decorator System', () => {
 	describe('Getter Decorators', () => {
 		it('should wrap getter calls', () => {
 			const getterDecorator = decorator({
-				getter(_name, original) {
+				getter(original, _name) {
 					return function (this: any) {
 						return `wrapped: ${original.call(this)}`
 					}
@@ -128,7 +114,7 @@ describe('Decorator System', () => {
 
 		it('should work with multiple getters', () => {
 			const getterDecorator = decorator({
-				getter(name, original) {
+				getter(original, name) {
 					return function (this: any) {
 						return `${String(name)}: ${original.call(this)}`
 					}
@@ -159,7 +145,7 @@ describe('Decorator System', () => {
 	describe('Setter Decorators', () => {
 		it('should wrap setter calls', () => {
 			const setterDecorator = decorator({
-				setter(_name, original) {
+				setter(original, _name) {
 					return function (this: any, value: any) {
 						return original.call(this, `wrapped: ${value}`)
 					}
@@ -186,7 +172,7 @@ describe('Decorator System', () => {
 
 		it('should work with multiple setters', () => {
 			const setterDecorator = decorator({
-				setter(name, original) {
+				setter(original, name) {
 					return function (this: any, value: any) {
 						return original.call(this, `${String(name)}: ${value}`)
 					}
@@ -231,7 +217,7 @@ describe('Decorator System', () => {
 					;(target as any).decorated = true
 					return target
 				},
-				method(_name, original) {
+				method(original, _name) {
 					return function (this: any, ...args: any[]) {
 						return `method: ${original.apply(this, args)}`
 					}
@@ -253,12 +239,12 @@ describe('Decorator System', () => {
 
 		it('should work with getter and setter decorators on different properties', () => {
 			const myDecorator = decorator({
-				getter(_name, original) {
+				getter(original, _name) {
 					return function (this: any) {
 						return `get: ${original.call(this)}`
 					}
 				},
-				setter(_name, original) {
+				setter(original, _name) {
 					return function (this: any, value: any) {
 						return original.call(this, `set: ${value}`)
 					}
@@ -278,7 +264,7 @@ describe('Decorator System', () => {
 				set value2(v: string) {
 					this._value2 = v
 				}
-				//@ts-ignore: The end-user should put a decorator here if stage3, and not if stage2
+				//@ts-ignore: The end-user should put a decorator here if modern, and not if legacy
 				@myDecorator
 				get value2() {
 					return this._value2
@@ -297,12 +283,12 @@ describe('Decorator System', () => {
 					;(target as any).decorated = true
 					return target
 				},
-				method(_name, original) {
+				method(original, _name) {
 					return function (this: any, ...args: any[]) {
 						return `method: ${original.apply(this, args)}`
 					}
 				},
-				getter(_name, original) {
+				getter(original, _name) {
 					return function (this: any) {
 						return `get: ${original.call(this)}`
 					}
@@ -355,15 +341,15 @@ describe('Decorator System', () => {
 					callLog.push('class decorator called')
 					return original // Return unchanged
 				},
-				method(name, original) {
+				method(original, name) {
 					callLog.push(`method decorator called for ${String(name)}`)
 					return original // Return unchanged
 				},
-				getter(name, original) {
+				getter(original, name) {
 					callLog.push(`getter decorator called for ${String(name)}`)
 					return original // Return unchanged
 				},
-				setter(name, original) {
+				setter(original, name) {
 					callLog.push(`setter decorator called for ${String(name)}`)
 					return original // Return unchanged
 				},
@@ -409,7 +395,7 @@ describe('Decorator System', () => {
 			const callLog: string[] = []
 
 			const noOpDecorator = decorator({
-				setter(name, original) {
+				setter(original, name) {
 					callLog.push(`setter decorator called for ${String(name)}`)
 					return original // Return unchanged
 				},
@@ -442,7 +428,7 @@ describe('Decorator System', () => {
 	describe('Error Handling', () => {
 		it('should throw error when decorator is applied to wrong target', () => {
 			const methodOnlyDecorator = decorator({
-				method(_name, original) {
+				method(original, _name) {
 					return original
 				},
 			})
@@ -474,7 +460,7 @@ describe('Decorator System', () => {
 
 		it('should throw error when getter decorator is applied to method', () => {
 			const getterOnlyDecorator = decorator({
-				getter(_name, original) {
+				getter(original, _name) {
 					return original
 				},
 			})
@@ -491,7 +477,7 @@ describe('Decorator System', () => {
 
 		it('should throw error when decorating a field', () => {
 			const anyDecorator = decorator({
-				method(_name, original) {
+				method(original, _name) {
 					return original
 				},
 			})

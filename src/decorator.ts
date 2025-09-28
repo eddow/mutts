@@ -9,69 +9,37 @@ export class DecoratorError extends Error {
 		this.name = 'DecoratorException'
 	}
 }
-
-/**
- * Detects which decorator system is available in the current environment
- */
-function detectDecoratorSupport(): 'stage3' | 'stage2' | false {
-	let result: 'stage3' | 'stage2' | false = false
-	try {
-		// Test for Stage 3 decorator signature
-		const stage3Decorator = (_target: any, context: any) => {
-			result = context ? 'stage3' : 'stage2'
-		}
-		// @ts-ignore
-		@stage3Decorator
-		class Test {}
-		// Use Test to avoid unused warning
-		void Test
-
-		return result
-	} catch (_e) {
-		return false
-	}
-}
-
-// Cache the decorator support detection
-export const decoratorSupport = detectDecoratorSupport()
-/*
-interface TypedPropertyDescriptor<T> extends PropertyDescriptor {
-	value?: T
-	get?(): T
-	set?(v: T): void
-}*/
-
 //#region all decorator types
 
 // Used for get/set and method decorators
-export type Stage2PropertyDecorator<T> = (
+export type LegacyPropertyDecorator<T> = (
 	target: T,
 	name: string | symbol,
 	descriptor: PropertyDescriptor
 ) => any
 
-export type Stage2ClassDecorator<T> = (target: T) => any
+export type LegacyClassDecorator<T> = (target: T) => any
 
-export type Stage3MethodDecorator<T> = (target: T, context: ClassMethodDecoratorContext) => any
+export type ModernMethodDecorator<T> = (target: T, context: ClassMethodDecoratorContext) => any
 
-export type Stage3GetterDecorator<T> = (target: T, context: ClassGetterDecoratorContext) => any
+export type ModernGetterDecorator<T> = (target: T, context: ClassGetterDecoratorContext) => any
 
-export type Stage3SetterDecorator<T> = (target: T, context: ClassSetterDecoratorContext) => any
+export type ModernSetterDecorator<T> = (target: T, context: ClassSetterDecoratorContext) => any
 
-export type Stage3ClassDecorator<T> = (target: T, context: ClassDecoratorContext) => any
+export type ModernClassDecorator<T> = (target: T, context: ClassDecoratorContext) => any
 
 //#endregion
 
 type DDMethod<T> = (
-	name: PropertyKey,
-	original: (this: T, ...args: any[]) => any
+	original: (this: T, ...args: any[]) => any,
+	name: PropertyKey
 ) => ((this: T, ...args: any[]) => any) | void
 
-type DDGetter<T> = (name: PropertyKey, original: (this: T) => any) => ((this: T) => any) | void
+type DDGetter<T> = (original: (this: T) => any, name: PropertyKey) => ((this: T) => any) | void
 
 type DDSetter<T> = (
-	name: PropertyKey,
-	original: (this: T, value: any) => void
+	original: (this: T, value: any) => void,
+	name: PropertyKey
 ) => ((this: T, value: any) => void) | void
 
 type DDClass<T> = <Ctor extends new (...args: any[]) => T = new (...args: any[]) => T>(
@@ -88,38 +56,38 @@ export interface DecoratorDescription<T> {
 export type Decorator<T, Description extends DecoratorDescription<T>> = (Description extends {
 	method: DDMethod<T>
 }
-	? Stage2PropertyDecorator<T> & Stage3MethodDecorator<T>
+	? LegacyPropertyDecorator<T> & ModernMethodDecorator<T>
 	: unknown) &
 	(Description extends { class: DDClass<new (...args: any[]) => T> }
-		? Stage2ClassDecorator<new (...args: any[]) => T> &
-				Stage3ClassDecorator<new (...args: any[]) => T>
+		? LegacyClassDecorator<new (...args: any[]) => T> &
+				ModernClassDecorator<new (...args: any[]) => T>
 		: unknown) &
 	(Description extends { getter: DDGetter<T> }
-		? Stage2PropertyDecorator<T> & Stage3GetterDecorator<T>
+		? LegacyPropertyDecorator<T> & ModernGetterDecorator<T>
 		: unknown) &
 	(Description extends { setter: DDSetter<T> }
-		? Stage2PropertyDecorator<T> & Stage3SetterDecorator<T>
+		? LegacyPropertyDecorator<T> & ModernSetterDecorator<T>
 		: unknown) &
 	(Description extends { default: infer Signature } ? Signature : unknown)
 
 export type DecoratorFactory<T> = <Description extends DecoratorDescription<T>>(
 	description: Description
 ) => (Description extends { method: DDMethod<T> }
-	? Stage2PropertyDecorator<T> & Stage3MethodDecorator<T>
+	? LegacyPropertyDecorator<T> & ModernMethodDecorator<T>
 	: unknown) &
 	(Description extends { class: DDClass<new (...args: any[]) => T> }
-		? Stage2ClassDecorator<new (...args: any[]) => T> &
-				Stage3ClassDecorator<new (...args: any[]) => T>
+		? LegacyClassDecorator<new (...args: any[]) => T> &
+				ModernClassDecorator<new (...args: any[]) => T>
 		: unknown) &
 	(Description extends { getter: DDGetter<T> }
-		? Stage2PropertyDecorator<T> & Stage3GetterDecorator<T>
+		? LegacyPropertyDecorator<T> & ModernGetterDecorator<T>
 		: unknown) &
 	(Description extends { setter: DDSetter<T> }
-		? Stage2PropertyDecorator<T> & Stage3SetterDecorator<T>
+		? LegacyPropertyDecorator<T> & ModernSetterDecorator<T>
 		: unknown) &
 	(Description extends { default: infer Signature } ? Signature : unknown)
 
-export function stage2Decorator<T = any>(description: DecoratorDescription<T>): any {
+export function legacyDecorator<T = any>(description: DecoratorDescription<T>): any {
 	return function (
 		target: any,
 		propertyKey?: PropertyKey,
@@ -138,17 +106,17 @@ export function stage2Decorator<T = any>(description: DecoratorDescription<T>): 
 					if (!('getter' in description || 'setter' in description))
 						throw new Error('Decorator cannot be applied to a getter or setter')
 					if ('getter' in description) {
-						const newGetter = description.getter?.(propertyKey, descriptor.get)
+						const newGetter = description.getter?.(descriptor.get, propertyKey)
 						if (newGetter) descriptor.get = newGetter
 					}
 					if ('setter' in description) {
-						const newSetter = description.setter?.(propertyKey, descriptor.set)
+						const newSetter = description.setter?.(descriptor.set, propertyKey)
 						if (newSetter) descriptor.set = newSetter
 					}
 					return descriptor
 				} else if (typeof descriptor.value === 'function') {
 					if (!('method' in description)) throw new Error('Decorator cannot be applied to a method')
-					const newMethod = description.method?.(propertyKey, descriptor.value)
+					const newMethod = description.method?.(descriptor.value, propertyKey)
 					if (newMethod) descriptor.value = newMethod
 					return descriptor
 				}
@@ -160,7 +128,7 @@ export function stage2Decorator<T = any>(description: DecoratorDescription<T>): 
 	}
 }
 
-export function stage3Decorator<T = any>(description: DecoratorDescription<T>): any {
+export function modernDecorator<T = any>(description: DecoratorDescription<T>): any {
 	return function (target: any, context?: DecoratorContext, ...args: any[]) {
 		if (!context?.kind || typeof context.kind !== 'string') {
 			if (!('default' in description))
@@ -175,23 +143,23 @@ export function stage3Decorator<T = any>(description: DecoratorDescription<T>): 
 				throw new Error('Decorator cannot be applied to a field')
 			case 'getter':
 				if (!('getter' in description)) throw new Error('Decorator cannot be applied to a getter')
-				return description.getter?.(context.name, target)
+				return description.getter?.(target, context.name)
 			case 'setter':
 				if (!('setter' in description)) throw new Error('Decorator cannot be applied to a setter')
-				return description.setter?.(context.name, target)
+				return description.setter?.(target, context.name)
 			case 'method':
 				if (!('method' in description)) throw new Error('Decorator cannot be applied to a method')
-				return description.method?.(context.name, target)
+				return description.method?.(target, context.name)
 			case 'accessor': {
 				if (!('getter' in description || 'setter' in description))
 					throw new Error('Decorator cannot be applied to a getter or setter')
 				const rv: Partial<ClassAccessorDecoratorResult<any, any>> = {}
 				if ('getter' in description) {
-					const newGetter = description.getter?.(context.name, target.get)
+					const newGetter = description.getter?.(target.get, context.name)
 					if (newGetter) rv.get = newGetter
 				}
 				if ('setter' in description) {
-					const newSetter = description.setter?.(context.name, target.set)
+					const newSetter = description.setter?.(target.set, context.name)
 					if (newSetter) rv.set = newSetter
 				}
 				return rv
@@ -201,13 +169,35 @@ export function stage3Decorator<T = any>(description: DecoratorDescription<T>): 
 	}
 }
 
-export const decorator: DecoratorFactory<any> =
-	decoratorSupport === 'stage3' ? stage3Decorator : stage2Decorator
-/*export const decorator = <T extends object, Description extends DecoratorDescription<T>>(
-	description: Description
-): Decorator<T, Description> => {
-	return decoratorSupport === 'stage3' ? stage3Decorator(description) : stage2Decorator(description)
-}*/
+/**
+ * Detects if the decorator is being called in modern (Stage 3) or legacy (Stage 2) mode
+ * based on the arguments passed to the decorator function
+ */
+function detectDecoratorMode(
+	_target: any,
+	contextOrKey?: any,
+	_descriptor?: any
+): 'modern' | 'legacy' {
+	// Modern decorators have a context object as the second parameter
+	// Legacy decorators have a string/symbol key as the second parameter
+	if (
+		typeof contextOrKey === 'object' &&
+		contextOrKey !== null &&
+		typeof contextOrKey.kind === 'string'
+	) {
+		return 'modern'
+	}
+	return 'legacy'
+}
 
-export type GenericClassDecorator<T> = Stage2ClassDecorator<new (...args: any[]) => T> &
-	Stage3ClassDecorator<new (...args: any[]) => T>
+export const decorator: DecoratorFactory<any> = (description: DecoratorDescription<any>) => {
+	return ((target: any, contextOrKey?: any, ...args: any[]) => {
+		const mode = detectDecoratorMode(target, contextOrKey, args[0])
+		return mode === 'modern'
+			? modernDecorator(description)(target, contextOrKey, ...args)
+			: legacyDecorator(description)(target, contextOrKey, ...args)
+	}) as any
+}
+
+export type GenericClassDecorator<T> = LegacyClassDecorator<new (...args: any[]) => T> &
+	ModernClassDecorator<new (...args: any[]) => T>

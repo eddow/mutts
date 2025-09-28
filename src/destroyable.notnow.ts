@@ -134,7 +134,7 @@ describe('Destroyable', () => {
 
 			class MyClass extends Destroyable() {
 				@allocated
-				declare name: string
+				name: string
 				constructor(name: string) {
 					super()
 					this.name = name

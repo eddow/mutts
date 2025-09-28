@@ -2,6 +2,7 @@ import {
 	cache,
 	cached,
 	debounce,
+	deprecated,
 	describe as describeDecorator,
 	isCached,
 	throttle,
@@ -571,4 +572,104 @@ describe('throttle decorator', () => {
 
 		expect(slowCalls).toBe(2)
 	})*/
+})
+
+describe('deprecated decorator with string parameter', () => {
+	it('should use custom warning message for methods', () => {
+		const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+
+		class TestClass {
+			@deprecated('Use newMethod() instead')
+			oldMethod() {
+				return 'old'
+			}
+		}
+
+		const obj = new TestClass()
+		obj.oldMethod()
+
+		expect(consoleSpy).toHaveBeenCalledWith(
+			'TestClass.oldMethod is deprecated: Use newMethod() instead'
+		)
+
+		consoleSpy.mockRestore()
+	})
+
+	it('should use custom warning message for getters', () => {
+		const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+
+		class TestClass {
+			@deprecated('Use newValue instead')
+			get oldValue() {
+				return 'old'
+			}
+		}
+
+		const obj = new TestClass()
+		obj.oldValue
+
+		expect(consoleSpy).toHaveBeenCalledWith(
+			'TestClass.oldValue is deprecated: Use newValue instead'
+		)
+
+		consoleSpy.mockRestore()
+	})
+
+	it('should use custom warning message for setters', () => {
+		const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+
+		class TestClass {
+			@deprecated('Use setNewValue() instead')
+			set oldValue(_value: string) {
+				// deprecated setter
+			}
+		}
+
+		const obj = new TestClass()
+		obj.oldValue = 'test'
+
+		expect(consoleSpy).toHaveBeenCalledWith(
+			'TestClass.oldValue is deprecated: Use setNewValue() instead'
+		)
+
+		consoleSpy.mockRestore()
+	})
+
+	it('should use custom warning message for classes', () => {
+		const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+
+		@deprecated('Use NewClass instead')
+		class OldClass {
+			constructor() {}
+		}
+
+		new OldClass()
+
+		expect(consoleSpy).toHaveBeenCalledWith('.constructor is deprecated: Use NewClass instead')
+
+		consoleSpy.mockRestore()
+	})
+
+	it('should work with different custom messages', () => {
+		const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+
+		class TestClass {
+			@deprecated('This will be removed in v2.0')
+			method1() {}
+
+			@deprecated('Use the new API')
+			method2() {}
+		}
+
+		const obj = new TestClass()
+		obj.method1()
+		obj.method2()
+
+		expect(consoleSpy).toHaveBeenCalledWith(
+			'TestClass.method1 is deprecated: This will be removed in v2.0'
+		)
+		expect(consoleSpy).toHaveBeenCalledWith('TestClass.method2 is deprecated: Use the new API')
+
+		consoleSpy.mockRestore()
+	})
 })

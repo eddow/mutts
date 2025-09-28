@@ -6,5 +6,5 @@
 		"emitDecoratorMetadata": false,
 		"useDefineForClassFields": true
 	},
-	"include": ["sandbox/decorator.ts"]
+    "include": ["sandbox/decorator.ts", "src/**/*"]
 }

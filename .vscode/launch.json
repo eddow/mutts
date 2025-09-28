@@ -2,20 +2,20 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Run Current TS File - stage2",
+			"name": "Run Current TS File - legacy",
 			"type": "node",
 			"request": "launch",
 			"program": "${workspaceFolder}/node_modules/.bin/tsx",
-			"args": ["--tsconfig", "tsconfig.stage2.json", "${file}"],
+			"args": ["--tsconfig", "tsconfig.legacy.json", "${file}"],
 			"console": "integratedTerminal",
 			"cwd": "${workspaceFolder}"
 		},
 		{
-			"name": "Run Current TS File - stage3",
+			"name": "Run Current TS File - modern",
 			"type": "node",
 			"request": "launch",
 			"program": "${workspaceFolder}/node_modules/.bin/tsx",
-			"args": ["--tsconfig", "tsconfig.stage3.json", "${file}"],
+			"args": ["--tsconfig", "tsconfig.modern.json", "${file}"],
 			"console": "integratedTerminal",
 			"cwd": "${workspaceFolder}"
 		}

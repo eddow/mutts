@@ -3,7 +3,7 @@ import { decorator, GenericClassDecorator } from './decorator'
 // In order to avoid async re-entrance, we could use zone.js or something like that.
 const syncCalculating: { object: object; prop: PropertyKey }[] = []
 export const cached = decorator({
-	getter(propertyKey, original) {
+	getter(original, propertyKey) {
 		return function (this: any) {
 			const alreadyCalculating = syncCalculating.findIndex(
 				(c) => c.object === this && c.prop === propertyKey
@@ -58,19 +58,19 @@ export function describe(descriptor: {
 
 export const deprecated = Object.assign(
 	decorator({
-		method(propertyKey, original) {
+		method(original, propertyKey) {
 			return function (this: any, ...args: any[]) {
 				deprecated.warn(this, propertyKey)
 				return original.apply(this, args)
 			}
 		},
-		getter(propertyKey, original) {
+		getter(original, propertyKey) {
 			return function (this: any) {
 				deprecated.warn(this, propertyKey)
 				return original.call(this)
 			}
 		},
-		setter(propertyKey, original) {
+		setter(original, propertyKey) {
 			return function (this: any, value: any) {
 				deprecated.warn(this, propertyKey)
 				return original.call(this, value)
@@ -84,18 +84,50 @@ export const deprecated = Object.assign(
 				}
 			}
 		},
+		default(message: string) {
+			return decorator({
+				method(original, propertyKey) {
+					return function (this: any, ...args: any[]) {
+						deprecated.warn(this, propertyKey, message)
+						return original.apply(this, args)
+					}
+				},
+				getter(original, propertyKey) {
+					return function (this: any) {
+						deprecated.warn(this, propertyKey, message)
+						return original.call(this)
+					}
+				},
+				setter(original, propertyKey) {
+					return function (this: any, value: any) {
+						deprecated.warn(this, propertyKey, message)
+						return original.call(this, value)
+					}
+				},
+				class(original) {
+					return class extends original {
+						constructor(...args: any[]) {
+							super(...args)
+							deprecated.warn(this, 'constructor', message)
+						}
+					}
+				},
+			})
+		},
 	}),
 	{
-		warn: (target: any, propertyKey: PropertyKey) => {
+		warn: (target: any, propertyKey: PropertyKey, message?: string) => {
 			// biome-ignore lint/suspicious/noConsole: To be overridden
-			console.warn(`${target.constructor.name}.${String(propertyKey)} is deprecated`)
+			console.warn(
+				`${target.constructor.name}.${String(propertyKey)} is deprecated${message ? `: ${message}` : ''}`
+			)
 		},
 	}
 )
 
 export function debounce(delay: number) {
 	return decorator({
-		method(_propertyKey, original) {
+		method(original, _propertyKey) {
 			let timeoutId: ReturnType<typeof setTimeout> | null = null
 
 			return function (this: any, ...args: any[]) {
@@ -116,7 +148,7 @@ export function debounce(delay: number) {
 
 export function throttle(delay: number) {
 	return decorator({
-		method(_propertyKey, original) {
+		method(original, _propertyKey) {
 			let lastCallTime = 0
 			let timeoutId: ReturnType<typeof setTimeout> | null = null
 

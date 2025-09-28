@@ -42,3 +42,11 @@ const nativeConstructors = new Set<Function>([
 export function isConstructor(fn: Function): boolean {
 	return nativeConstructors.has(fn) || fn.toString().startsWith('class ')
 }
+
+export function renamed<F extends Function>(fct: F, name: string): F {
+	return Object.defineProperties(fct, {
+		name: {
+			value: name,
+		},
+	})
+}
