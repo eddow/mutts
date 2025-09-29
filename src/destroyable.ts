@@ -139,27 +139,7 @@ export const allocated = decorator({
 		}
 	},
 })
-/*
-export function allocated<
-	Key extends PropertyKey,
-	Allocated extends AbstractDestroyable<{ [key in Key]: any }>,
->(target: Allocated, propertyKey: Key) {
-	const forwarding = target as { [forwardProperties]?: PropertyKey[] }
-	if (!forwarding[forwardProperties]) {
-		forwarding[forwardProperties] = []
-	}
-	forwarding[forwardProperties].push(propertyKey)
-	// Make a get/set accessor that stores the value in the allocated object
-	Object.defineProperty(target, propertyKey, {
-		get: function (this: any) {
-			return this[allocatedValues][propertyKey]
-		},
-		set: function (this: any, value: any) {
-			this[allocatedValues][propertyKey] = value
-		},
-	})
-}
-*/
+
 export function callOnGC(cb: () => void) {
 	let called = false
 	const forward = () => {

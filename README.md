@@ -1,7 +1,6 @@
 # Modern UTility TS
 
 [![npm version](https://badge.fury.io/js/mutts.svg)](https://badge.fury.io/js/mutts)
-[![GitHub](https://img.shields.io/github/license/eddow/mutts)](https://github.com/eddow/mutts/blob/main/LICENSE)
 
 Basically, just a bunch of utilities that have many versions on the web, but none fitting my needs, so that I re-created every time.
 
@@ -20,8 +19,7 @@ npm install mutts
 ```typescript
 // Import from built modules (recommended for production)
 import { reactive, effect } from 'mutts'
-import { reactive as reactiveCollections } from 'mutts/reactive/collections'
-import { Cached } from 'mutts/std-decorators'
+import { cached } from 'mutts/std-decorators'
 import { Destroyable, allocated } from 'mutts/destroyable'
 ```
 
@@ -29,17 +27,12 @@ import { Destroyable, allocated } from 'mutts/destroyable'
 
 ```typescript
 // Import directly from source TypeScript files (for development/custom builds)
-import { reactive, effect } from 'mutts/src/index'
-import { reactive as reactiveCollections } from 'mutts/src/reactive/collections'
-import { Cached } from 'mutts/src/std-decorators'
+import { reactive, effect } from 'mutts/src'
+import { cached } from 'mutts/src/std-decorators'
 import { Destroyable, allocated } from 'mutts/src/destroyable'
 ```
 
 **Note:** When importing from source files, you'll need to configure your build system (TypeScript, Vite, Webpack, etc.) to handle TypeScript compilation and module resolution. The source files are published alongside the built modules, so you can import directly from the `src` directory.
-
-## Repository
-
-This project is hosted on GitHub: [https://github.com/eddow/mutts](https://github.com/eddow/mutts)
 
 ## [Indexable](./docs/indexable.md)
 
@@ -62,22 +55,13 @@ A way to write classes that allow numeric indexes managed by a custom function -
 
 ## [Standard Decorators](./docs/std-decorators.md)
 
-A collection of standard decorators including the `@cached` decorator that provides automatic caching for getter methods with circular dependency detection. The `@cached` decorator ensures that expensive computations are only performed once per instance, with built-in protection against infinite recursion.
+A collection of standard decorators that shouldn't be implemented a 101-th time.
 
-**Key Features:**
-- Automatic result caching for getter methods
-- Circular dependency detection and error reporting
-- Per-instance caching (each object instance has its own cache)
-- Thread-safe synchronous calculation tracking
-
-**Use Cases:**
-- Expensive computed properties
-- Derived state calculations
-- Performance optimization for frequently accessed values
+In extenso: cached, describe(enumerable, configurable, writable), deprecated, debounce, throttle
 
 ## [Decorator System](./docs/decorator.md)
 
-A standardized decorator system that works with both Legacy (Stage 2) and Modern (Stage 3) decorator proposals. Provides a unified API for creating decorators that automatically detect and adapt to the current decorator environment.
+A standardized decorator system that works with both Legacy and Modern decorator proposals. Provides a unified API for creating decorators that automatically detect and adapt to the current decorator environment.
 
 **Key Features:**
 - **Universal Compatibility**: Works with both Legacy and Modern decorator proposals

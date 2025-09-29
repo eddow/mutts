@@ -13,23 +13,17 @@
       "require": "./dist/index.js",
       "script": "./dist/mutts.umd.min.js"
     },
+    "./decorator": {
+      "types": "./dist/decorator.d.ts",
+      "source": "./src/decorator.ts",
+      "import": "./dist/decorator.esm.js",
+      "require": "./dist/decorator.js"
+    },
     "./reactive": {
-      "types": "./dist/reactive/index.d.ts",
+      "types": "./dist/reactive.d.ts",
       "source": "./src/reactive/index.ts",
-      "import": "./dist/reactive/index.esm.js",
-      "require": "./dist/reactive/index.js"
-    },
-    "./reactive/collections": {
-      "types": "./dist/reactive/collections.d.ts",
-      "source": "./src/reactive/collections.ts",
-      "import": "./dist/reactive/collections.esm.js",
-      "require": "./dist/reactive/collections.js"
-    },
-    "./cached": {
-      "types": "./dist/cached.d.ts",
-      "source": "./src/cached.ts",
-      "import": "./dist/cached.esm.js",
-      "require": "./dist/cached.js"
+      "import": "./dist/reactive.esm.js",
+      "require": "./dist/reactive.js"
     },
     "./eventful": {
       "types": "./dist/eventful.d.ts",
@@ -55,8 +49,17 @@
       "import": "./dist/destroyable.esm.js",
       "require": "./dist/destroyable.js"
     },
+    "./std-decorators": {
+      "types": "./dist/std-decorators.d.ts",
+      "source": "./src/std-decorators.ts",
+      "import": "./dist/std-decorators.esm.js",
+      "require": "./dist/std-decorators.js"
+    },
     "./src": {
       "import": "./src/index.ts"
+    },
+    "./src/*": {
+      "import": "./src/*"
     },
     "./umd": {
       "browser": "./dist/mutts.umd.js"
@@ -99,7 +102,7 @@
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "https://github.com/eddow/mutts.git"
+    "url": "git+https://github.com/eddow/mutts.git"
   },
   "homepage": "https://github.com/eddow/mutts#readme",
   "bugs": {

@@ -18,7 +18,7 @@ Reactivity is a programming paradigm where the system automatically tracks depen
 ### Basic Example
 
 ```typescript
-import { reactive, effect } from './reactive'
+import { reactive, effect } from 'mutts/reactive'
 
 // Create a reactive object
 const user = reactive({ name: "John", age: 30 })
@@ -38,13 +38,13 @@ user.age = 25       // Triggers effect
 ### Installation
 
 ```bash
-npm install @your-org/reactive
+npm install mutts
 ```
 
 ### Basic Usage
 
 ```typescript
-import { reactive, effect } from '@your-org/reactive'
+import { reactive, effect } from 'mutts/reactive'
 
 // Make an object reactive
 const state = reactive({
@@ -69,7 +69,7 @@ state.message = "Hi" // Triggers second effect
 ### Hello World Example
 
 ```typescript
-import { reactive, effect } from '@your-org/reactive'
+import { reactive, effect } from 'mutts/reactive'
 
 // Simple counter
 const counter = reactive({ value: 0 })
@@ -387,7 +387,7 @@ effect(async (dep) => {
 Effects can be created inside other effects and will have separate effect scopes:
 
 ```typescript
-import { effect, reactive } from './reactive'
+import { effect, reactive } from 'mutts/reactive'
 
 const state = reactive({ a: 0, b: 0 })
 
@@ -409,7 +409,7 @@ const stopOuter = effect(() => {
 The `untracked()` function allows you to run code without tracking dependencies, which can be useful for creating effects or performing operations that shouldn't be part of the current effect's dependency graph.
 
 ```typescript
-import { effect, untracked, reactive } from './reactive'
+import { effect, untracked, reactive } from 'mutts/reactive'
 
 const state = reactive({ a: 0, b: 0 })
 
@@ -439,7 +439,7 @@ effect(() => {
 Configure the reactive system behavior:
 
 ```typescript
-import { options as reactiveOptions } from './reactive'
+import { options as reactiveOptions } from 'mutts/reactive'
 
 // Set maximum effect chain depth
 reactiveOptions.maxEffectChain = 50
@@ -1072,7 +1072,7 @@ effect(() => {
 The `@reactive` decorator makes class instances automatically reactive. This is the recommended approach for adding reactivity to classes.
 
 ```typescript
-import { reactive } from './reactive'
+import { reactive } from 'mutts/reactive'
 
 @reactive
 class User {
@@ -1104,7 +1104,7 @@ user.name = "Jane" // Triggers effect
 You can also use the functional syntax for making classes reactive:
 
 ```typescript
-import { reactive } from './reactive'
+import { reactive } from 'mutts/reactive'
 
 class User {
     name: string
@@ -1136,7 +1136,7 @@ user.name = "Jane" // Triggers effect
 For complex inheritance trees, especially when you need to solve constructor reactivity issues, extend `ReactiveBase`:
 
 ```typescript
-import { ReactiveBase, reactive } from './reactive'
+import { ReactiveBase, reactive } from 'mutts/reactive'
 
 class GameObject extends ReactiveBase {
     id = 'game-object'
@@ -1549,7 +1549,7 @@ array.push(1) // Triggers effect
 Register custom reactive classes for automatic wrapping:
 
 ```typescript
-import { registerNativeReactivity } from './reactive'
+import { registerNativeReactivity } from 'mutts/reactive'
 
 class CustomMap<K, V> {
     private data = new Map<K, V>()
@@ -1636,7 +1636,7 @@ const largeMap = new ReactiveMap(new Map()) // For large collections with key ac
 Configure debug behavior:
 
 ```typescript
-import { options as reactiveOptions } from './reactive'
+import { options as reactiveOptions } from 'mutts/reactive'
 
 // Track effect entry/exit
 reactiveOptions.enter = (effect) => {

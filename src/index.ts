@@ -1,3 +1,4 @@
+export * from './decorator'
 export * from './destroyable'
 export * from './eventful'
 export * from './indexable'

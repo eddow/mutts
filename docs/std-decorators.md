@@ -47,7 +47,7 @@ Manually caches a value for a property on an object.
 ### Basic Caching
 
 ```typescript
-import { cached } from './cached'
+import { cached } from 'mutts/std-decorators'
 
 class ExpensiveCalculator {
   @cached
@@ -70,7 +70,7 @@ console.log(calculator.expensiveValue) // Cached result
 ### Circular Dependency Detection
 
 ```typescript
-import { cached } from './cached'
+import { cached } from 'mutts/std-decorators'
 
 class CircularObject {
   @cached
@@ -92,7 +92,7 @@ console.log(obj.valueA)
 ### Complex Object Graph
 
 ```typescript
-import { cached } from './cached'
+import { cached } from 'mutts/std-decorators'
 
 class Node {
   constructor(public id: string, public children: Node[] = []) {}
@@ -123,7 +123,7 @@ console.log(root.depth) // 2
 ### Manual Caching
 
 ```typescript
-import { cache, isCached } from './cached'
+import { cache, isCached } from 'mutts/std-decorators'
 
 class ManualCache {
   private _value: number | undefined
@@ -223,7 +223,7 @@ class MyClass { }
 ### Creating Reusable Decorators
 
 ```typescript
-import { describe } from './std-decorators'
+import { describe } from 'mutts/std-decorators'
 
 // Create reusable descriptor configurations
 const readonly = describe({ writable: false })
@@ -254,7 +254,7 @@ console.log(Object.keys(user)) // ['id', 'name', 'createdAt', 'critical'] - only
 ### Making Properties Non-Enumerable
 
 ```typescript
-import { describe } from './std-decorators'
+import { describe } from 'mutts/std-decorators'
 
 const hidden = describe({ enumerable: false })
 
@@ -279,7 +279,7 @@ console.log(Object.getOwnPropertyNames(cache)) // ['data', '_internal', '_cache'
 ### Read-Only Properties
 
 ```typescript
-import { describe } from './std-decorators'
+import { describe } from 'mutts/std-decorators'
 
 const readonly = describe({ writable: false })
 const readonlyLocked = describe({ writable: false, configurable: false })
@@ -313,7 +313,7 @@ doc.updateTitle('Updated Title') // This works
 ### Configuration Control
 
 ```typescript
-import { describe } from './std-decorators'
+import { describe } from 'mutts/std-decorators'
 
 const locked = describe({ configurable: false })
 const frozen = describe({ configurable: false, writable: false })
@@ -437,7 +437,7 @@ A decorator that can be applied to methods, getters, setters, or classes to mark
 ### Basic Deprecation
 
 ```typescript
-import { deprecated } from './std-decorators'
+import { deprecated } from 'mutts/std-decorators'
 
 class API {
   @deprecated
@@ -459,7 +459,7 @@ api.oldValue    // Console: "API.oldValue is deprecated"
 ### Custom Deprecation Messages
 
 ```typescript
-import { deprecated } from './std-decorators'
+import { deprecated } from 'mutts/std-decorators'
 
 class API {
   @deprecated('Use newMethod() instead')

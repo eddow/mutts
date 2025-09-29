@@ -118,7 +118,7 @@ const unsubscribe = myObject.hook((event, ...args) => {
 ### Basic Event Handling
 
 ```typescript
-import { Eventful } from './events'
+import { Eventful } from 'mutts/eventful'
 
 interface AppEvents {
   ready: () => void
