@@ -1,3 +1,5 @@
+import { decorator } from './decorator'
+
 // Integrated with `using` statement via Symbol.dispose
 const fr = new FinalizationRegistry<() => void>((f) => f())
 export const destructor = Symbol('destructor')
@@ -129,6 +131,15 @@ export function Destroyable<
 }
 
 const forwardProperties = Symbol('forwardProperties')
+export const allocated = decorator({
+	setter(original, propertyKey) {
+		return function (value) {
+			this[allocatedValues][propertyKey] = value
+			return original.call(this, value)
+		}
+	},
+})
+/*
 export function allocated<
 	Key extends PropertyKey,
 	Allocated extends AbstractDestroyable<{ [key in Key]: any }>,
@@ -148,7 +159,7 @@ export function allocated<
 		},
 	})
 }
-
+*/
 export function callOnGC(cb: () => void) {
 	let called = false
 	const forward = () => {

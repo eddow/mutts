@@ -1,6 +1,8 @@
 // biome-ignore-all lint/suspicious/noConfusingVoidType: Type 'void' is not assignable to type 'ScopedCallback | undefined'.
 // Argument of type '() => void' is not assignable to parameter of type '(dep: DependencyFunction) => ScopedCallback | undefined'.
 
+import { decorator } from '../decorator'
+
 export type DependencyFunction = <T>(cb: () => T) => T
 // TODO: proper async management, read when fn returns a promise and let the effect as "running",
 //  either to cancel the running one or to avoid running 2 in "parallel" and debounce the second one
@@ -480,30 +482,7 @@ export class ReactiveBase {
 	}
 }
 
-export function reactive<T>(anyTarget: T): T {
-	if (typeof anyTarget === 'function') {
-		if (anyTarget.prototype instanceof ReactiveBase) {
-			reactiveClasses.add(anyTarget)
-			return anyTarget
-		}
-		//@ts-expect-error - anyTarget is a constructor function
-		class Reactive extends anyTarget {
-			constructor(...args: any[]) {
-				super(...args)
-				if (new.target !== Reactive && !reactiveClasses.has(new.target))
-					options.warn(
-						`${(anyTarget as any).name} has been inherited by ${this.constructor.name} that is not reactive.
-@reactive decorator must be applied to the leaf class OR classes have to extend ReactiveBase.`
-					)
-				// biome-ignore lint/correctness/noConstructorReturn: This is the whole point here
-				return reactive(this)
-			}
-		}
-		Object.defineProperty(Reactive, 'name', {
-			value: `Reactive<${anyTarget.name}>`,
-		})
-		return Reactive as any
-	}
+function reactiveObject<T>(anyTarget: T): T {
 	if (!anyTarget || typeof anyTarget !== 'object') return anyTarget
 	const target = anyTarget as any
 	// If target is already a proxy, return it
@@ -524,6 +503,35 @@ export function reactive<T>(anyTarget: T): T {
 	proxyToObject.set(proxy, target)
 	return proxy as T
 }
+
+export const reactive = decorator({
+	class(original) {
+		if (original.prototype instanceof ReactiveBase) {
+			reactiveClasses.add(original)
+			return original
+		}
+		class Reactive extends original {
+			constructor(...args: any[]) {
+				super(...args)
+				if (new.target !== Reactive && !reactiveClasses.has(new.target))
+					options.warn(
+						`${(original as any).name} has been inherited by ${this.constructor.name} that is not reactive.
+@reactive decorator must be applied to the leaf class OR classes have to extend ReactiveBase.`
+					)
+				// biome-ignore lint/correctness/noConstructorReturn: This is the whole point here
+				return reactive(this)
+			}
+		}
+		Object.defineProperty(Reactive, 'name', {
+			value: `Reactive<${original.name}>`,
+		})
+		return Reactive as any
+	},
+	get(original) {
+		return reactiveObject(original)
+	},
+	default: reactiveObject,
+})
 
 export function unwrap<T>(proxy: T): T {
 	// Return the original object

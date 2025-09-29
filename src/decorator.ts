@@ -1,5 +1,5 @@
 // biome-ignore-all lint/suspicious/noConfusingVoidType: We *love* voids
-// Standardized decorator system that works with both Stage 2 and Stage 3 decorators
+// Standardized decorator system that works with both Legacy and Modern decorators
 
 import { isConstructor } from './utils'
 
@@ -25,6 +25,8 @@ export type ModernMethodDecorator<T> = (target: T, context: ClassMethodDecorator
 export type ModernGetterDecorator<T> = (target: T, context: ClassGetterDecoratorContext) => any
 
 export type ModernSetterDecorator<T> = (target: T, context: ClassSetterDecoratorContext) => any
+
+export type ModernAccessorDecorator<T> = (target: T, context: ClassAccessorDecoratorContext) => any
 
 export type ModernClassDecorator<T> = (target: T, context: ClassDecoratorContext) => any
 
@@ -63,10 +65,10 @@ export type Decorator<T, Description extends DecoratorDescription<T>> = (Descrip
 				ModernClassDecorator<new (...args: any[]) => T>
 		: unknown) &
 	(Description extends { getter: DDGetter<T> }
-		? LegacyPropertyDecorator<T> & ModernGetterDecorator<T>
+		? LegacyPropertyDecorator<T> & ModernGetterDecorator<T> & ModernAccessorDecorator<T>
 		: unknown) &
 	(Description extends { setter: DDSetter<T> }
-		? LegacyPropertyDecorator<T> & ModernSetterDecorator<T>
+		? LegacyPropertyDecorator<T> & ModernSetterDecorator<T> & ModernAccessorDecorator<T>
 		: unknown) &
 	(Description extends { default: infer Signature } ? Signature : unknown)
 
@@ -80,10 +82,10 @@ export type DecoratorFactory<T> = <Description extends DecoratorDescription<T>>(
 				ModernClassDecorator<new (...args: any[]) => T>
 		: unknown) &
 	(Description extends { getter: DDGetter<T> }
-		? LegacyPropertyDecorator<T> & ModernGetterDecorator<T>
+		? LegacyPropertyDecorator<T> & ModernGetterDecorator<T> & ModernAccessorDecorator<T>
 		: unknown) &
 	(Description extends { setter: DDSetter<T> }
-		? LegacyPropertyDecorator<T> & ModernSetterDecorator<T>
+		? LegacyPropertyDecorator<T> & ModernSetterDecorator<T> & ModernAccessorDecorator<T>
 		: unknown) &
 	(Description extends { default: infer Signature } ? Signature : unknown)
 
@@ -170,7 +172,7 @@ export function modernDecorator<T = any>(description: DecoratorDescription<T>): 
 }
 
 /**
- * Detects if the decorator is being called in modern (Stage 3) or legacy (Stage 2) mode
+ * Detects if the decorator is being called in modern (Modern) or legacy (Legacy) mode
  * based on the arguments passed to the decorator function
  */
 function detectDecoratorMode(

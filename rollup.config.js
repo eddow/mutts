@@ -41,7 +41,6 @@ const umdPlugins = [
 const input = {
   index: 'src/index.ts',
   'reactive/index': 'src/reactive/index.ts',
-  'reactive/collections': 'src/reactive/collections.ts',
   'std-decorators': 'src/std-decorators.ts',
   eventful: 'src/eventful.ts',
   indexable: 'src/indexable.ts',

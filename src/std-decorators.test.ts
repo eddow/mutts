@@ -425,11 +425,11 @@ describe('throttle decorator', () => {
 		expect(callCount).toBe(2)
 	})
 
-	it('should execute first call immediately', () => {
+	it('should execute first call immediately', async () => {
 		let callCount = 0
 
 		class TestClass {
-			@throttle(1000)
+			@throttle(200)
 			method() {
 				callCount++
 			}
@@ -441,9 +441,13 @@ describe('throttle decorator', () => {
 		obj.method()
 		expect(callCount).toBe(1)
 
-		// Second call should be throttled
+		// Second call should be throttled (and scheduled)
 		obj.method()
 		expect(callCount).toBe(1)
+
+		// Wait long enough for the scheduled trailing call to run so no timers remain
+		await new Promise((resolve) => setTimeout(resolve, 250))
+		expect(callCount).toBe(2)
 	})
 
 	it('should schedule delayed execution for throttled calls', async () => {
@@ -459,7 +463,7 @@ describe('throttle decorator', () => {
 		const obj = new TestClass()
 
 		// First call - immediate
-		const startTime = Date.now()
+		// const startTime = Date.now()
 		obj.method()
 
 		// Second call - should be throttled and scheduled
@@ -485,7 +489,7 @@ describe('throttle decorator', () => {
 		const obj = new TestClass()
 
 		// Multiple rapid calls
-		const startTime = Date.now()
+		// const startTime = Date.now()
 		obj.method() // Immediate
 		obj.method() // Throttled
 		obj.method() // Throttled
@@ -526,7 +530,6 @@ describe('throttle decorator', () => {
 
 		expect(lastArgs).toEqual(['throttled1', 'throttled2'])
 	})
-	/* TODO: throttle fails here ... ?
 	it('should handle different throttle delays', async () => {
 		let fastCalls = 0
 		let slowCalls = 0
@@ -552,26 +555,27 @@ describe('throttle decorator', () => {
 		expect(fastCalls).toBe(1)
 		expect(slowCalls).toBe(1)
 
-		// Call again immediately
+		// Call again immediately (throttled)
 		obj.fast()
 		obj.slow()
 
 		expect(fastCalls).toBe(1)
 		expect(slowCalls).toBe(1)
 
-		// Wait for fast throttle
+		// Wait for fast throttle window; scheduled fast should have fired
 		await new Promise((resolve) => setTimeout(resolve, 100))
-		obj.fast()
-
 		expect(fastCalls).toBe(2)
+		obj.fast()
+		expect(fastCalls).toBe(3)
 		expect(slowCalls).toBe(1)
 
-		// Wait for slow throttle
+		// Wait to exceed slow window; scheduled slow should have fired
 		await new Promise((resolve) => setTimeout(resolve, 100))
-		obj.slow()
-
 		expect(slowCalls).toBe(2)
-	})*/
+		obj.slow()
+		// Immediate call is within new window start; should schedule, not increment now
+		expect(slowCalls).toBe(2)
+	})
 })
 
 describe('deprecated decorator with string parameter', () => {

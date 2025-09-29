@@ -1,6 +1,6 @@
 # Decorator System
 
-A unified decorator system that works seamlessly across both Stage 2 (legacy) and Stage 3 (standard) decorator environments in TypeScript.
+A unified decorator system that works seamlessly across both Legacy (legacy) and Modern (standard) decorator environments in TypeScript.
 
 Hopefully this library will soon become obsolete, but it is still a struggle when writing a library to choose which version of decorators to use. Here is a way for a library to provide decorators that can be used however the using application is configured.
 
@@ -248,7 +248,7 @@ class Test {
 
 ## Environment Detection
 
-The system automatically detects whether you're using Stage 2 or Stage 3 decorators:
+The system automatically detects whether you're using Legacy or Modern decorators:
 
 ```typescript
 import { detectDecoratorSupport } from 'mutts'
@@ -283,18 +283,18 @@ class MyClass {
 
 ## Key Features
 
-- **Environment Agnostic**: Works with both Stage 2 and Stage 3 decorators
+- **Environment Agnostic**: Works with both Legacy and Modern decorators
 - **Type Safe**: Full TypeScript support with proper inference
 - **Unified API**: Single API surface regardless of environment
 - **Consistent Behavior**: Same results across all environments
-- **Future Proof**: Will work when Stage 3 becomes standard
+- **Future Proof**: Will work when Modern becomes standard
 
 ## Implementation Details
 
 The decorator system uses different underlying implementations based on your environment:
 
-- **Stage 2**: Uses `experimentalDecorators` with `PropertyDescriptor` manipulation
-- **Stage 3**: Uses the new decorator standard with `DecoratorContext` objects
+- **Legacy**: Uses `experimentalDecorators` with `PropertyDescriptor` manipulation
+- **Modern**: Uses the new decorator standard with `DecoratorContext` objects
 
 The `decorator` function automatically routes to the appropriate implementation and normalizes the differences between the two systems, providing a consistent API regardless of which environment you're using.
 

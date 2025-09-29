@@ -2002,11 +2002,9 @@ set.add(4); // Triggers reactivity
 
 #### Automatic Collection Reactivity
 
-For applications that want collections to have full reactive behavior, you can import the collections module:
+All native collections have their specific management:
 
 ```typescript
-import 'mutts/reactive/collections'
-
 // Collections still need to be wrapped with reactive()
 const arr = reactive([1, 2, 3]) // ReactiveArray
 const map = reactive(new Map()) // ReactiveMap

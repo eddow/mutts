@@ -21,7 +21,7 @@ npm install mutts
 // Import from built modules (recommended for production)
 import { reactive, effect } from 'mutts'
 import { reactive as reactiveCollections } from 'mutts/reactive/collections'
-import { Cached } from 'mutts/cached'
+import { Cached } from 'mutts/std-decorators'
 import { Destroyable, allocated } from 'mutts/destroyable'
 ```
 
@@ -31,7 +31,7 @@ import { Destroyable, allocated } from 'mutts/destroyable'
 // Import directly from source TypeScript files (for development/custom builds)
 import { reactive, effect } from 'mutts/src/index'
 import { reactive as reactiveCollections } from 'mutts/src/reactive/collections'
-import { Cached } from 'mutts/src/cached'
+import { Cached } from 'mutts/src/std-decorators'
 import { Destroyable, allocated } from 'mutts/src/destroyable'
 ```
 
@@ -60,9 +60,9 @@ A way to write classes that allow numeric indexes managed by a custom function -
 - Immutable data structures
 - Performance-optimized access patterns
 
-## [Cached](./docs/cached.md)
+## [Standard Decorators](./docs/std-decorators.md)
 
-A property-get decorator that provides automatic caching for getter methods with circular dependency detection. The `@cached` decorator ensures that expensive computations are only performed once per instance, with built-in protection against infinite recursion.
+A collection of standard decorators including the `@cached` decorator that provides automatic caching for getter methods with circular dependency detection. The `@cached` decorator ensures that expensive computations are only performed once per instance, with built-in protection against infinite recursion.
 
 **Key Features:**
 - Automatic result caching for getter methods
@@ -74,6 +74,23 @@ A property-get decorator that provides automatic caching for getter methods with
 - Expensive computed properties
 - Derived state calculations
 - Performance optimization for frequently accessed values
+
+## [Decorator System](./docs/decorator.md)
+
+A standardized decorator system that works with both Legacy (Stage 2) and Modern (Stage 3) decorator proposals. Provides a unified API for creating decorators that automatically detect and adapt to the current decorator environment.
+
+**Key Features:**
+- **Universal Compatibility**: Works with both Legacy and Modern decorator proposals
+- **Runtime Detection**: Automatically detects decorator type based on function arguments
+- **Type Safety**: Full TypeScript support with proper type inference
+- **Unified API**: Single decorator factory that handles all decorator types
+- **Method, Getter, Setter Support**: Handles all decorator kinds with appropriate type safety
+
+**Use Cases:**
+- Creating cross-compatible decorators
+- Library development with decorator support
+- Framework development
+- Utility decorator creation
 
 ## [Events](./docs/events.md)
 

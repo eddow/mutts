@@ -72,10 +72,10 @@ The `@allocated` decorator automatically stores property values in a separate al
 ```typescript
 class ResourceManager extends Destroyable() {
   @allocated
-  declare connection: DatabaseConnection
+  accessor connection: DatabaseConnection
 
   @allocated
-  declare cache: Map<string, any>
+  accessor cache: Map<string, any>
 
   constructor() {
     super()
@@ -90,6 +90,8 @@ class ResourceManager extends Destroyable() {
   }
 }
 ```
+
+Note that `@allocated` can only be applied on accessors: get, set and auto-`accessor`s. (in case of modern decorator usage, the `set` accessor only)
 
 ## Context Manager Integration
 

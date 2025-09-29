@@ -1,3 +1,5 @@
+import { decorator, GenericClassDecorator } from '../decorator'
+import { renamed } from '../utils'
 import {
 	type DependencyFunction,
 	deepWatch,
@@ -61,73 +63,28 @@ function computedFunction<T>(getter: ComputedFunction<T>): T {
 }
 
 /**
- * Decorator to mark a class accessor as computed.
- * The computed value will be cached and recomputed when the dependencies change
- */
-export function computed(target: any, desc: PropertyKey, descriptor: PropertyDescriptor): void
-/**
- * Decorator to mark a class accessor as computed.
- * The computed value will be cached and recomputed when the dependencies change
- */
-export function computed(target: undefined, desc: ClassAccessorDecoratorContext): void
-/**
  * Get the cached value of a computed function - cache is invalidated when the dependencies change
- * @param target - The computed function
  */
-export function computed<T>(getter: ComputedFunction<T>): T
-
-export function computed(
-	target: any,
-	spec?: PropertyKey | ClassAccessorDecoratorContext,
-	descriptor?: PropertyDescriptor
-) {
-	return descriptor
-		? computedLegacy(target, spec as string | symbol, descriptor)
-		: spec !== undefined
-			? computedStage3(target, spec as ClassAccessorDecoratorContext)
-			: computedFunction(target)
-}
-function computedStage3(_target: any, context: ClassAccessorDecoratorContext) {
-	const computers = new WeakMap<any, () => any>()
-	return {
-		get(this: any) {
+export const computed = decorator({
+	getter(original, propertyKey) {
+		const computers = new WeakMap<any, () => any>()
+		return function (this: any) {
 			if (!computers.has(this)) {
-				computers.set(this, () => context.access.get(this))
+				computers.set(
+					this,
+					renamed(
+						() => original.call(this),
+						`${String(this.constructor.name)}.${String(propertyKey)}`
+					)
+				)
 			}
 			return computedFunction(computers.get(this)!)
-		},
-		set(this: any, value: any) {
-			context.access.set(this, value)
-		},
-	}
-}
-
-function computedLegacy(
-	_target: any,
-	_propertyKey: string | symbol,
-	descriptor: PropertyDescriptor
-) {
-	const original = descriptor.get
-	const computers = new WeakMap<any, () => any>()
-	if (original)
-		return {
-			get(this: any) {
-				if (!computers.has(this)) {
-					computers.set(
-						this,
-						Object.defineProperties(() => original.call(this), {
-							name: {
-								value: `${String(_target.constructor.name)}.${String(_propertyKey)}`,
-							},
-						})
-					)
-				}
-				return computedFunction(computers.get(this)!)
-				//return computedFunction(() => original.call(this))
-			},
-			set: descriptor.set,
 		}
-}
+	},
+	default<T>(getter: ComputedFunction<T>): T {
+		return computedFunction(getter)
+	},
+})
 
 //#endregion
 
@@ -240,61 +197,32 @@ function deepNonReactive<T>(obj: T): T {
 	for (const key in obj) deepNonReactive(obj[key])
 	return obj
 }
-
-/**
- * Decorator to mark a class property as non-reactive.
- * The property change will not be tracked by the reactive system and its value neither
- *
- */
-export function unreactive(target: any, desc: PropertyKey): void
-/**
- * Decorator to mark a class property as non-reactive.
- * The property change will not be tracked by the reactive system and its value neither
- *
- */
-export function unreactive(target: undefined, desc: ClassFieldDecoratorContext): void
-/**
- * Mark a class as non-reactive. All instances of this class will automatically be non-reactive.
- * @param target - The class to mark as non-reactive
- */
-export function unreactive<T>(target: new (...args: any[]) => T): new (...args: any[]) => T
-/**
- * Mark an object as non-reactive. This object and all its properties will never be made reactive.
- * Note: the object is marked deeply, so all its children will also be non-reactive.
- * @param target - The object to mark as non-reactive
- */
-export function unreactive<T>(target: T): T
-
-export function unreactive(target: any, spec?: PropertyKey | ClassFieldDecoratorContext) {
-	return typeof spec === 'object'
-		? unreactiveStage3(spec as ClassFieldDecoratorContext)
-		: spec !== undefined
-			? unreactiveLegacy(target, spec as PropertyKey)
-			: typeof target === 'function'
-				? nonReactiveClass(target)
-				: deepNonReactive(target)
+function unreactiveApplication<T extends object>(...args: (keyof T)[]): GenericClassDecorator<T>
+function unreactiveApplication<T extends object>(obj: T): T
+function unreactiveApplication<T extends object>(
+	arg1: T | keyof T,
+	...args: (keyof T)[]
+): GenericClassDecorator<T> | T {
+	return typeof arg1 === 'object'
+		? deepNonReactive(arg1)
+		: (((original) => {
+				// Copy the parent's unreactive properties if they exist
+				original.prototype[unreactiveProperties] = new Set<PropertyKey>(
+					original.prototype[unreactiveProperties] || []
+				)
+				// Add all arguments (including the first one)
+				original.prototype[unreactiveProperties].add(arg1)
+				for (const arg of args) original.prototype[unreactiveProperties].add(arg)
+				return original // Return the class
+			}) as GenericClassDecorator<T>)
 }
-// TODO: stage3 decorators -> generic prototype decorators
-function unreactiveLegacy(target: any, propertyKey: PropertyKey) {
-	// Initialize the unreactive properties set if it doesn't exist
-	if (!target[unreactiveProperties]) {
-		target[unreactiveProperties] = new Set<PropertyKey>()
-	}
-
-	// Add this property to the unreactive set
-	target[unreactiveProperties].add(propertyKey)
-}
-function unreactiveStage3(context: ClassFieldDecoratorContext) {
-	context.addInitializer(function (this: any) {
-		// Initialize the unreactive properties set if it doesn't exist
-		if (!this[unreactiveProperties]) {
-			this[unreactiveProperties] = new Set<PropertyKey>()
-		}
-
-		// Add this property to the unreactive set
-		this[unreactiveProperties].add(context.name)
-	})
-}
+export const unreactive = decorator({
+	class(original) {
+		// Called without arguments, mark entire class as non-reactive
+		nonReactiveClass(original)
+	},
+	default: unreactiveApplication,
+})
 
 //#endregion
 

@@ -40,7 +40,7 @@ const nativeConstructors = new Set<Function>([
 	Boolean,
 ] as Function[])
 export function isConstructor(fn: Function): boolean {
-	return nativeConstructors.has(fn) || fn.toString().startsWith('class ')
+	return fn && (nativeConstructors.has(fn) || fn.toString().startsWith('class '))
 }
 
 export function renamed<F extends Function>(fct: F, name: string): F {

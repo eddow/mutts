@@ -991,10 +991,10 @@ describe('non-reactive functionality', () => {
 })
 
 describe('@unreactive decorator', () => {
-	describe('legacy decorator syntax', () => {
-		it('should mark properties as unreactive using legacy syntax', () => {
+	describe('class-level decorator syntax', () => {
+		it('should mark properties as unreactive using class-level syntax', () => {
+			@unreactive('unreactiveProp')
 			class TestClass {
-				@unreactive
 				unreactiveProp = 'test'
 
 				reactiveProp = 'reactive'
@@ -1023,11 +1023,10 @@ describe('@unreactive decorator', () => {
 		})
 
 		it('should work with multiple unreactive properties', () => {
+			@unreactive('prop1', 'prop2')
 			class TestClass {
-				@unreactive
 				prop1 = 'value1'
 
-				@unreactive
 				prop2 = 'value2'
 
 				reactiveProp = 'reactive'
@@ -1059,8 +1058,8 @@ describe('@unreactive decorator', () => {
 		it('should work with symbol properties', () => {
 			const sym = Symbol('test')
 
+			@unreactive(sym)
 			class TestClass {
-				@unreactive
 				[sym] = 'symbol value'
 
 				reactiveProp = 'reactive'
@@ -1090,8 +1089,8 @@ describe('@unreactive decorator', () => {
 
 	describe('integration with reactive system', () => {
 		it('should bypass reactivity completely for unreactive properties', () => {
+			@unreactive('unreactiveProp')
 			class TestClass {
-				@unreactive
 				unreactiveProp = { nested: 'value' }
 
 				reactiveProp = { nested: 'reactive' }
@@ -1119,8 +1118,8 @@ describe('@unreactive decorator', () => {
 		})
 
 		it('should work with regular properties', () => {
+			@unreactive('unreactiveProp')
 			class TestClass {
-				@unreactive
 				unreactiveProp = 'test'
 
 				reactiveProp = 'reactive'
@@ -1148,15 +1147,15 @@ describe('@unreactive decorator', () => {
 		})
 
 		it('should work with inheritance', () => {
+			@unreactive('baseUnreactiveProp')
 			class BaseClass {
-				@unreactive
 				baseUnreactiveProp = 'base unreactive'
 
 				baseReactiveProp = 'base reactive'
 			}
 
+			@unreactive('derivedUnreactiveProp')
 			class DerivedClass extends BaseClass {
-				@unreactive
 				derivedUnreactiveProp = 'derived unreactive'
 
 				derivedReactiveProp = 'derived reactive'
@@ -1191,8 +1190,8 @@ describe('@unreactive decorator', () => {
 
 	describe('edge cases', () => {
 		it('should handle undefined and null values', () => {
+			@unreactive('unreactiveProp')
 			class TestClass {
-				@unreactive
 				unreactiveProp: any = undefined
 
 				reactiveProp: any = null
@@ -1222,8 +1221,8 @@ describe('@unreactive decorator', () => {
 		it('should work with computed property names', () => {
 			const propName = 'computed'
 
+			@unreactive(propName)
 			class TestClass {
-				@unreactive
 				[propName] = 'computed unreactive'
 
 				reactiveProp = 'reactive'
@@ -1251,8 +1250,8 @@ describe('@unreactive decorator', () => {
 		})
 
 		it('should handle property deletion', () => {
+			@unreactive('unreactiveProp')
 			class TestClass {
-				@unreactive
 				unreactiveProp?: string = 'test'
 
 				reactiveProp?: string = 'reactive'

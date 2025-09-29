@@ -77,12 +77,9 @@
     "build:watch": "rollup -c --watch",
     "prepublishOnly": "npm run build",
     "test": "node --expose-gc node_modules/.bin/jest",
-    "test:legacy": "TSCONFIG=tsconfig.legacy.json node --expose-gc node_modules/.bin/jest --testPathPatterns=decorator",
-    "test:modern": "TSCONFIG=tsconfig.modern.json node --expose-gc node_modules/.bin/jest --testPathPatterns=decorator",
-    "test:decorator": "node --expose-gc node_modules/.bin/jest src/decorator.test.ts",
-    "biome": "biome check --write src",
-    "sandbox:legacy": "tsc --project tsconfig.legacy.json --outDir ./temp && node ./temp/sandbox/decorator.js",
-    "sandbox:modern": "tsc --project tsconfig.modern.json --outDir ./temp && node ./temp/sandbox/decorator.js"
+    "test:legacy": "TSCONFIG=tsconfig.legacy.json node node_modules/.bin/jest --detectOpenHandles --testPathPatterns=decorator",
+    "test:modern": "TSCONFIG=tsconfig.modern.json node node_modules/.bin/jest --detectOpenHandles --testPathPatterns=decorator",
+    "biome": "biome check --write src"
   },
   "keywords": [
     "typescript",

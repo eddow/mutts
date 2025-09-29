@@ -17,8 +17,8 @@ jest.config.js
 
 # Development configs
 biome.json
-tsconfig.json
-tsconfig.stage3.json
+tsconfig.legacy.json
+tsconfig.modern.json
 
 # Build artifacts (except dist/)
 *.log

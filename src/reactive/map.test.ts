@@ -1,5 +1,4 @@
 import { effect, reactive } from './index'
-import './collections'
 
 describe('ReactiveWeakMap', () => {
 	describe('basic functionality', () => {
