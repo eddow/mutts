@@ -339,7 +339,8 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 		this[native].forEach(callbackfn as any, thisArg)
 	}
 
-	// TODO: re-implement for fun dependencies? (eg - every only check the first ones until it find some)
+	// TODO: re-implement for fun dependencies? (eg - every only check the first ones until it find some),
+	// no need to make it dependant on indexes after the found one
 	every(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): boolean {
 		dependant(this)
 		return this[native].every(callbackfn as any, thisArg)

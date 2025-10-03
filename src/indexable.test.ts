@@ -1,6 +1,5 @@
 import { getAt, Indexable, setAt } from './indexable'
 
-// TODO: get/set became this: based
 describe('Indexable', () => {
 	describe('Indexable(base, accessor)', () => {
 		it('should create indexable class with custom accessor', () => {

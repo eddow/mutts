@@ -10,8 +10,6 @@ import {
 
 const native = Symbol('native')
 
-// TODO: [prototypeForwarding]
-
 export class ReactiveWeakMap<K extends object, V> {
 	declare readonly [native]: WeakMap<K, V>
 	declare readonly content: symbol

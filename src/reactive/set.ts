@@ -10,8 +10,6 @@ import {
 
 const native = Symbol('native')
 
-// TODO: [prototypeForwarding]
-
 export class ReactiveWeakSet<T extends object> {
 	declare readonly [native]: WeakSet<T>
 	declare readonly content: symbol

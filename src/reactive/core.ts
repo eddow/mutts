@@ -49,7 +49,7 @@ const effectToDeepWatchedObjects = new WeakMap<ScopedCallback, Set<object>>()
 
 // Track objects that should never be reactive and cannot be modified
 export const nonReactiveObjects = new WeakSet<object>()
-
+const absent = Symbol('absent')
 /**
  * Converts an iterator to a generator that yields reactive values
  */
@@ -225,7 +225,6 @@ export function getState(obj: any) {
 }
 
 export function dependant(obj: any, prop: any = allProps) {
-	// TODO: avoid depending on property get?
 	obj = unwrap(obj)
 	if (activeEffect && (typeof prop !== 'symbol' || prop === allProps)) {
 		let objectWatchers = watchers.get(obj)
@@ -395,9 +394,9 @@ const reactiveHandlers = {
 		// Check if this property is marked as unreactive
 		if (obj[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
 			return Reflect.get(obj, prop, receiver)
-		const absent = !(prop in obj)
 		// Depend if...
-		if (!options.instanceMembers || Object.hasOwn(receiver, prop) || absent) dependant(obj, prop)
+		if (!options.instanceMembers || Object.hasOwn(receiver, prop) || !Reflect.has(receiver, prop))
+			dependant(obj, prop)
 
 		const value = Reflect.get(obj, prop, receiver)
 		if (typeof value === 'object' && value !== null) {
@@ -428,14 +427,13 @@ const reactiveHandlers = {
 			return true
 		}
 
-		const oldVal = (obj as any)[prop]
-		const oldPresent = prop in obj
+		const oldVal = Reflect.has(receiver, prop) ? Reflect.get(obj, prop, receiver) : absent
 		track1(obj, prop, oldVal, newValue)
 
 		if (oldVal !== newValue) {
 			Reflect.set(obj, prop, newValue, receiver)
 			// try to find a "generic" way to express that
-			touched1(obj, { type: oldPresent ? 'set' : 'add', prop }, prop)
+			touched1(obj, { type: oldVal !== absent ? 'set' : 'add', prop }, prop)
 		}
 		return true
 	},
@@ -636,7 +634,6 @@ export function effect<Args extends any[]>(
 		fr.register(callIfCollected, mainCleanup, callIfCollected)
 		return callIfCollected
 	}
-	// TODO: parentEffect = last non-undefined activeEffect
 	// Register this effect to be cleaned up with the parent effect
 	let children = effectChildren.get(parentEffect)
 	if (!children) {
