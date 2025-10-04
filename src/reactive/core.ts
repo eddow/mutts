@@ -181,7 +181,7 @@ function raiseDeps(objectWatchers: Map<any, Set<ScopedCallback>>, ...keyChains: 
 	for (const keys of keyChains)
 		for (const key of keys) {
 			const deps = objectWatchers.get(key)
-			if (deps) for (const effect of Array.from(deps)) hasEffect(effect)
+			if (deps) for (const effect of Array.from(deps)) atomicEffect(effect)
 		}
 }
 
@@ -260,12 +260,14 @@ let batchedEffects: Map<Function, ScopedCallback> | undefined
 
 // Track which sub-effects have been executed to prevent infinite loops
 // These are all the effects triggered under `activeEffect` and all their sub-effects
-function hasEffect(effect: ScopedCallback) {
+function atomicEffect(effect: ScopedCallback, immediate?: 'immediate') {
 	const root = getRoot(effect)
 
 	options?.chain(getRoot(effect), getRoot(activeEffect))
-	if (batchedEffects) batchedEffects.set(root, effect)
-	else {
+	if (batchedEffects) {
+		if (immediate) effect()
+		else batchedEffects.set(root, effect)
+	} else {
 		const runEffects: any[] = []
 		batchedEffects = new Map<Function, ScopedCallback>([[root, effect]])
 		try {
@@ -282,6 +284,17 @@ function hasEffect(effect: ScopedCallback) {
 		}
 	}
 }
+
+export const atomic = decorator({
+	method(original) {
+		return function (...args: any[]) {
+			atomicEffect(
+				markWithRoot(() => original.apply(this, args), original),
+				'immediate'
+			)
+		}
+	},
+})
 
 export function withEffect<T>(
 	effect: ScopedCallback | undefined,
@@ -361,7 +374,7 @@ function bubbleUpChange(changedObject: object, evolution: Evolution) {
 	for (const { parent } of parents) {
 		// Trigger deep watchers on parent
 		const parentDeepWatchers = deepWatchers.get(parent)
-		if (parentDeepWatchers) for (const watcher of parentDeepWatchers) hasEffect(watcher)
+		if (parentDeepWatchers) for (const watcher of parentDeepWatchers) atomicEffect(watcher)
 
 		// Continue bubbling up
 		bubbleUpChange(parent, evolution)
@@ -597,22 +610,7 @@ export function effect<Args extends any[]>(
 	// Mark the runEffect callback with the original function as its root
 	markWithRoot(runEffect, fn)
 
-	// Run the effect immediately
-	if (!batchedEffects) {
-		hasEffect(runEffect)
-	} else {
-		const oldBatchedEffects = batchedEffects
-		try {
-			// Simulate a hasEffect who batches, but do not execute the batch, give it back to the parent batch,
-			// Only the immediate effect has to be executed, the sub-effects will be executed by the parent batch
-			batchedEffects = new Map([[fn, runEffect]])
-			runEffect()
-			batchedEffects.delete(fn)
-			for (const [root, effect] of batchedEffects!) oldBatchedEffects.set(root, effect)
-		} finally {
-			batchedEffects = oldBatchedEffects
-		}
-	}
+	atomicEffect(runEffect, 'immediate')
 
 	const mainCleanup = (): void => {
 		if (effectStopped) return
