@@ -2023,7 +2023,7 @@ describe('@atomic decorator', () => {
 					state.a = 1
 					expect(effectCount).toBe(1) // Effects don't run during atomic method
 					throw new Error('Test error')
-					// This line should not execute
+					//biome-ignore lint/correctness/noUnreachable: This line should not execute
 					state.b = 2
 				}
 
@@ -2153,6 +2153,189 @@ describe('@atomic decorator', () => {
 			expect(state.count).toBe(2)
 		})
 
+		it('should work with atomic function wrapper', () => {
+			const state = reactive({ a: 0, b: 0 })
+			let effectCount = 0
+
+			effect(() => {
+				effectCount++
+				state.a
+				state.b
+			})
+
+			const atomicFunction = atomic(() => {
+				state.a = 1
+				state.b = 2
+				expect(effectCount).toBe(1) // Effects don't run during atomic function execution
+			})
+
+			expect(effectCount).toBe(1)
+			expect(state.a).toBe(0)
+			expect(state.b).toBe(0)
+
+			atomicFunction()
+			expect(effectCount).toBe(2) // Effects run after atomic function completes
+			expect(state.a).toBe(1)
+			expect(state.b).toBe(2)
+		})
+
+		it('should return values from atomic function', () => {
+			const state = reactive({ a: 0, b: 0 })
+			let effectCount = 0
+
+			effect(() => {
+				effectCount++
+				state.a
+				state.b
+			})
+
+			// Test returning primitive values
+			const atomicFunction1 = atomic(() => {
+				state.a = 5
+				state.b = 10
+				return state.a + state.b
+			})
+			const result1 = atomicFunction1()
+
+			expect(result1).toBe(15)
+			expect(effectCount).toBe(2) // Effects run after atomic function completes
+			expect(state.a).toBe(5)
+			expect(state.b).toBe(10)
+
+			// Test returning objects
+			const atomicFunction2 = atomic(() => {
+				state.a = 20
+				state.b = 30
+				return { sum: state.a + state.b, product: state.a * state.b }
+			})
+			const result2 = atomicFunction2()
+
+			expect(result2).toEqual({ sum: 50, product: 600 })
+			expect(effectCount).toBe(3) // Effects run after atomic function completes
+			expect(state.a).toBe(20)
+			expect(state.b).toBe(30)
+
+			// Test returning undefined
+			const atomicFunction3 = atomic(() => {
+				state.a = 100
+				// No explicit return
+			})
+			const result3 = atomicFunction3()
+
+			expect(result3).toBeUndefined()
+			expect(effectCount).toBe(4) // Effects run after atomic function completes
+			expect(state.a).toBe(100)
+
+			// Test returning null
+			const atomicFunction4 = atomic(() => {
+				state.b = 200
+				return null
+			})
+			const result4 = atomicFunction4()
+
+			expect(result4).toBeNull()
+			expect(effectCount).toBe(5) // Effects run after atomic function completes
+			expect(state.b).toBe(200)
+		})
+
+		it('should return values from atomic function with complex operations', () => {
+			const state = reactive({ items: [] as any[], count: 0 })
+			let effectCount = 0
+
+			effect(() => {
+				effectCount++
+				state.items.length
+				state.count
+			})
+
+			// Test returning computed result after array operations
+			const atomicFunction = atomic(() => {
+				state.items.push(1, 2, 3)
+				state.count = state.items.length
+				return {
+					items: state.items.slice(),
+					count: state.count,
+					sum: state.items.reduce((a, b) => a + b, 0),
+				}
+			})
+			const result = atomicFunction()
+
+			expect(result).toEqual({
+				items: [1, 2, 3],
+				count: 3,
+				sum: 6,
+			})
+			expect(effectCount).toBe(2) // Effects run after atomic function completes
+			expect(state.items.slice()).toEqual([1, 2, 3])
+			expect(state.count).toBe(3)
+		})
+
+		it('should return values from atomic function with edge cases', () => {
+			const state = reactive({ data: null as any })
+			let effectCount = 0
+
+			effect(() => {
+				effectCount++
+				state.data
+			})
+
+			// Test returning falsy values
+			const atomicFunction1 = atomic(() => {
+				state.data = false
+				return false
+			})
+			const result1 = atomicFunction1()
+
+			expect(result1).toBe(false)
+			expect(effectCount).toBe(2)
+			expect(state.data).toBe(false)
+
+			// Test returning zero
+			const atomicFunction2 = atomic(() => {
+				state.data = 0
+				return 0
+			})
+			const result2 = atomicFunction2()
+
+			expect(result2).toBe(0)
+			expect(effectCount).toBe(3)
+			expect(state.data).toBe(0)
+
+			// Test returning empty string
+			const atomicFunction3 = atomic(() => {
+				state.data = ''
+				return ''
+			})
+			const result3 = atomicFunction3()
+
+			expect(result3).toBe('')
+			expect(effectCount).toBe(4)
+			expect(state.data).toBe('')
+
+			// Test returning arrays and functions
+			const atomicFunction4 = atomic(() => {
+				state.data = [1, 2, 3]
+				return [1, 2, 3]
+			})
+			const result4 = atomicFunction4()
+
+			expect(result4).toEqual([1, 2, 3])
+			expect(effectCount).toBe(5)
+			expect(state.data.slice()).toEqual([1, 2, 3])
+
+			// Test returning a function
+			const testFunc = () => 'test'
+			const atomicFunction5 = atomic(() => {
+				state.data = testFunc
+				return testFunc
+			})
+			const result5 = atomicFunction5()
+
+			expect(result5).toBe(testFunc)
+			expect(effectCount).toBe(6)
+			expect(state.data).toBe(testFunc)
+		})
+
 		it('should work with maps and sets', () => {
 			const state = reactive({
 				map: new Map([
@@ -2271,7 +2454,7 @@ describe('@atomic decorator', () => {
 		})
 
 		it("should handle atomic methods that don't modify state", () => {
-			const state = reactive({ a: 0, b: 0 })
+			const state = reactive({ a: 1, b: 2 })
 			let effectCount = 0
 
 			effect(() => {
@@ -2292,6 +2475,15 @@ describe('@atomic decorator', () => {
 					expect(effectCount).toBe(1) // Effects don't run during atomic method
 					return sum
 				}
+
+				@atomic
+				updateAndReturn() {
+					const oldSum = state.a + state.b
+					state.a = 10
+					state.b = 20
+					expect(effectCount).toBe(1) // Effects don't run during atomic method
+					return { oldSum, newSum: state.a + state.b }
+				}
 			}
 
 			const instance = new TestClass()
@@ -2302,8 +2494,14 @@ describe('@atomic decorator', () => {
 			expect(effectCount).toBe(1) // No additional runs
 
 			const result = instance.readOnly()
-			expect(effectCount).toBe(1) // No additional runs
-			expect(result).toBeUndefined() // Current implementation doesn't return values
+			expect(effectCount).toBe(1) // No additional runs since no state was modified
+			expect(result).toBe(3) // Returns the computed value (1 + 2 = 3)
+
+			const updateResult = instance.updateAndReturn()
+			expect(effectCount).toBe(2) // Effects run after atomic method completes
+			expect(updateResult).toEqual({ oldSum: 3, newSum: 30 })
+			expect(state.a).toBe(10)
+			expect(state.b).toBe(20)
 		})
 	})
 

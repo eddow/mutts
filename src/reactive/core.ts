@@ -265,20 +265,23 @@ function atomicEffect(effect: ScopedCallback, immediate?: 'immediate') {
 
 	options?.chain(getRoot(effect), getRoot(activeEffect))
 	if (batchedEffects) {
-		if (immediate) effect()
+		if (immediate) return effect()
 		else batchedEffects.set(root, effect)
 	} else {
 		const runEffects: any[] = []
 		batchedEffects = new Map<Function, ScopedCallback>([[root, effect]])
+		const firstReturn: { value?: any } = {}
 		try {
 			while (batchedEffects.size) {
 				if (runEffects.length > options.maxEffectChain)
 					throw new ReactiveError('[reactive] Max effect chain reached')
 				const [root, effect] = batchedEffects.entries().next().value!
 				runEffects.push(root)
-				effect()
+				const rv = effect()
+				if (!('value' in firstReturn)) firstReturn.value = rv
 				batchedEffects.delete(root)
 			}
+			return firstReturn.value
 		} finally {
 			batchedEffects = undefined
 		}
@@ -288,7 +291,17 @@ function atomicEffect(effect: ScopedCallback, immediate?: 'immediate') {
 export const atomic = decorator({
 	method(original) {
 		return function (...args: any[]) {
-			atomicEffect(
+			return atomicEffect(
+				markWithRoot(() => original.apply(this, args), original),
+				'immediate'
+			)
+		}
+	},
+	default<Args extends any[], Return>(
+		original: (...args: Args) => Return
+	): (...args: Args) => Return {
+		return function (...args: Args) {
+			return atomicEffect(
 				markWithRoot(() => original.apply(this, args), original),
 				'immediate'
 			)
