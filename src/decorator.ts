@@ -201,5 +201,5 @@ export const decorator: DecoratorFactory<any> = (description: DecoratorDescripti
 	}) as any
 }
 
-export type GenericClassDecorator<T> = LegacyClassDecorator<new (...args: any[]) => T> &
-	ModernClassDecorator<new (...args: any[]) => T>
+export type GenericClassDecorator<T> = LegacyClassDecorator<abstract new (...args: any[]) => T> &
+	ModernClassDecorator<abstract new (...args: any[]) => T>

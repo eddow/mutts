@@ -12,7 +12,7 @@ export type DependencyFunction = <T>(cb: () => T) => T
 export type ScopedCallback = () => void
 
 export type PropEvolution = {
-	type: 'set' | 'del' | 'add'
+	type: 'set' | 'del' | 'add' | 'invalidate'
 	prop: any
 }
 

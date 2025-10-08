@@ -17,7 +17,6 @@ import {
 	unreactiveProperties,
 	untracked,
 	unwrap,
-	withEffect,
 } from './core'
 
 //#region computed
@@ -38,27 +37,28 @@ function computedFunction<T>(getter: ComputedFunction<T>): T {
 	let invalidations: (() => void)[] = []
 	dependant(computedCache, key)
 	if (computedCache.has(key)) return computedCache.get(key)
-	withEffect(undefined, () => {
-		const stop = effect(
-			markWithRoot((dep) => {
-				const oldCI = computedInvalidations
-				if (computedCache.has(key)) {
-					// This should *not* be called in the cleanup chain, as its effects would be lost and cleaned-up
-					for (const cb of invalidations) cb()
-					invalidations = []
-					computedCache.delete(key)
-					touched1(computedCache, { type: 'set', prop: key }, key)
-					stop()
-				} else
-					try {
-						computedInvalidations = invalidations
-						computedCache.set(key, getter(dep))
-					} finally {
-						computedInvalidations = oldCI
-					}
-			}, getter)
-		)
-	})
+	let stopped = false
+	const stop = effect(
+		markWithRoot((dep) => {
+			if (stopped) return
+			const oldCI = computedInvalidations
+			if (computedCache.has(key)) {
+				// This should *not* be called in the cleanup chain, as its effects would be lost and cleaned-up
+				for (const cb of invalidations) cb()
+				invalidations = []
+				computedCache.delete(key)
+				touched1(computedCache, { type: 'invalidate', prop: key }, key)
+				stop()
+				stopped = true
+			} else
+				try {
+					computedInvalidations = invalidations
+					computedCache.set(key, getter(dep))
+				} finally {
+					computedInvalidations = oldCI
+				}
+		}, getter)
+	)
 	return computedCache.get(key)
 }
 
