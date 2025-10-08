@@ -131,6 +131,25 @@ describe('computed', () => {
 		expect(computedRuns).toBe(3)
 		expect(state.result).toBe(12)
 	})
+
+	it('doubles computed', () => {
+		const source: any = reactive({})
+		class DecoratedClass {
+			@computed
+			get doubled() {
+				source.a ??= 1
+				return source.a * 2
+			}
+			@computed
+			get quadrupled() {
+				return this.doubled * 2
+			}
+		}
+		const obj = new DecoratedClass()
+		expect(obj.quadrupled).toBe(4)
+		source.a = 2
+		expect(obj.quadrupled).toBe(8)
+	})
 })
 
 describe('watch', () => {

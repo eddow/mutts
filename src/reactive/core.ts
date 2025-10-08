@@ -265,8 +265,13 @@ function atomicEffect(effect: ScopedCallback, immediate?: 'immediate') {
 
 	options?.chain(getRoot(effect), getRoot(activeEffect))
 	if (batchedEffects) {
-		if (immediate) return effect()
-		else batchedEffects.set(root, effect)
+		batchedEffects.set(root, effect)
+		if (immediate)
+			try {
+				return effect()
+			} finally {
+				batchedEffects.delete(root)
+			}
 	} else {
 		const runEffects: any[] = []
 		batchedEffects = new Map<Function, ScopedCallback>([[root, effect]])
