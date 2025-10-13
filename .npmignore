@@ -1,6 +1,13 @@
+# Test files (must be first to exclude from "src" in package.json files field)
+**/*.test.ts
+**/*.test.js
+**/*.test.tsx
+**/*.test.jsx
+*.test.ts
+*.test.js
+jest.config.js
+
 # Source files (will be compiled to dist/)
-src/
-*.ts
 !*.d.ts
 
 # Development files
@@ -10,15 +17,13 @@ node_modules/
 .gitignore
 .npmignore
 
-# Test files
-*.test.ts
-*.test.js
-jest.config.js
-
 # Development configs
 biome.json
 tsconfig.legacy.json
 tsconfig.modern.json
+tsconfig.declarations.json
+tsconfig.json
+rollup.config.js
 
 # Build artifacts (except dist/)
 *.log
@@ -38,3 +43,6 @@ pnpm-lock.yaml
 # OS files
 .DS_Store
 Thumbs.db
+
+# Sandbox/examples
+sandbox/

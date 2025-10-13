@@ -153,11 +153,26 @@ export const options = {
 	 */
 	chain: (target: Function, caller?: Function) => {},
 	/**
+	 * Debug purpose: called when an effect chain is started
+	 * @param target - The effect that is being triggered
+	 */
+	beginChain: (target: Function) => {},
+	/**
+	 * Debug purpose: called when an effect chain is ended
+	 */
+	endChain: () => {},
+	/**
 	 * Debug purpose: maximum effect chain (like call stack max depth)
 	 * Used to prevent infinite loops
 	 * @default 100
 	 */
 	maxEffectChain: 100,
+	/**
+	 * Debug purpose: maximum effect reaction (like call stack max depth)
+	 * Used to prevent infinite loops
+	 * @default 'throw'
+	 */
+	maxEffectReaction: 'throw' as 'throw' | 'debug' | 'warn',
 	/**
 	 * Maximum depth for deep watching traversal
 	 * Used to prevent infinite recursion in circular references
@@ -263,8 +278,8 @@ let batchedEffects: Map<Function, ScopedCallback> | undefined
 function atomicEffect(effect: ScopedCallback, immediate?: 'immediate') {
 	const root = getRoot(effect)
 
-	options?.chain(getRoot(effect), getRoot(activeEffect))
 	if (batchedEffects) {
+		options?.chain(getRoot(effect), getRoot(activeEffect))
 		batchedEffects.set(root, effect)
 		if (immediate)
 			try {
@@ -273,13 +288,25 @@ function atomicEffect(effect: ScopedCallback, immediate?: 'immediate') {
 				batchedEffects.delete(root)
 			}
 	} else {
+		options.beginChain(root)
 		const runEffects: any[] = []
 		batchedEffects = new Map<Function, ScopedCallback>([[root, effect]])
 		const firstReturn: { value?: any } = {}
 		try {
 			while (batchedEffects.size) {
-				if (runEffects.length > options.maxEffectChain)
-					throw new ReactiveError('[reactive] Max effect chain reached')
+				if (runEffects.length > options.maxEffectChain) {
+					switch (options.maxEffectReaction) {
+						case 'throw':
+							throw new ReactiveError('[reactive] Max effect chain reached')
+						case 'debug':
+							// biome-ignore lint/suspicious/noDebugger: This is the whole point here
+							debugger
+							break
+						case 'warn':
+							options.warn('[reactive] Max effect chain reached')
+							break
+					}
+				}
 				const [root, effect] = batchedEffects.entries().next().value!
 				runEffects.push(root)
 				const rv = effect()
@@ -289,6 +316,7 @@ function atomicEffect(effect: ScopedCallback, immediate?: 'immediate') {
 			return firstReturn.value
 		} finally {
 			batchedEffects = undefined
+			options.endChain()
 		}
 	}
 }

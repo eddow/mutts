@@ -38,7 +38,7 @@ function computedFunction<T>(getter: ComputedFunction<T>): T {
 	dependant(computedCache, key)
 	if (computedCache.has(key)) return computedCache.get(key)
 	let stopped = false
-	const stop = effect(
+	const once = effect(
 		markWithRoot((dep) => {
 			if (stopped) return
 			const oldCI = computedInvalidations
@@ -48,7 +48,7 @@ function computedFunction<T>(getter: ComputedFunction<T>): T {
 				invalidations = []
 				computedCache.delete(key)
 				touched1(computedCache, { type: 'invalidate', prop: key }, key)
-				stop()
+				once()
 				stopped = true
 			} else
 				try {
