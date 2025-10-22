@@ -1,4 +1,5 @@
-export class Eventful<Events extends Record<string, (...args: any[]) => void>> {
+export type EventsBase = Record<string, (...args: any[]) => void>
+export class Eventful<Events extends EventsBase> {
 	readonly #events = new Map<keyof Events, ((...args: any[]) => void)[]>()
 	readonly #hooks = [] as ((...args: any[]) => void)[]
 

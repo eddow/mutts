@@ -2,6 +2,7 @@
 // Argument of type '() => void' is not assignable to parameter of type '(dep: DependencyFunction) => ScopedCallback | undefined'.
 
 import { decorator } from '../decorator'
+import { mixin } from '../mixins'
 
 export type DependencyFunction = <T>(cb: () => T) => T
 // TODO: proper async management, read when fn returns a promise and let the effect as "running",
@@ -451,7 +452,7 @@ const reactiveHandlers = {
 	get(obj: any, prop: PropertyKey, receiver: any) {
 		if (prop === nonReactiveMark) return false
 		// Check if this property is marked as unreactive
-		if (obj[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
+		if (unwrap(obj)[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
 			return Reflect.get(obj, prop, receiver)
 		// Depend if...
 		if (!options.instanceMembers || Object.hasOwn(receiver, prop) || !Reflect.has(receiver, prop))
@@ -472,7 +473,7 @@ const reactiveHandlers = {
 	},
 	set(obj: any, prop: PropertyKey, value: any, receiver: any): boolean {
 		// Check if this property is marked as unreactive
-		if (obj[unreactiveProperties]?.has(prop)) return Reflect.set(obj, prop, value, receiver)
+		if (unwrap(obj)[unreactiveProperties]?.has(prop)) return Reflect.set(obj, prop, value, receiver)
 		// Really specific case for when Array is forwarder, in order to let it manage the reactivity
 		const isArrayCase =
 			prototypeForwarding in obj &&
@@ -532,13 +533,34 @@ const reactiveHandlers = {
 } as const
 
 const reactiveClasses = new WeakSet<Function>()
-export class ReactiveBase {
-	constructor() {
-		// biome-ignore lint/correctness/noConstructorReturn: This is the whole point here
-		return reactiveClasses.has(new.target) ? reactive(this) : this
-	}
-}
 
+// Create the ReactiveBase mixin
+export const ReactiveBase = mixin((base) => {
+	class ReactiveMixin extends base {
+		constructor(...args: any[]) {
+			super(...args)
+			// Only apply reactive transformation if the class is marked with @reactive
+			// This allows the mixin to work properly with method inheritance
+			// biome-ignore lint/correctness/noConstructorReturn: This is the whole point here
+			return reactiveClasses.has(new.target) ? reactive(this) : this
+		}
+	}
+	return ReactiveMixin
+})
+export const Reactive = mixin((base) => {
+	class ReactiveMixin extends base {
+		constructor(...args: any[]) {
+			super(...args)
+			// Only apply reactive transformation if the class is marked with @reactive
+			// This allows the mixin to work properly with method inheritance
+			// biome-ignore lint/correctness/noConstructorReturn: This is the whole point here
+			return reactive(this)
+		}
+	}
+	// Mark this as the Reactive mixin to distinguish it from ReactiveBase
+	;(ReactiveMixin as any).__isReactiveMixin = true
+	return ReactiveMixin
+}, unwrap)
 function reactiveObject<T>(anyTarget: T): T {
 	if (!anyTarget || typeof anyTarget !== 'object') return anyTarget
 	const target = anyTarget as any
@@ -566,6 +588,18 @@ export const reactive = decorator({
 		if (original.prototype instanceof ReactiveBase) {
 			reactiveClasses.add(original)
 			return original
+		}
+
+		// Check if the class extends the Reactive mixin (not ReactiveBase) by checking the prototype chain
+		let current = original.prototype
+		while (current && current !== Object.prototype) {
+			// Check if this is the Reactive mixin specifically (not ReactiveBase)
+			if (current.constructor && (current.constructor as any).__isReactiveMixin) {
+				throw new Error(
+					'@reactive decorator cannot be used with Reactive mixin. Reactive mixin already provides reactivity.'
+				)
+			}
+			current = Object.getPrototypeOf(current)
 		}
 		class Reactive extends original {
 			constructor(...args: any[]) {
@@ -753,7 +787,7 @@ export function nonReactiveClass<T extends (new (...args: any[]) => any)[]>(...c
 
 nonReactiveClass(Date, RegExp, Error, Promise, Function)
 if (typeof window !== 'undefined') nonReactive(window, document)
-if (typeof Element !== 'undefined') nonReactiveClass(Element, Node)
+//if (typeof Element !== 'undefined') nonReactiveClass(Element, Node)
 
 export function registerNativeReactivity(
 	originalClass: new (...args: any[]) => any,

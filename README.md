@@ -18,7 +18,8 @@ npm install mutts
 
 ```typescript
 // Import from built modules (recommended for production)
-import { reactive, effect } from 'mutts'
+import { reactive, effect, Reactive } from 'mutts'
+import { mixin } from 'mutts/mixin'
 import { cached } from 'mutts/std-decorators'
 import { Destroyable, allocated } from 'mutts/destroyable'
 ```
@@ -27,7 +28,8 @@ import { Destroyable, allocated } from 'mutts/destroyable'
 
 ```typescript
 // Import directly from source TypeScript files (for development/custom builds)
-import { reactive, effect } from 'mutts/src'
+import { reactive, effect, Reactive } from 'mutts/src'
+import { mixin } from 'mutts/src/mixin'
 import { cached } from 'mutts/src/std-decorators'
 import { Destroyable, allocated } from 'mutts/src/destroyable'
 ```
@@ -52,6 +54,24 @@ A way to write classes that allow numeric indexes managed by a custom function -
 - Wrapper classes for external data sources
 - Immutable data structures
 - Performance-optimized access patterns
+
+## [Mixin](./docs/mixin.md)
+
+A powerful mixin system that allows you to create reusable functionality that can be applied to classes either as base classes or as mixin functions. Provides automatic caching and seamless integration with other MutTs features.
+
+**Key Features:**
+- **Dual Usage**: Can be used as both base class (`extends MyMixin`) and mixin function (`MyMixin(SomeBase)`)
+- **Automatic Caching**: Same base class always returns the same mixed class for performance
+- **Type Safety**: Full TypeScript support with proper type inference
+- **Proxy-based**: Uses JavaScript Proxies to handle both constructor and function calls
+- **Memory Efficient**: Automatic cleanup when base classes are garbage collected
+
+**Use Cases:**
+- Creating reusable functionality across multiple classes
+- Building composable class hierarchies
+- Adding cross-cutting concerns (logging, events, reactivity)
+- Framework development with mixin support
+- Plugin systems and extensible architectures
 
 ## [Standard Decorators](./docs/std-decorators.md)
 
@@ -138,6 +158,8 @@ A comprehensive reactivity system that provides fine-grained dependency tracking
 - **Core Reactivity**: Proxy-based property access tracking with `reactive()`, `effect()`, and `computed()`
 - **Deep Watching**: Automatic tracking of nested object changes with `deepWatch()`
 - **Reactive Collections**: Specialized reactive versions of Array, Map, Set, WeakMap, and WeakSet
+- **Class Reactivity**: `@reactive` decorator and `ReactiveBase` for class-based reactivity
+- **Reactive Mixin**: Always-reactive classes with mixin support (`Reactive`)
 - **Back-Reference System**: Efficient change propagation through object hierarchies
 - **Type Safety**: Full TypeScript support with proper type inference
 - **Performance Optimized**: Lazy back-reference creation and efficient dependency tracking

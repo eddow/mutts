@@ -7,6 +7,7 @@ export {
 	isReactive,
 	options as reactiveOptions,
 	profileInfo,
+	Reactive,
 	ReactiveBase,
 	ReactiveError,
 	reactive,

@@ -10,6 +10,7 @@
 - [Collections](#collections)
 - [ReactiveArray](#reactivearray)
 - [Class Reactivity](#class-reactivity)
+- [Reactive Mixin](#reactive-mixin-for-always-reactive-classes)
 - [Non-Reactive System](#non-reactive-system)
 - [Computed Properties](#computed-properties)
 - [Atomic Operations](#atomic-operations)
@@ -754,6 +755,7 @@ The system tracks different types of changes:
 - **`set`**: Property value was changed
 - **`del`**: Property was deleted
 - **`bunch`**: Collection operation (array methods, map/set operations)
+- **`invalidate`**: Computed property cache was invalidated due to dependency changes
 
 ```typescript
 const obj = reactive({ count: 0 })
@@ -779,7 +781,55 @@ delete obj.count      // { type: 'del', prop: 'count' }
 const array = reactive([1, 2, 3])
 array.push(4)        // { type: 'bunch', method: 'push' }
 array.reverse()      // { type: 'bunch', method: 'reverse' }
+
+// Computed property invalidation
+const state = reactive({ a: 1, b: 2 })
+const getter = () => state.a + state.b
+
+computed(getter)      // Initial computation
+state.a = 5          // This triggers { type: 'invalidate', prop: getter } in computed cache
+computed(getter)      // Recomputes due to dependency change
 ```
+
+### Evolution Type Details
+
+#### `invalidate` Evolution Type
+
+The `invalidate` evolution type occurs when computed properties need to be recalculated due to dependency changes:
+
+```typescript
+import { computed, getState, profileInfo } from 'mutts/reactive'
+
+const state = reactive({ a: 1, b: 2 })
+const getter = () => state.a + state.b
+
+// Access computed cache state for tracking
+let computedState = getState(profileInfo.computedCache)
+
+effect(() => {
+    while ('evolution' in computedState) {
+        console.log('Computed change:', computedState.evolution)
+        computedState = computedState.next
+    }
+    
+    // Reset for next run
+    computedState = getState(profileInfo.computedCache)
+})
+
+// Initial computation - no evolution event yet
+const result1 = computed(getter) // 3
+
+// Change dependency - triggers invalidate evolution
+state.a = 5
+// Output: "Computed change: { type: 'invalidate', prop: [getter function] }"
+
+const result2 = computed(getter) // 7 (recomputed)
+```
+
+**When `invalidate` occurs:**
+- A computed property's dependency changes
+- The computed cache needs to be cleared and recalculated
+- The `prop` field contains the getter function that was invalidated
 
 ### Change History Patterns
 
@@ -1198,6 +1248,79 @@ player.health = 80     // Triggers effect
 - You need to modify or use `this` in the constructor
 - You want to prevent reactivity from being added to prototype chains
 
+### `Reactive` Mixin for Always-Reactive Classes
+
+The `Reactive` mixin provides a class that is always reactive without needing the `@reactive` decorator. This is useful when you want a class that is inherently reactive and can be used as both a base class and a mixin.
+
+```typescript
+import { Reactive, effect } from 'mutts/reactive'
+
+// As a base class - no @reactive decorator needed
+class Counter extends Reactive {
+    count = 0
+    
+    increment() {
+        this.count++
+    }
+}
+
+// As a mixin function
+class BaseModel {
+    id = Math.random().toString(36)
+}
+
+class UserModel extends Reactive(BaseModel) {
+    name = ''
+    email = ''
+    
+    updateName(newName: string) {
+        this.name = newName
+    }
+}
+
+const counter = new Counter()
+const user = new UserModel()
+
+effect(() => {
+    console.log('Count:', counter.count)
+})
+
+effect(() => {
+    console.log('User:', user.name)
+})
+
+counter.increment() // Triggers effect
+user.updateName('John') // Triggers effect
+```
+
+**Key Features of `Reactive` Mixin:**
+
+1. **Always Reactive**: No need for `@reactive` decorator
+2. **Mixin Support**: Can be used as both `extends Reactive` and `extends Reactive(BaseClass)`
+3. **Error Prevention**: Throws an error if used with `@reactive` decorator (since it's redundant)
+4. **Caching**: Mixin results are cached for performance
+
+**When to use `Reactive` mixin:**
+- You want a class that is always reactive by design
+- You need mixin functionality for combining with other base classes
+- You want to avoid the `@reactive` decorator syntax
+- You're building a library where reactivity is a core feature
+
+**Important**: The `@reactive` decorator will throw an error when used with `Reactive` mixin since it's redundant:
+
+```typescript
+// ❌ This will throw an error
+@reactive
+class MyClass extends Reactive {
+    value = 0
+}
+
+// ✅ This is the correct way
+class MyClass extends Reactive {
+    value = 0
+}
+```
+
 ### Making Existing Class Instances Reactive
 
 You can also make existing class instances reactive:
@@ -1316,12 +1439,12 @@ const reactiveInstance = reactive(instance) // Returns instance unchanged
 
 ### `@unreactive` Decorator
 
-Mark class properties as non-reactive.
+Mark class properties as non-reactive using class-level syntax.
 
 ```typescript
 @reactive
+@unreactive('id')
 class User {
-    @unreactive
     id: string = 'user-123'
     
     name: string = 'John'
@@ -1339,6 +1462,21 @@ user.name = 'Jane' // Triggers effect
 user.id = 'new-id' // Does NOT trigger effect
 ```
 
+You can mark multiple properties as unreactive:
+
+```typescript
+@reactive
+@unreactive('id', 'metadata', 'internalState')
+class User {
+    id: string = 'user-123'
+    metadata: any = {}
+    internalState: any = {}
+    
+    name: string = 'John'
+    age: number = 30
+}
+```
+
 ### Non-Reactive Classes
 
 Classes marked as non-reactive bypass the reactive system entirely:
@@ -1351,7 +1489,9 @@ class Config {
 
 unreactive(Config)
 ```
--or-
+
+Alternatively, you can use the `@unreactive` decorator without arguments to mark the entire class as non-reactive:
+
 ```typescript
 @unreactive
 class Config {
@@ -1472,15 +1612,17 @@ Create computed values outside of classes:
 ```typescript
 const state = reactive({ a: 1, b: 2 })
 
-const sum = computed(() => state.a + state.b)
-const product = computed(() => state.a * state.b)
+const sum = () => state.a + state.b
+const product = () => state.a * state.b
 
 effect(() => {
-    console.log('Sum:', sum, 'Product:', product)
+    console.log('Sum:', computed(sum), 'Product:', computed(product))
 })
 
 state.a = 5 // Both computed values update
 ```
+
+**Note:** The `computed()` function takes a getter function and returns the cached or recalculated value. You call `computed(getter)` each time you need the value, not assign it to a variable.
 
 ### Caching and Invalidation
 
@@ -1490,18 +1632,18 @@ Computed values are cached until their dependencies change:
 const state = reactive({ x: 1, y: 2 })
 
 let computeCount = 0
-const expensive = computed(() => {
+const expensive = () => {
     computeCount++
     console.log('Computing expensive value...')
     return Math.pow(state.x, state.y)
-})
+}
 
-console.log('First access:', expensive) // Computes once
-console.log('Second access:', expensive) // Uses cached value
+console.log('First access:', computed(expensive)) // Computes once
+console.log('Second access:', computed(expensive)) // Uses cached value
 console.log('Compute count:', computeCount) // 1
 
 state.x = 2 // Invalidates cache
-console.log('After change:', expensive) // Recomputes
+console.log('After change:', computed(expensive)) // Recomputes
 console.log('Compute count:', computeCount) // 2
 ```
 
@@ -1513,16 +1655,16 @@ Choose between computed and effects based on your needs:
 const state = reactive({ count: 0 })
 
 // Use computed when you need a value
-const doubled = computed(() => state.count * 2)
+const doubled = () => state.count * 2
 
 // Use effect when you need side effects
 effect(() => {
-    console.log('Count doubled:', doubled)
+    console.log('Count doubled:', computed(doubled))
     document.title = `Count: ${state.count}`
 })
 
 state.count = 5
-// doubled becomes 10
+// computed(doubled) returns 10
 // effect logs and updates title
 ```
 
@@ -2071,13 +2213,15 @@ This example demonstrates how `atomic` ensures that complex state updates are tr
 Create custom reactive objects with specialized behavior:
 
 ```typescript
+import { dependant, touched, allProps } from 'mutts/reactive'
+
 class ReactiveArray<T> {
     private items: T[] = []
     
     push(item: T) {
         this.items.push(item)
-        touched(this, 'length')
-        touched(this, 'allProps')
+        touched(this, { type: 'add', prop: this.items.length - 1 }, 'length')
+        touched(this, { type: 'bunch', method: 'push' }, allProps)
     }
     
     get length() {
@@ -2101,32 +2245,25 @@ array.push(1) // Triggers effect
 
 ### Native Reactivity Registration
 
-Register custom reactive classes for automatic wrapping:
+The library automatically registers native collection types (Array, Map, Set, WeakMap, WeakSet) to use specialized reactive wrappers. This happens automatically when you import from `'mutts/reactive'`.
+
+**Note:** Library users typically don't need to register native types as this is handled automatically. The `registerNativeReactivity` function is primarily for library internals.
+
+If you need to create custom reactive collections, you can extend the existing reactive collection classes or create your own reactive wrapper:
 
 ```typescript
-import { registerNativeReactivity } from 'mutts/reactive'
+import { ReactiveMap } from 'mutts/reactive'
 
-class CustomMap<K, V> {
-    private data = new Map<K, V>()
-    
-    set(key: K, value: V) {
-        this.data.set(key, value)
-        // Custom reactivity logic
-    }
-    
-    get(key: K) {
-        return this.data.get(key)
+class CustomReactiveMap<K, V> extends ReactiveMap<K, V> {
+    // Add custom methods while maintaining reactivity
+    customMethod() {
+        // Your custom logic here
+        return this.size
     }
 }
 
-class ReactiveCustomMap<K, V> extends CustomMap<K, V> {
-    // Reactive wrapper implementation
-}
-
-registerNativeReactivity(CustomMap, ReactiveCustomMap)
-
-// Now CustomMap instances are automatically wrapped
-const customMap = reactive(new CustomMap())
+const customMap = new CustomReactiveMap()
+// CustomMap instances are automatically reactive
 ```
 
 ### Memory Management
@@ -2172,8 +2309,8 @@ state.c = 30
 
 // 3. Avoid unnecessary reactivity
 @reactive
+@unreactive('internalId')
 class User {
-    @unreactive
     private internalId = crypto.randomUUID() // Never changes
     
     name: string = 'John' // Changes, should be reactive
@@ -2290,8 +2427,7 @@ const result = computed(myExpensiveCalculus);
 - Performance optimization for frequently accessed values
 
 **Notes:**
-By how JS works, writing `computed(()=> ...)` will always be wrong, as the notation `()=> ...` internally is a `new Function(...)`.
-So, even if the return value is cached, it will never be used.
+The `computed()` function works correctly with arrow functions. The library handles the caching and dependency tracking automatically.
 
 #### `@atomic`
 
@@ -2338,23 +2474,28 @@ const result = atomic(() => {
 
 #### `@unreactive`
 
-Marks a class property as non-reactive. The property change will not be tracked by the reactive system.
+Marks class properties as non-reactive using class-level syntax. The property changes will not be tracked by the reactive system.
 
-Marks a class (and its descendants) as non-reactive.
+Can also mark an entire class (and its descendants) as non-reactive when used without arguments.
 
 ```typescript
+// Property-level usage (class-level syntax)
+@reactive
+@unreactive('config', 'internalState')
 class MyClass {
-  @unreactive
   private config = { theme: 'dark' };
+  private internalState = {};
+  
+  name: string = 'John'; // This will be reactive
 }
 
-// Class decorator usage
+// Class-level usage (entire class non-reactive)
 @unreactive
 class NonReactiveClass {
   // All instances will be non-reactive
 }
 
-// Function usage
+// Function usage for objects
 const nonReactiveObj = unreactive({ config: { theme: 'dark' } });
 ```
 
@@ -2430,7 +2571,8 @@ Creates a computed value that caches its result and recomputes when dependencies
 - Conditional logic based on reactive state
 
 ```typescript
-const result = computed(someExpensiveCalculus);
+const getter = () => someExpensiveCalculus();
+const result = computed(getter); // Call computed(getter) to get cached value
 ```
 
 #### `watch(value, callback, options?): ScopedCallback`
@@ -2538,12 +2680,14 @@ Registers a callback to be called when a computed property is invalidated.
 - Performance monitoring
 
 ```typescript
-const computed = computed(() => {
+const expensiveGetter = () => {
   invalidateComputed(() => {
     console.log('Computed invalidated');
   });
   return expensiveCalculation();
-});
+};
+
+const result = computed(expensiveGetter);
 ```
 
 ### Configuration
@@ -2576,21 +2720,31 @@ reactiveOptions.enter = (effect) => console.log('Effect entered:', effect.name);
 
 #### `ReactiveBase`
 
-Base class for reactive objects. When extended, instances are automatically made reactive.
+Base class for reactive objects. When extended and combined with the `@reactive` decorator, instances are automatically made reactive.
 
 **Use Cases:**
-- Creating reactive classes
-- Automatic reactivity for class instances
+- Creating reactive classes with proper constructor reactivity
+- Solving constructor reactivity issues in complex inheritance trees
 - Type safety for reactive objects
+- Preventing reactivity from being added to prototype chains
 
 ```typescript
+import { ReactiveBase, reactive } from 'mutts/reactive'
+
 class MyState extends ReactiveBase {
   count = 0;
   name = '';
 }
 
-const state = new MyState(); // Automatically reactive
+@reactive
+class ReactiveMyState extends MyState {
+  // Now instances will be automatically reactive
+}
+
+const state = new ReactiveMyState(); // Automatically reactive
 ```
+
+**Note:** `ReactiveBase` alone does not make instances reactive. You must use the `@reactive` decorator on the class for instances to be automatically reactive.
 
 #### `ReactiveError`
 
@@ -2645,7 +2799,7 @@ set.add('item') // Triggers effect
 - Ensuring collection methods (push, set, add, etc.) trigger reactivity
 - Performance optimization for collection-heavy applications
 
-**Note:** This module registers native collection types to use specialized reactive wrappers. Without importing this module, collections wrapped with `reactive()` will only have basic object reactivity - collection methods like `map.set()`, `array.push()`, etc. will not trigger effects. The `reactive()` wrapper is still required, but the collections module ensures proper reactive behavior for collection-specific operations.
+**Note:** The reactive module automatically registers native collection types to use specialized reactive wrappers. When you import from `'mutts/reactive'`, collections wrapped with `reactive()` automatically use the appropriate reactive wrappers - collection methods like `map.set()`, `array.push()`, etc. will trigger effects properly. The `reactive()` wrapper is still required, but the module ensures proper reactive behavior for collection-specific operations.
 
 ### Types
 
@@ -2686,3 +2840,4 @@ Object containing internal reactive system state for debugging and profiling.
 - Performance profiling
 - Memory leak detection
 - System state inspection
+

@@ -908,6 +908,34 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(3)
 				expect(sum).toBe(19)
 			})
+			it('should react when iterating a pre-fetched Symbol.iterator', () => {
+				const array = [1, 2, 3]
+				const reactiveArray = reactive(array)
+
+				const values: number[] = []
+				let effectCount = 0
+				effect(() => {
+					effectCount++
+					values.length = 0
+					// Pre-fetch iterator BEFORE iterating
+					for (const value of reactiveArray) {
+						values.push(value)
+					}
+				})
+
+				expect(effectCount).toBe(1)
+				expect(unwrap(values)).toEqual([1, 2, 3])
+
+				// Changing an element should trigger the effect
+				reactiveArray[0] = 100
+				expect(effectCount).toBe(2)
+				expect(unwrap(values)).toEqual([100, 2, 3])
+
+				// Adding an element should also trigger the effect
+				reactiveArray.push(4)
+				expect(effectCount).toBe(3)
+				expect(unwrap(values)).toEqual([100, 2, 3, 4])
+			})
 		})
 		it('should work with reactive() function', () => {
 			const array = [1, 2, 3]
