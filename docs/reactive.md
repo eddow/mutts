@@ -1624,6 +1624,104 @@ state.a = 5 // Both computed values update
 
 **Note:** The `computed()` function takes a getter function and returns the cached or recalculated value. You call `computed(getter)` each time you need the value, not assign it to a variable.
 
+### `computed.map()`
+
+Creates a reactive array that automatically maps over an input array with intelligent caching and memoization. This is optimized for scenarios where you have expensive computations that should only re-run when inputs change.
+
+```typescript
+const input = reactive([1, 2, 3])
+const mapped = computed.map(input, x => x * 2)
+
+console.log(mapped) // [2, 4, 6]
+
+// When input changes, mapped automatically updates
+input.push(4)
+console.log(mapped) // [2, 4, 6, 8]
+```
+
+**Key Features:**
+
+- **Live Reactivity**: The output array automatically updates when the input array changes
+- **Intelligent Caching**: Results are cached per input item, only recomputing when items change
+- **Primitive Optimization**: Non-object primitives are computed directly without caching overhead
+- **Object Caching**: Objects are cached and only recomputed when their properties change
+- **Memory Efficient**: Proper cleanup prevents memory leaks when items are removed
+
+**Performance Characteristics:**
+
+```typescript
+const users = reactive([
+  { name: 'John', age: 30 },
+  { name: 'Jane', age: 25 }
+])
+
+let computeCount = 0
+const processedUsers = computed.map(users, user => {
+  computeCount++
+  return {
+    ...user,
+    displayName: `${user.name} (${user.age})`,
+    isAdult: user.age >= 18
+  }
+})
+
+console.log(computeCount) // 2 (initial computation)
+
+// Access again - uses cached values
+console.log(processedUsers[0].displayName) // "John (30)"
+console.log(computeCount) // 2 (no additional computation)
+
+// Modify one user - only that item recomputes
+users[0].age = 31
+console.log(processedUsers[0].displayName) // "John (31)"
+console.log(computeCount) // 3 (only one more computation)
+```
+
+**Use Cases:**
+
+- **Expensive Transformations**: When mapping involves complex calculations
+- **Derived Data**: Creating computed views of your data
+- **Performance-Critical Scenarios**: Large datasets with infrequent changes
+- **Real-time Updates**: When input data changes frequently but transformations are expensive
+
+**Comparison with `array.map`:**
+
+```typescript
+// Standard array.map - recomputes everything each time
+const standardMapped = input.map(expensiveFunction) // Recomputes all items
+
+// computed.map - only recomputes changed items
+const computedMapped = computed.map(input, expensiveFunction) // Caches results
+```
+
+**Advanced Usage:**
+
+```typescript
+// Complex object transformations
+const products = reactive([
+  { id: 1, price: 10, category: 'electronics' },
+  { id: 2, price: 20, category: 'clothing' }
+])
+
+const enrichedProducts = computed.map(products, product => ({
+  ...product,
+  tax: product.price * 0.1,
+  total: product.price * 1.1,
+  displayPrice: `$${product.price.toFixed(2)}`
+}))
+
+// Nested reactive objects
+const orders = reactive([
+  { items: [{ price: 10 }, { price: 20 }] },
+  { items: [{ price: 15 }] }
+])
+
+const orderTotals = computed.map(orders, order => ({
+  ...order,
+  total: order.items.reduce((sum, item) => sum + item.price, 0)
+}))
+```
+
 ### Caching and Invalidation
 
 Computed values are cached until their dependencies change:

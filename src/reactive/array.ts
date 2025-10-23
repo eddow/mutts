@@ -1,6 +1,7 @@
 import { Indexable } from '../indexable'
 import {
 	dependant,
+	effect,
 	makeReactiveEntriesIterator,
 	makeReactiveIterator,
 	prototypeForwarding,
@@ -152,8 +153,9 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 	}
 
 	sort(compareFn?: (a: any, b: any) => number) {
+		compareFn = compareFn || ((a, b) => a.toString().localeCompare(b.toString()))
 		try {
-			return this[native].sort(compareFn) as any
+			return this[native].sort((a, b) => compareFn(reactive(a), reactive(b))) as any
 		} finally {
 			touched(this, { type: 'bunch', method: 'sort' }, range(0, this[native].length - 1))
 		}
@@ -283,12 +285,16 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 
 	filter(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): any[] {
 		dependant(this)
-		return reactive(this[native].filter(callbackfn as any, thisArg))
+		return reactive(
+			this[native].filter((item, index, array) => callbackfn(reactive(item), index, array), thisArg)
+		)
 	}
 
 	map(callbackfn: (value: any, index: number, array: any[]) => any, thisArg?: any): any[] {
 		dependant(this)
-		return reactive(this[native].map(callbackfn as any, thisArg))
+		return reactive(
+			this[native].map((item, index, array) => callbackfn(reactive(item), index, array), thisArg)
+		)
 	}
 
 	reduce(
@@ -350,4 +356,43 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 		dependant(this)
 		return this[native].some(callbackfn as any, thisArg)
 	}
+}
+
+export function computedMap<Input, Output>(
+	input: Input[],
+	compute: (input: Input) => Output
+): Output[] {
+	const cached = new WeakMap<any, { output: Output; stop: () => void }>()
+	const rv: Output[] = reactive([])
+	input = reactive(input)
+	effect(() => {
+		rv.length = input.length
+		const cleanups: (() => void)[] = []
+		for (let i = 0; i < input.length; i++) {
+			const item = input[i]
+			if (!item || !['object', 'function'].includes(typeof item)) rv[i] = compute(item)
+			else {
+				let cachedEntry: any
+				if (cached.has(item)) {
+					cachedEntry = cached.get(item)!
+				} else {
+					cachedEntry = reactive({ output: undefined, stop: undefined })
+					cachedEntry.stop = effect(() => {
+						cachedEntry.output = compute(item)
+					})
+					cached.set(item, cachedEntry)
+				}
+				cleanups.push(
+					((i) =>
+						effect(() => {
+							rv[i] = cachedEntry.output
+						}))(i)
+				)
+			}
+		}
+		return () => {
+			for (const cleanup of cleanups) cleanup()
+		}
+	})
+	return rv
 }

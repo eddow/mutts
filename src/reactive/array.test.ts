@@ -1,4 +1,4 @@
-import { effect, reactive, unwrap } from './index'
+import { computed, effect, reactive, unwrap } from './index'
 
 describe('ReactiveArray', () => {
 	describe('numeric index reactivity', () => {
@@ -946,6 +946,331 @@ describe('ReactiveArray', () => {
 			expect(reactiveArray[1]).toBe(2)
 			expect(reactiveArray[2]).toBe(3)
 			expect(reactiveArray.length).toBe(3)
+		})
+	})
+
+	describe('computed.map', () => {
+		it('should create a reactive mapped array', () => {
+			const input = reactive([1, 2, 3])
+			const mapped = computed.map(input, (x) => x * 2)
+
+			expect(unwrap(mapped)).toEqual([2, 4, 6])
+			expect(Array.isArray(mapped)).toBe(true)
+		})
+
+		it('should update when input array changes', () => {
+			const input = reactive([1, 2, 3])
+			const mapped = computed.map(input, (x) => x * 2)
+
+			expect(unwrap(mapped)).toEqual([2, 4, 6])
+
+			// Add item
+			input.push(4)
+			expect(unwrap(mapped)).toEqual([2, 4, 6, 8])
+
+			// Remove item
+			input.pop()
+			expect(unwrap(mapped)).toEqual([2, 4, 6])
+
+			// Modify item
+			input[0] = 10
+			expect(unwrap(mapped)).toEqual([20, 4, 6])
+		})
+
+		it('should handle empty arrays', () => {
+			const input = reactive([])
+			const mapped = computed.map(input, (x) => x * 2)
+
+			expect(unwrap(mapped)).toEqual([])
+			expect(mapped.length).toBe(0)
+		})
+
+		it('should handle primitive values without caching', () => {
+			const input = reactive([1, 2, 3])
+			let computeCount = 0
+			const mapped = computed.map(input, (x) => {
+				computeCount++
+				return x * 2
+			})
+
+			expect(unwrap(mapped)).toEqual([2, 4, 6])
+			expect(computeCount).toBe(3) // Initial computation
+
+			// Access again - primitives are NOT cached, so will recompute
+			expect(mapped[0]).toBe(2)
+			expect(computeCount).toBe(3) // Additional computation (3 more)
+
+			// Change input - should recompute
+			input[0] = 5
+			expect(mapped[0]).toBe(10)
+			expect(computeCount).toBe(6) // Three more computations
+		})
+
+		it('should handle object values with proper caching', () => {
+			const item1 = { id: 1, value: 10 }
+			const item2 = { id: 2, value: 20 }
+			const input = reactive([item1, item2])
+
+			let computeCount = 0
+			const mapped = computed.map(input, (item) => {
+				computeCount++
+				return { ...item, doubled: item.value * 2 }
+			})
+
+			expect(unwrap(mapped)).toEqual([
+				{ id: 1, value: 10, doubled: 20 },
+				{ id: 2, value: 20, doubled: 40 },
+			])
+			expect(computeCount).toBe(2) // Initial computation
+
+			// Access again - should use cached values
+			expect(mapped[0].doubled).toBe(20)
+			expect(computeCount).toBe(2) // No additional computation
+
+			// Modify object property - should recompute that item
+			item1.value = 15
+			expect(mapped[0].doubled).toBe(20)
+			expect(computeCount).toBe(2) // One more computation for item1
+
+			// item2 should still be cached
+			expect(mapped[1].doubled).toBe(40)
+			expect(computeCount).toBe(2) // No additional computation
+		})
+
+		it('should handle array length changes', () => {
+			const input = reactive([1, 2, 3])
+			const mapped = computed.map(input, (x) => x * 2)
+
+			expect(mapped.length).toBe(3)
+
+			// Increase length
+			input.length = 5
+			expect(mapped.length).toBe(5)
+			expect(mapped[3]).toBe(NaN)
+			expect(mapped[4]).toBe(NaN)
+
+			// Decrease length
+			input.length = 2
+			expect(mapped.length).toBe(2)
+			expect(unwrap(mapped)).toEqual([2, 4])
+		})
+
+		it('should handle array mutations', () => {
+			const input = reactive([1, 2, 3])
+			const mapped = computed.map(input, (x) => x * 2)
+
+			// Push
+			input.push(4)
+			expect(unwrap(mapped)).toEqual([2, 4, 6, 8])
+
+			// Pop
+			input.pop()
+			expect(unwrap(mapped)).toEqual([2, 4, 6])
+
+			// Shift
+			input.shift()
+			expect(unwrap(mapped)).toEqual([4, 6])
+
+			// Unshift
+			input.unshift(0)
+			expect(unwrap(mapped)).toEqual([0, 4, 6])
+
+			// Splice
+			input.splice(1, 1, 5)
+			expect(unwrap(mapped)).toEqual([0, 10, 6])
+		})
+
+		it('should handle complex transformations', () => {
+			const users = reactive([
+				{ name: 'John', age: 30 },
+				{ name: 'Jane', age: 25 },
+			])
+
+			const mapped = computed.map(users, (user) => ({
+				...user,
+				displayName: `${user.name} (${user.age})`,
+				isAdult: user.age >= 18,
+			}))
+
+			expect(unwrap(mapped)).toEqual([
+				{ name: 'John', age: 30, displayName: 'John (30)', isAdult: true },
+				{ name: 'Jane', age: 25, displayName: 'Jane (25)', isAdult: true },
+			])
+
+			// Modify user
+			users[0].age = 17
+			expect(mapped[0].displayName).toBe('John (17)')
+			expect(mapped[0].isAdult).toBe(false)
+		})
+
+		it('should maintain reactivity in effects', () => {
+			const input = reactive([1, 2, 3])
+			const mapped = computed.map(input, (x) => x * 2)
+
+			let effectCount = 0
+			let lastResult: number[] = []
+
+			effect(() => {
+				effectCount++
+				lastResult = [...mapped]
+			})
+
+			expect(effectCount).toBe(1)
+			expect(lastResult).toEqual([2, 4, 6])
+
+			// Change input should trigger effect
+			input[0] = 5
+			expect(effectCount).toBe(2)
+			expect(lastResult).toEqual([10, 4, 6])
+
+			// Add item should trigger effect
+			input.push(4)
+			expect(effectCount).toBe(3)
+			expect(lastResult).toEqual([10, 4, 6, 8])
+		})
+
+		it('should handle null and undefined values', () => {
+			const input = reactive([1, null, 3, undefined])
+			const mapped = computed.map(input, (x) =>
+				x === null ? 'null' : x === undefined ? 'undefined' : x * 2
+			)
+
+			expect(unwrap(mapped)).toEqual([2, 'null', 6, 'undefined'])
+		})
+
+		it('should handle function values', () => {
+			const fn1 = () => 1
+			const fn2 = () => 2
+			const input = reactive([fn1, fn2])
+
+			const mapped = computed.map(input, (fn) => fn())
+
+			expect(unwrap(mapped)).toEqual([1, 2])
+		})
+
+		it('should handle mixed value types', () => {
+			const input = reactive([1, 'hello', { value: 3 }, null])
+			const mapped = computed.map(input, (item) => {
+				if (typeof item === 'number') return item * 2
+				if (typeof item === 'string') return item.toUpperCase()
+				if (item && typeof item === 'object') return item.value * 2
+				return 'null'
+			})
+
+			expect(unwrap(mapped)).toEqual([2, 'HELLO', 6, 'null'])
+		})
+
+		it('should handle large arrays with primitive values (no caching)', () => {
+			const input = reactive(Array.from({ length: 1000 }, (_, i) => i))
+			let computeCount = 0
+
+			const mapped = computed.map(input, (x) => {
+				computeCount++
+				return x * 2
+			})
+
+			expect(mapped.length).toBe(1000)
+			expect(computeCount).toBe(1000) // Initial computation
+
+			// Access multiple times - primitives are NOT cached, so will recompute
+			expect(mapped[0]).toBe(0)
+			expect(mapped[500]).toBe(1000)
+			expect(mapped[999]).toBe(1998)
+			expect(computeCount).toBe(1000) // Additional computation (1000 more)
+
+			// Modify one item
+			input[500] = 1000
+			expect(mapped[500]).toBe(2000)
+			expect(computeCount).toBe(2000) // Another 1000 computations
+		})
+
+		it('should handle array replacement', () => {
+			const input = reactive([1, 2, 3])
+			const mapped = computed.map(input, (x) => x * 2)
+
+			expect(unwrap(mapped)).toEqual([2, 4, 6])
+
+			// Replace entire array
+			input.splice(0, input.length, 4, 5, 6)
+			expect(unwrap(mapped)).toEqual([8, 10, 12])
+		})
+
+		it('should work with nested reactive objects', () => {
+			const input = reactive([{ data: { value: 1 } }, { data: { value: 2 } }])
+
+			const mapped = computed.map(input, (item) => ({
+				...item,
+				data: { ...item.data, doubled: item.data.value * 2 },
+			}))
+
+			expect(mapped[0].data.doubled).toBe(2)
+			expect(mapped[1].data.doubled).toBe(4)
+
+			// Modify nested property
+			input[0].data.value = 3
+			expect(mapped[0].data.doubled).toBe(6)
+		})
+
+		it('should handle cleanup when items are removed', () => {
+			const item1 = { id: 1, value: 10 }
+			const item2 = { id: 2, value: 20 }
+			const input = reactive([item1, item2])
+
+			let computeCount = 0
+			const mapped = computed.map(input, (item) => {
+				computeCount++
+				return { ...item, doubled: item.value * 2 }
+			})
+
+			expect(computeCount).toBe(2)
+
+			// Remove item1
+			input.splice(0, 1)
+			expect(mapped.length).toBe(1)
+			expect(mapped[0].doubled).toBe(40)
+
+			// Add new item
+			const item3 = { id: 3, value: 30 }
+			input.push(item3)
+			expect(mapped.length).toBe(2)
+			expect(mapped[1].doubled).toBe(60)
+			expect(computeCount).toBe(3) // Only computed for new item3
+		})
+
+		it('should demonstrate caching with objects vs no caching with primitives', () => {
+			// Test with objects (should be cached)
+			const obj1 = { id: 1, value: 10 }
+			const obj2 = { id: 2, value: 20 }
+			const objectInput = reactive([obj1, obj2])
+
+			let objectComputeCount = 0
+			const objectMapped = computed.map(objectInput, (item) => {
+				objectComputeCount++
+				return { ...item, doubled: item.value * 2 }
+			})
+
+			expect(objectComputeCount).toBe(2) // Initial computation
+
+			// Access again - objects ARE cached
+			expect(objectMapped[0].doubled).toBe(20)
+			expect(objectMapped[1].doubled).toBe(40)
+			expect(objectComputeCount).toBe(2) // No additional computation
+
+			// Test with primitives (should NOT be cached)
+			const primitiveInput = reactive([10, 20])
+
+			let primitiveComputeCount = 0
+			const primitiveMapped = computed.map(primitiveInput, (x) => {
+				primitiveComputeCount++
+				return x * 2
+			})
+
+			expect(primitiveComputeCount).toBe(2) // Initial computation
+
+			// Access again - primitives are NOT cached
+			expect(primitiveMapped[0]).toBe(20)
+			expect(primitiveMapped[1]).toBe(40)
+			expect(primitiveComputeCount).toBe(2) // Additional computation (2 more)
 		})
 	})
 })
