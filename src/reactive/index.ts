@@ -17,7 +17,7 @@ export {
 } from './core'
 export { invalidateComputed, unreactive, watch } from './interface'
 
-import { computedMap, ReactiveArray } from './array'
+import { computedFilter, computedMap, ReactiveArray } from './array'
 import { registerNativeReactivity } from './core'
 import { computed } from './interface'
 import { ReactiveMap, ReactiveWeakMap } from './map'
@@ -25,6 +25,7 @@ import { ReactiveSet, ReactiveWeakSet } from './set'
 
 const extendedComputed = Object.assign(computed, {
 	map: computedMap,
+	filter: computedFilter,
 })
 export { extendedComputed as computed }
 

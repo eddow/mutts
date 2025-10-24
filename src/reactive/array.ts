@@ -8,6 +8,7 @@ import {
 	reactive,
 	touched,
 } from './core'
+import { watch } from './interface'
 
 const native = Symbol('native')
 const isArray = Array.isArray
@@ -361,38 +362,71 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 export function computedMap<Input, Output>(
 	input: Input[],
 	compute: (input: Input) => Output
-): Output[] {
+): Output[] & { stop: () => void } {
 	const cached = new WeakMap<any, { output: Output; stop: () => void }>()
 	const rv: Output[] = reactive([])
 	input = reactive(input)
-	effect(() => {
-		rv.length = input.length
-		const cleanups: (() => void)[] = []
-		for (let i = 0; i < input.length; i++) {
-			const item = input[i]
-			if (!item || !['object', 'function'].includes(typeof item)) rv[i] = compute(item)
-			else {
-				let cachedEntry: any
-				if (cached.has(item)) {
-					cachedEntry = cached.get(item)!
-				} else {
-					cachedEntry = reactive({ output: undefined, stop: undefined })
-					cachedEntry.stop = effect(() => {
-						cachedEntry.output = compute(item)
-					})
-					cached.set(item, cachedEntry)
+	const stop = watch(
+		input,
+		function computedMapRedo(input) {
+			rv.length = input.length
+			const cleanups: (() => void)[] = []
+			for (let i = 0; i < input.length; i++) {
+				const item = input[i]
+				if (!item || !['object', 'function'].includes(typeof item)) rv[i] = compute(item)
+				else {
+					let cachedEntry: any
+					if (cached.has(item)) {
+						cachedEntry = cached.get(item)!
+					} else {
+						cachedEntry = reactive({ output: undefined, stop: undefined })
+						cachedEntry.stop = effect(function computedMapEntryCompute() {
+							cachedEntry.output = compute(item)
+						})
+						cached.set(item, cachedEntry)
+					}
+					cleanups.push(
+						((i) =>
+							effect(function computedMapEntrySet() {
+								rv[i] = cachedEntry.output
+							}))(i)
+					)
 				}
-				cleanups.push(
-					((i) =>
-						effect(() => {
-							rv[i] = cachedEntry.output
-						}))(i)
-				)
 			}
-		}
+			return () => {
+				for (const cleanup of cleanups) cleanup()
+			}
+		},
+		{ immediate: true }
+	)
+	Object.defineProperty(rv, 'stop', {
+		value: stop,
+	})
+	return rv as Output[] & { stop: () => void }
+}
+
+export function computedFilter<Input>(
+	input: Input[],
+	predicate: (input: Input) => boolean
+): Input[] {
+	const rv: Input[] = reactive([])
+	const stop = effect(() => {
+		const mapped = computedMap(input, (item) => Boolean(predicate(item)))
+		const stop = watch(
+			mapped,
+			function computedFilterRedo(mapped) {
+				rv.length = 0
+				for (let i = 0; i < mapped.length; i++) if (mapped[i]) rv.push(input[i])
+			},
+			{ immediate: true }
+		)
 		return () => {
-			for (const cleanup of cleanups) cleanup()
+			mapped.stop()
+			stop()
 		}
+	})
+	Object.defineProperty(rv, 'stop', {
+		value: stop,
 	})
 	return rv
 }

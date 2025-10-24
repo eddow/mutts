@@ -1273,4 +1273,327 @@ describe('ReactiveArray', () => {
 			expect(primitiveComputeCount).toBe(2) // Additional computation (2 more)
 		})
 	})
+
+	describe('computed.filter', () => {
+		it('should create a reactive filtered array', () => {
+			const input = reactive([1, 2, 3, 4, 5])
+			const filtered = computed.filter(input, (x) => x % 2 === 0)
+
+			expect(unwrap(filtered)).toEqual([2, 4])
+			expect(Array.isArray(filtered)).toBe(true)
+		})
+
+		it('should update when input array changes', () => {
+			const input = reactive([1, 2, 3, 4, 5])
+			const filtered = computed.filter(input, (x) => x % 2 === 0)
+
+			expect(unwrap(filtered)).toEqual([2, 4])
+
+			// Add item
+			input.push(6)
+			expect(unwrap(filtered)).toEqual([2, 4, 6])
+
+			// Remove item
+			input.pop()
+			expect(unwrap(filtered)).toEqual([2, 4])
+
+			// Modify item
+			input[0] = 2
+			expect(unwrap(filtered)).toEqual([2, 2, 4])
+		})
+
+		it('should handle empty arrays', () => {
+			const input = reactive([])
+			const filtered = computed.filter(input, (x) => x > 0)
+
+			expect(unwrap(filtered)).toEqual([])
+			expect(filtered.length).toBe(0)
+		})
+
+		it('should handle primitive values without caching', () => {
+			const input = reactive([1, 2, 3, 4, 5])
+			let predicateCount = 0
+			const filtered = computed.filter(input, (x) => {
+				predicateCount++
+				return x % 2 === 0
+			})
+
+			expect(unwrap(filtered)).toEqual([2, 4])
+			expect(predicateCount).toBe(5) // Initial computation
+
+			// Access again - primitives are NOT cached, so will recompute
+			expect(filtered[0]).toBe(2)
+			expect(predicateCount).toBe(5) // No additional computation (access doesn't trigger)
+
+			// Change input - should recompute
+			input[0] = 2
+			expect(unwrap(filtered)).toEqual([2, 2, 4])
+			expect(predicateCount).toBe(10) // Five more computations
+		})
+
+		it('should handle object values with proper caching', () => {
+			const item1 = reactive({ id: 1, value: 10 })
+			const item2 = reactive({ id: 2, value: 20 })
+			const item3 = reactive({ id: 3, value: 15 })
+			const input = reactive([item1, item2, item3])
+
+			let predicateCount = 0
+			const filtered = computed.filter(input, (item) => {
+				predicateCount++
+				return item.value > 15
+			})
+
+			expect(unwrap(filtered)).toEqual([item2])
+			expect(predicateCount).toBe(3) // Initial computation
+
+			// Access again - objects ARE cached
+			expect(filtered[0]).toBe(item2)
+			expect(predicateCount).toBe(3) // No additional computation
+
+			// Modify object property - should recompute that item
+			item1.value = 25
+			expect(unwrap(filtered)).toEqual([item1, item2])
+			expect(predicateCount).toBe(4) // One more computation for item1
+
+			// item2 should still be cached
+			expect(filtered[1]).toBe(item2)
+			expect(predicateCount).toBe(4) // No additional computation
+		})
+
+		it('should handle array length changes', () => {
+			const input = reactive([1, 2, 3])
+			const filtered = computed.filter(input, (x) => x > 1)
+
+			expect(filtered.length).toBe(2)
+
+			// Increase length
+			input.length = 5
+			expect(filtered.length).toBe(2)
+			expect(filtered[2]).toBeUndefined()
+			expect(filtered[3]).toBeUndefined()
+
+			// Decrease length
+			input.length = 2
+			expect(filtered.length).toBe(1)
+			expect(unwrap(filtered)).toEqual([2])
+		})
+
+		it('should handle array mutations', () => {
+			const input = reactive([1, 2, 3, 4, 5])
+			const filtered = computed.filter(input, (x) => x % 2 === 0)
+
+			// Push
+			input.push(6)
+			expect(unwrap(filtered)).toEqual([2, 4, 6])
+
+			// Pop
+			input.pop()
+			expect(unwrap(filtered)).toEqual([2, 4])
+
+			// Shift
+			input.shift()
+			expect(unwrap(filtered)).toEqual([2, 4])
+			// Shift
+			input.shift()
+			expect(unwrap(filtered)).toEqual([4])
+
+			// Unshift
+			input.unshift(2)
+			expect(unwrap(filtered)).toEqual([2, 4])
+
+			// Splice
+			input.splice(1, 1, 6)
+			expect(unwrap(filtered)).toEqual([2, 6, 4])
+		})
+
+		it('should handle complex filtering', () => {
+			const users = reactive([
+				{ name: 'John', age: 30, active: true },
+				{ name: 'Jane', age: 25, active: false },
+				{ name: 'Bob', age: 35, active: true },
+			])
+
+			const filtered = computed.filter(users, (user) => user.active && user.age > 25)
+
+			expect(unwrap(filtered)).toEqual([
+				{ name: 'John', age: 30, active: true },
+				{ name: 'Bob', age: 35, active: true },
+			])
+
+			// Modify user
+			users[0].active = false
+			expect(unwrap(filtered)).toEqual([{ name: 'Bob', age: 35, active: true }])
+		})
+
+		it('should maintain reactivity in effects', () => {
+			const input = reactive([1, 2, 3, 4, 5])
+			const filtered = computed.filter(input, (x) => x % 2 === 0)
+
+			let effectCount = 0
+			let lastResult: number[] = []
+
+			effect(() => {
+				effectCount++
+				lastResult = [...filtered]
+			})
+
+			expect(effectCount).toBe(1)
+			expect(lastResult).toEqual([2, 4])
+
+			// Change input should trigger effect
+			input[0] = 2
+			expect(effectCount).toBe(2)
+			expect(lastResult).toEqual([2, 2, 4])
+
+			// Add item should trigger effect
+			input.push(6)
+			expect(effectCount).toBe(3)
+			expect(lastResult).toEqual([2, 2, 4, 6])
+		})
+
+		it('should handle null and undefined values', () => {
+			const input = reactive([1, null, 3, undefined, 5])
+			const filtered = computed.filter(input, (x) => x != null && x > 2)
+
+			expect(unwrap(filtered)).toEqual([3, 5])
+		})
+
+		it('should handle function values', () => {
+			const fn1 = () => 1
+			const fn2 = () => 2
+			const fn3 = () => 3
+			const input = reactive([fn1, fn2, fn3])
+
+			const filtered = computed.filter(input, (fn) => fn() > 1)
+
+			expect(unwrap(filtered)).toEqual([fn2, fn3])
+		})
+
+		it('should handle mixed value types', () => {
+			const input = reactive([1, 'hello', { value: 3 }, null, 5])
+			const filtered = computed.filter(input, (item) => {
+				if (typeof item === 'number') return item > 2
+				if (typeof item === 'string') return item.length > 3
+				if (item && typeof item === 'object') return item.value > 2
+				return false
+			})
+
+			expect(unwrap(filtered)).toEqual(['hello', { value: 3 }, 5])
+		})
+
+		it('should handle large arrays with primitive values (no caching)', () => {
+			const input = reactive(Array.from({ length: 1000 }, (_, i) => i))
+			let predicateCount = 0
+
+			const filtered = computed.filter(input, (x) => {
+				predicateCount++
+				return x % 2 === 0
+			})
+
+			expect(filtered.length).toBe(500)
+			expect(predicateCount).toBe(1000) // Initial computation
+
+			// Access multiple times - primitives are NOT cached, so will recompute
+			expect(filtered[0]).toBe(0)
+			expect(filtered[250]).toBe(500)
+			expect(filtered[499]).toBe(998)
+			expect(predicateCount).toBe(1000) // No additional computation (access doesn't trigger)
+
+			// Modify one item
+			input[500] = 1000
+			expect(filtered[250]).toBe(1000)
+			expect(predicateCount).toBe(2000) // Another 1000 computations
+		})
+
+		it('should handle array replacement', () => {
+			const input = reactive([1, 2, 3, 4, 5])
+			const filtered = computed.filter(input, (x) => x % 2 === 0)
+
+			expect(unwrap(filtered)).toEqual([2, 4])
+
+			// Replace entire array
+			input.splice(0, input.length, 6, 7, 8, 9, 10)
+			expect(unwrap(filtered)).toEqual([6, 8, 10])
+		})
+
+		it('should work with nested reactive objects', () => {
+			const input = reactive([
+				{ data: { value: 1, active: true } },
+				{ data: { value: 2, active: false } },
+				{ data: { value: 3, active: true } },
+			])
+
+			const filtered = computed.filter(input, (item) => item.data.active && item.data.value > 1)
+
+			expect(unwrap(filtered)).toEqual([{ data: { value: 3, active: true } }])
+
+			// Modify nested property
+			input[1].data.active = true
+			expect(unwrap(filtered)).toEqual([
+				{ data: { value: 2, active: true } },
+				{ data: { value: 3, active: true } },
+			])
+		})
+
+		it('should handle cleanup when items are removed', () => {
+			const item1 = { id: 1, value: 10 }
+			const item2 = { id: 2, value: 20 }
+			const item3 = { id: 3, value: 15 }
+			const input = reactive([item1, item2, item3])
+
+			let predicateCount = 0
+			const filtered = computed.filter(input, (item) => {
+				predicateCount++
+				return item.value > 15
+			})
+
+			expect(predicateCount).toBe(3)
+
+			// Remove item1
+			input.splice(0, 1)
+			expect(filtered.length).toBe(1)
+			expect(unwrap(filtered[0])).toBe(item2)
+
+			// Add new item
+			const item4 = { id: 4, value: 30 }
+			input.push(item4)
+			expect(filtered.length).toBe(2)
+			expect(unwrap(filtered[1])).toBe(item4)
+			expect(predicateCount).toBe(4) // Only computed for new item4
+		})
+
+		it('should demonstrate caching with objects vs no caching with primitives', () => {
+			// Test with objects (should be cached)
+			const obj1 = { id: 1, value: 10 }
+			const obj2 = { id: 2, value: 20 }
+			const objectInput = reactive([obj1, obj2])
+
+			let objectPredicateCount = 0
+			const objectFiltered = computed.filter(objectInput, (item) => {
+				objectPredicateCount++
+				return item.value > 15
+			})
+
+			expect(objectPredicateCount).toBe(2) // Initial computation
+
+			// Access again - objects ARE cached
+			expect(unwrap(objectFiltered[0])).toBe(obj2)
+			expect(objectPredicateCount).toBe(2) // No additional computation
+
+			// Test with primitives (should NOT be cached)
+			const primitiveInput = reactive([10, 20])
+
+			let primitivePredicateCount = 0
+			const primitiveFiltered = computed.filter(primitiveInput, (x) => {
+				primitivePredicateCount++
+				return x > 15
+			})
+
+			expect(primitivePredicateCount).toBe(2) // Initial computation
+
+			// Access again - primitives are NOT cached
+			expect(primitiveFiltered[0]).toBe(20)
+			expect(primitivePredicateCount).toBe(2) // No additional computation (access doesn't trigger)
+		})
+	})
 })
