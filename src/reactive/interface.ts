@@ -1,6 +1,7 @@
 import { decorator, GenericClassDecorator } from '../decorator'
 import { renamed } from '../utils'
 import {
+	addBatchCleanup,
 	type DependencyFunction,
 	deepWatch,
 	dependant,
@@ -14,6 +15,7 @@ import {
 	options,
 	reactive,
 	type ScopedCallback,
+	touched,
 	touched1,
 	unreactiveProperties,
 	untracked,
@@ -89,8 +91,7 @@ export const computed = Object.assign(
 		},
 	}),
 	{
-		values: computedMapValues,
-		//filter: computedFilter,
+		map: computedMap,
 	}
 )
 
@@ -310,133 +311,130 @@ export type ComputedMapInput<T> = {
 	readonly array: T[]
 }
 
-function computedMapValues<T, U>(
+function computedMap<T, U>(
 	inputs: T[],
-	compute: (input: ComputedMapInput<T>, oldValue?: U) => U
+	compute: (input: ComputedMapInput<T>, oldValue?: U) => U,
+	computeKey?: (input: T) => any
 ): U[] & { cleanup: () => void } {
+	computeKey ??= (input: T) => input
+	const cache = new Map<any, { output: U; input: ComputedMapInput<T> }>()
 	const result = reactive([])
+	const keys: any[] = []
+	function keysCleanup() {
+		const usedKeys = new Set<any>(keys)
+		for (const key of cache.keys()) if (!usedKeys.has(key)) cache.delete(key)
+	}
+	const nonKeyed = new Set<number>()
 	function input(index: number) {
-		const input = Object.defineProperties(
-			{},
-			{
-				value: {
-					get() {
-						return inputs[index]
-					},
-					set(value) {
-						inputs[index] = value
-					},
-				},
-				index: {
-					value: index,
-				},
-				array: {
-					value: inputs,
-				},
-			}
-		) as ComputedMapInput<T>
 		return effect(() => {
-			result[index] = compute(input, result[index])
+			const item = inputs[index]
+			const key = computeKey
+				? computeKey(item)
+				: ['object', 'function'].includes(typeof item)
+					? item
+					: undefined
+			if (key === undefined) {
+				if (nonKeyed.has(index)) return
+				nonKeyed.add(index)
+				const input = Object.defineProperties(
+					{},
+					{
+						value: {
+							get() {
+								return inputs[index]
+							},
+							set(value) {
+								inputs[index] = value
+							},
+						},
+						index: {
+							value: index,
+						},
+						array: {
+							value: inputs,
+						},
+					}
+				) as ComputedMapInput<T>
+				return effect(() => {
+					result[index] = compute(input, result[index])
+				})
+			}
+			nonKeyed.delete(index)
+			keys[index] = key
+			addBatchCleanup(keysCleanup)
+			if (cache.has(key)) {
+				const cached = cache.get(key)!
+				result[index] = cached.output
+				const changedProps = []
+				if (cached.input.index !== index) {
+					changedProps.push('index')
+					Object.defineProperty(cached.input, 'index', { value: index, configurable: true })
+				}
+				if (cached.input.value !== item) {
+					changedProps.push('value')
+					Object.defineProperty(cached.input, 'value', {
+						get: () => item,
+						set: (value) => {
+							inputs[index] = value
+						},
+						configurable: true,
+					})
+				}
+				if (changedProps.length)
+					touched(cached.input, { type: 'invalidate', prop: changedProps }, changedProps)
+			} else {
+				const input = Object.defineProperties(
+					{},
+					{
+						value: {
+							get() {
+								return item
+							},
+							set(value) {
+								inputs[index] = value
+							},
+							configurable: true,
+						},
+						index: {
+							get() {
+								dependant(input, 'index')
+								return index
+							},
+							configurable: true,
+						},
+						array: {
+							value: inputs,
+						},
+					}
+				) as ComputedMapInput<T>
+				return effect(() => {
+					const output = compute(input)
+					cache.set(key, {
+						output,
+						input,
+					})
+					result[index] = output
+				})
+			}
 		})
 	}
 	const cleanups: ScopedCallback[] = []
 	const cleanup = watch(
 		() => inputs.length,
 		(length) => {
-			if (length <= result.length) {
+			if (length < result.length) {
 				const toCleanup = cleanups.splice(length)
 				for (const cleanup of toCleanup) cleanup()
 				result.length = length
-			} else for (let i = result.length; i < length; i++) cleanups.push(input(i))
+				addBatchCleanup(keysCleanup)
+			} else if (length > result.length)
+				for (let i = result.length; i < length; i++) cleanups.push(input(i))
 		},
 		{ immediate: true }
 	)
 	return cleanedBy(result, () => {
 		cleanup()
+		keysCleanup()
 		for (const cleanup of cleanups) cleanup()
 	})
 }
-/*
-
-const generatedObjectKeys = new WeakMap<object, symbol>()
-function computedMap<T, U>(
-	input: T[],
-	compute: (input: T, oldValue?: U) => U,
-	key?: (input: T, index: number) => string | number | symbol
-): U[] & { cleanup: () => void } {
-	key ??= (input: T, index: number) => {
-		if (!input || (typeof input !== 'object' && typeof input !== 'function')) return index
-		for (const key of usualKeys) if (key in input) return String(input[key])
-		if (generatedObjectKeys.has(input)) return generatedObjectKeys.get(input)!
-		const key = Symbol(`generated-key:${String(input)}`)
-		generatedObjectKeys.set(input, key)
-		return key
-	}
-	type CacheEntry = { value: U; item: T; cleanup: ScopedCallback }
-	const cache = new Map<PropertyKey, CacheEntry>()
-	const result = reactive([])
-	return cleanedBy(
-		result,
-		effect(() => {
-			const keys = input.map(key)
-			const keySet = new Set<PropertyKey>(keys)
-			for (const [k, v] of cache.entries())
-				if (!keySet.has(k)) {
-					v.cleanup()
-					cache.delete(k)
-				}
-			result.length = 0
-			const cleanups: ScopedCallback[] = []
-			for (const [i, k] of keys.entries())
-				((k, i) => {
-					const item = input[i]
-					let c: CacheEntry
-					if (cache.has(k)) {
-						c = cache.get(k)
-						c.item = item
-					} else {
-						c = reactive({ item }) as CacheEntry
-						cache.set(
-							k,
-							cleanedBy(
-								c,
-								effect(() => {
-									c.value = compute(c.item)
-								})
-							)
-						)
-					}
-					cleanups.push(
-						effect(() => {
-							result[i] = c.value
-						})
-					)
-				})(k, i)
-			return () => {
-				while (cleanups.length) cleanups.pop()!()
-			}
-		})
-	)
-}
-
-function computedFilter<Input>(input: Input[], predicate: (input: Input) => boolean): Input[] {
-	const rv: Input[] = reactive([])
-	const stop = effect(() => {
-		const mapped = computedMap(input, (item) => Boolean(predicate(item)))
-		const cleanup = watch(
-			mapped,
-			function computedFilterRedo(mapped) {
-				rv.length = 0
-				for (let i = 0; i < mapped.length; i++) if (mapped[i]) rv.push(input[i])
-			},
-			{ immediate: true }
-		)
-		return () => {
-			mapped.cleanup()
-			cleanup()
-		}
-	})
-	return cleanedBy(rv, stop)
-}
-*/
-//#endregion

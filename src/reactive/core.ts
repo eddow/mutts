@@ -3,6 +3,7 @@
 
 import { decorator } from '../decorator'
 import { mixin } from '../mixins'
+import { ReflectGet, ReflectSet } from '../utils'
 
 /**
  * Function type for dependency tracking in effects and computed values
@@ -545,12 +546,12 @@ const reactiveHandlers = {
 		if (prop === nonReactiveMark) return false
 		// Check if this property is marked as unreactive
 		if (unwrap(obj)[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
-			return Reflect.get(obj, prop, receiver)
+			return ReflectGet(obj, prop, receiver)
 		// Depend if...
 		if (!options.instanceMembers || Object.hasOwn(receiver, prop) || !Reflect.has(receiver, prop))
 			dependant(obj, prop)
 
-		const value = Reflect.get(obj, prop, receiver)
+		const value = ReflectGet(obj, prop, receiver)
 		if (typeof value === 'object' && value !== null) {
 			const reactiveValue = reactive(value)
 
@@ -565,7 +566,7 @@ const reactiveHandlers = {
 	},
 	set(obj: any, prop: PropertyKey, value: any, receiver: any): boolean {
 		// Check if this property is marked as unreactive
-		if (unwrap(obj)[unreactiveProperties]?.has(prop)) return Reflect.set(obj, prop, value, receiver)
+		if (unwrap(obj)[unreactiveProperties]?.has(prop)) return ReflectSet(obj, prop, value, receiver)
 		// Really specific case for when Array is forwarder, in order to let it manage the reactivity
 		const isArrayCase =
 			prototypeForwarding in obj &&
@@ -579,11 +580,11 @@ const reactiveHandlers = {
 			return true
 		}
 
-		const oldVal = Reflect.has(receiver, prop) ? unwrap(Reflect.get(obj, prop, receiver)) : absent
+		const oldVal = Reflect.has(receiver, prop) ? unwrap(ReflectGet(obj, prop, receiver)) : absent
 		track1(obj, prop, oldVal, newValue)
 
 		if (oldVal !== newValue) {
-			Reflect.set(obj, prop, newValue, receiver)
+			ReflectSet(obj, prop, newValue, receiver)
 			// try to find a "generic" way to express that
 			touched1(obj, { type: oldVal !== absent ? 'set' : 'add', prop }, prop)
 		}

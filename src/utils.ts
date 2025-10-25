@@ -70,3 +70,18 @@ export function renamed<F extends Function>(fct: F, name: string): F {
 		},
 	})
 }
+
+export function ReflectGet(obj: any, prop: any, receiver: any) {
+	// Check if Node is available and obj is an instance of Node
+	if (typeof Node !== 'undefined' && obj instanceof Node) return obj[prop]
+	return Reflect.get(obj, prop, receiver)
+}
+
+export function ReflectSet(obj: any, prop: any, value: any, receiver: any) {
+	// Check if Node is available and obj is an instance of Node
+	if (typeof Node !== 'undefined' && obj instanceof Node) {
+		obj[prop] = value
+		return value
+	}
+	return Reflect.set(obj, prop, value, receiver)
+}

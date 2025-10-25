@@ -1,4 +1,4 @@
-import { isConstructor } from './utils'
+import { isConstructor, ReflectGet } from './utils'
 
 /**
  * A mixin function that takes a base class and returns a new class with mixed-in functionality
@@ -85,7 +85,7 @@ export function mixin<MixinFn extends (base: any) => new (...args: any[]) => any
 				const originalPrototype = baseClass.prototype
 				const proxiedPrototype = new Proxy(originalPrototype, {
 					get(target, prop, receiver) {
-						const value = Reflect.get(target, prop, receiver)
+						const value = ReflectGet(target, prop, receiver)
 
 						// Only wrap methods that are likely to access private fields
 						// Skip symbols and special properties that the reactive system needs

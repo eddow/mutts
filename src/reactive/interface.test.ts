@@ -2037,7 +2037,7 @@ describe('deep watch via watch({ deep: true })', () => {
 	describe('computed.values', () => {
 		it('should create a reactive mapped array', () => {
 			const input = reactive([1, 2, 3])
-			const mapped = computed.values(input, ({ value }) => value * 2)
+			const mapped = computed.map(input, ({ value }) => value * 2)
 
 			expect(unwrap(mapped)).toEqual([2, 4, 6])
 			expect(Array.isArray(mapped)).toBe(true)
@@ -2045,7 +2045,7 @@ describe('deep watch via watch({ deep: true })', () => {
 
 		it('should update when input array changes', () => {
 			const input = reactive([1, 2, 3])
-			const mapped = computed.values(input, ({ value }) => value * 2)
+			const mapped = computed.map(input, ({ value }) => value * 2)
 
 			expect(unwrap(mapped)).toEqual([2, 4, 6])
 
@@ -2058,7 +2058,7 @@ describe('deep watch via watch({ deep: true })', () => {
 
 		it('should provide index in compute function', () => {
 			const input = reactive([10, 20, 30])
-			const mapped = computed.values(input, ({ value, index }) => `[${index}]: ${value}`)
+			const mapped = computed.map(input, ({ value, index }) => `[${index}]: ${value}`)
 
 			expect(unwrap(mapped)).toEqual(['[0]: 10', '[1]: 20', '[2]: 30'])
 
@@ -2068,10 +2068,7 @@ describe('deep watch via watch({ deep: true })', () => {
 
 		it('should provide array reference in compute function', () => {
 			const input = reactive([1, 2, 3])
-			const mapped = computed.values(
-				input,
-				({ value, array }) => `${value} (total: ${array.length})`
-			)
+			const mapped = computed.map(input, ({ value, array }) => `${value} (total: ${array.length})`)
 
 			expect(unwrap(mapped)).toEqual(['1 (total: 3)', '2 (total: 3)', '3 (total: 3)'])
 
@@ -2086,7 +2083,7 @@ describe('deep watch via watch({ deep: true })', () => {
 
 		it('should handle empty arrays', () => {
 			const input = reactive([])
-			const mapped = computed.values(input, ({ value }) => value * 2)
+			const mapped = computed.map(input, ({ value }) => value * 2)
 
 			expect(unwrap(mapped)).toEqual([])
 			expect(mapped.length).toBe(0)
@@ -2095,7 +2092,7 @@ describe('deep watch via watch({ deep: true })', () => {
 		it('should track compute function call count', () => {
 			const input = reactive([1, 2, 3])
 			let computeCount = 0
-			const mapped = computed.values(input, ({ value }) => {
+			const mapped = computed.map(input, ({ value }) => {
 				computeCount++
 				return value * 2
 			})
@@ -2119,7 +2116,7 @@ describe('deep watch via watch({ deep: true })', () => {
 			let computeCount = 0
 			let effectCount = 0
 
-			const mapped = computed.values(input, ({ value }) => {
+			const mapped = computed.map(input, ({ value }) => {
 				computeCount++
 				return value * 2
 			})
@@ -2149,7 +2146,7 @@ describe('deep watch via watch({ deep: true })', () => {
 			let computeCount = 0
 			let effectCount = 0
 
-			const mapped = computed.values(input, ({ value }) => {
+			const mapped = computed.map(input, ({ value }) => {
 				computeCount++
 				return value * 2
 			})
@@ -2183,7 +2180,7 @@ describe('deep watch via watch({ deep: true })', () => {
 			let computeCount = 0
 			let effectCount = 0
 
-			const mapped = computed.values(users, ({ value: user }) => {
+			const mapped = computed.map(users, ({ value: user }) => {
 				computeCount++
 				return `${user.name} (${user.age})`
 			})
@@ -2205,6 +2202,79 @@ describe('deep watch via watch({ deep: true })', () => {
 			users.push({ name: 'Bob', age: 35 })
 			expect(computeCount).toBe(4) // One more computation for new user
 			expect(effectCount).toBe(3) // Effect triggered by length change
+		})
+
+		it('should allow modifying primitive value through ComputedMapInput and track counts', () => {
+			const inputs = reactive(['a', 'b', 'c'])
+			let computeCount = 0
+			let effectCount = 0
+
+			// Create a mapped array where each value is an object with a method to modify the original value
+			const mapped = computed.map(inputs, (item) => {
+				computeCount++
+				return {
+					original: item.value,
+					uppercase: item.value.toUpperCase(),
+					// Method to modify the original value by directly assigning to item.value
+					setValue(newVal: string) {
+						item.value = newVal
+					},
+				}
+			})
+
+			// Track effects watching the mapped values
+			effect(() => {
+				effectCount++
+				mapped.forEach((v) => v)
+			})
+
+			expect(computeCount).toBe(3) // Initial computation for 3 items
+			expect(effectCount).toBe(1) // Initial effect
+
+			// Modify value through the ComputedMapInput by setting item.value
+			mapped[0].setValue('z')
+
+			// Verify the original array was updated
+			expect(inputs[0]).toBe('z')
+
+			// Verify the mapped value was recomputed
+			expect(mapped[0].original).toBe('z')
+			expect(mapped[0].uppercase).toBe('Z')
+
+			// Verify counts
+			expect(computeCount).toBe(4) // One more computation for the modified item
+			expect(effectCount).toBe(2) // Effect triggered by value change
+		})
+
+		it('should allow direct assignment to primitive value property', () => {
+			const inputs = reactive([1, 2, 3])
+			let computeCount = 0
+
+			const mapped = computed.map(inputs, (item) => {
+				computeCount++
+				return {
+					value: item.value,
+					squared: item.value * item.value,
+					// Direct assignment to primitive value
+					setValue(newVal: number) {
+						item.value = newVal
+					},
+				}
+			})
+
+			expect(computeCount).toBe(3) // Initial computation
+
+			// Modify through method that sets item.value
+			mapped[0].setValue(5)
+			expect(inputs[0]).toBe(5)
+			expect(mapped[0].squared).toBe(25) // Should be recomputed
+			expect(computeCount).toBe(4) // One more computation
+
+			// Test with different values
+			mapped[1].setValue(10)
+			expect(inputs[1]).toBe(10)
+			expect(mapped[1].squared).toBe(100) // Should be recomputed
+			expect(computeCount).toBe(5) // One more computation
 		})
 	})
 })
