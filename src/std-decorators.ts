@@ -2,6 +2,10 @@ import { decorator, GenericClassDecorator } from './decorator'
 
 // In order to avoid async re-entrance, we could use zone.js or something like that.
 const syncCalculating: { object: object; prop: PropertyKey }[] = []
+/**
+ * Decorator that caches the result of a getter method and only recomputes when dependencies change
+ * Prevents circular dependencies and provides automatic cache invalidation
+ */
 export const cached = decorator({
 	getter(original, propertyKey) {
 		return function (this: any) {
@@ -27,14 +31,31 @@ export const cached = decorator({
 	},
 })
 
+/**
+ * Checks if a property is cached (has a cached value)
+ * @param object - The object to check
+ * @param propertyKey - The property key to check
+ * @returns True if the property has a cached value
+ */
 export function isCached(object: Object, propertyKey: PropertyKey) {
 	return !!Object.getOwnPropertyDescriptor(object, propertyKey)
 }
 
+/**
+ * Caches a value for a property on an object
+ * @param object - The object to cache the value on
+ * @param propertyKey - The property key to cache
+ * @param value - The value to cache
+ */
 export function cache(object: Object, propertyKey: PropertyKey, value: any) {
 	Object.defineProperty(object, propertyKey, { value })
 }
 
+/**
+ * Creates a decorator that modifies property descriptors for specified properties
+ * @param descriptor - The descriptor properties to apply
+ * @returns A class decorator that applies the descriptor to specified properties
+ */
 export function describe(descriptor: {
 	enumerable?: boolean
 	configurable?: boolean // Not modifiable once the property has been defined ?
@@ -56,6 +77,10 @@ export function describe(descriptor: {
 		}
 }
 
+/**
+ * Decorator that marks methods, properties, or classes as deprecated
+ * Provides warning messages when deprecated items are used
+ */
 export const deprecated = Object.assign(
 	decorator({
 		method(original, propertyKey) {
@@ -125,6 +150,11 @@ export const deprecated = Object.assign(
 	}
 )
 
+/**
+ * Creates a debounced method decorator that delays execution until after the delay period has passed
+ * @param delay - The delay in milliseconds
+ * @returns A method decorator that debounces method calls
+ */
 export function debounce(delay: number) {
 	return decorator({
 		method(original, _propertyKey) {
@@ -146,6 +176,11 @@ export function debounce(delay: number) {
 	})
 }
 
+/**
+ * Creates a throttled method decorator that limits execution to once per delay period
+ * @param delay - The delay in milliseconds
+ * @returns A method decorator that throttles method calls
+ */
 export function throttle(delay: number) {
 	return decorator({
 		method(original, _propertyKey) {

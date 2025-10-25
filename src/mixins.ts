@@ -2,6 +2,7 @@ import { isConstructor } from './utils'
 
 /**
  * A mixin function that takes a base class and returns a new class with mixed-in functionality
+ * @template Mixed - The functionality to be mixed in
  */
 export type MixinFunction<Mixed> = <Base>(
 	base: new (...args: any[]) => Base
@@ -11,6 +12,7 @@ export type MixinFunction<Mixed> = <Base>(
 
 /**
  * A mixin class that can be used both as a base class and as a mixin function
+ * @template Mixed - The functionality to be mixed in
  */
 export type MixinClass<Mixed> = new (...args: any[]) => Mixed
 

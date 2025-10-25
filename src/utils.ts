@@ -2,6 +2,11 @@ type ElementTypes<T extends readonly unknown[]> = {
 	[K in keyof T]: T[K] extends readonly (infer U)[] ? U : T[K]
 }
 
+/**
+ * Combines multiple arrays into an array of tuples, stopping at the shortest array length
+ * @param args - Arrays to zip together
+ * @returns Array of tuples containing elements from each input array
+ */
 export function zip<T extends (readonly unknown[])[]>(...args: T): ElementTypes<T>[] {
 	if (!args.length) return []
 	const minLength = Math.min(...args.map((arr) => arr.length))
@@ -39,10 +44,25 @@ const nativeConstructors = new Set<Function>([
 	Number,
 	Boolean,
 ] as Function[])
+/**
+ * Checks if a function is a constructor (class or constructor function)
+ * @param fn - The function to check
+ * @returns True if the function is a constructor
+ */
 export function isConstructor(fn: Function): boolean {
-	return fn && (nativeConstructors.has(fn) || fn.toString?.().startsWith('class '))
+	return (
+		fn &&
+		typeof fn === 'function' &&
+		(nativeConstructors.has(fn) || fn.toString?.().startsWith('class '))
+	)
 }
 
+/**
+ * Renames a function with a new name
+ * @param fct - The function to rename
+ * @param name - The new name for the function
+ * @returns The function with the new name
+ */
 export function renamed<F extends Function>(fct: F, name: string): F {
 	return Object.defineProperties(fct, {
 		name: {

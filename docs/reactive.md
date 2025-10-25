@@ -1722,6 +1722,51 @@ const orderTotals = computed.map(orders, order => ({
 }))
 ```
 
+### `derived()` Function
+
+Creates a derived value that automatically recomputes when dependencies change. Unlike `computed`, this always recomputes immediately when dependencies change.
+
+```typescript
+function derived<T>(compute: (dep: DependencyFunction) => T): {
+    value: T
+    stop: ScopedCallback
+}
+```
+
+**Parameters:**
+- `compute` - Function that computes the derived value
+
+**Returns:** Object with `value` (current computed value) and `stop` (cleanup function)
+
+**Example:**
+```typescript
+const state = reactive({ a: 1, b: 2 })
+const derived = derived(() => state.a + state.b)
+console.log(derived.value) // 3
+state.a = 5 // derived.value automatically becomes 7
+derived.stop() // cleanup
+```
+
+**Differences from `computed`:**
+
+| Aspect | `computed` | `derived` |
+|--------|-------------|-----------|
+| **Caching Strategy** | Lazy - only computes when accessed | Eager - always computes when dependencies change |
+| **Cross-Access** | Shared cache across multiple calls | Independent instances |
+| **Performance** | More efficient for infrequently accessed values | More efficient for frequently changing values |
+| **Memory Usage** | Lower (shared cache) | Higher (separate instances) |
+| **Complexity** | High (sophisticated invalidation) | Low (simple effect) |
+
+**When to use `derived`:**
+- You need immediate updates when dependencies change
+- You want simple, predictable behavior
+- You're okay with always recomputing (even if not accessed)
+
+**When to use `computed`:**
+- You have expensive computations that aren't always needed
+- Multiple parts of your code need the same computed value
+- You want lazy evaluation (compute only when accessed)
+
 ### Caching and Invalidation
 
 Computed values are cached until their dependencies change:
@@ -2672,6 +2717,30 @@ Creates a computed value that caches its result and recomputes when dependencies
 const getter = () => someExpensiveCalculus();
 const result = computed(getter); // Call computed(getter) to get cached value
 ```
+
+#### `derived<T>(compute: ComputedFunction<T>): {value: T, stop: ScopedCallback}`
+
+Creates a derived value that automatically recomputes when dependencies change. Unlike `computed`, this always recomputes immediately when dependencies change.
+
+**Use Cases:**
+- Immediate updates when dependencies change
+- Simple, predictable behavior
+- When you're okay with always recomputing (even if not accessed)
+- Real-time derived values that need to stay current
+
+```typescript
+const state = reactive({ a: 1, b: 2 })
+const derived = derived(() => state.a + state.b)
+console.log(derived.value) // 3
+state.a = 5 // derived.value automatically becomes 7
+derived.stop() // cleanup
+```
+
+**Key Differences from `computed`:**
+- **Eager computation**: Always recomputes when dependencies change
+- **Independent instances**: Each `derived()` call creates a separate effect
+- **Simple behavior**: No complex caching or invalidation logic
+- **Immediate updates**: Value is always current when accessed
 
 #### `watch(value, callback, options?): ScopedCallback`
 

@@ -1,4 +1,11 @@
+/**
+ * Base type for event maps - all event handlers must be functions
+ */
 export type EventsBase = Record<string, (...args: any[]) => void>
+/**
+ * A type-safe event system that provides a clean API for event handling
+ * @template Events - The event map defining event names and their handler signatures
+ */
 export class Eventful<Events extends EventsBase> {
 	readonly #events = new Map<keyof Events, ((...args: any[]) => void)[]>()
 	readonly #hooks = [] as ((...args: any[]) => void)[]
@@ -68,3 +75,8 @@ export class Eventful<Events extends EventsBase> {
 		for (const cb of this.#hooks) cb.call(this, event, ...args)
 	}
 }
+
+/* TODO:
+this.on.click(() => {...}))
+this.raise.click(args)
+*/

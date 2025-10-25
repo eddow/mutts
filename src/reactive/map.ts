@@ -10,6 +10,10 @@ import {
 
 const native = Symbol('native')
 
+/**
+ * Reactive wrapper around JavaScript's WeakMap class
+ * Only tracks individual key operations, no size tracking (WeakMap limitation)
+ */
 export class ReactiveWeakMap<K extends object, V> {
 	declare readonly [native]: WeakMap<K, V>
 	declare readonly content: symbol
@@ -51,6 +55,10 @@ export class ReactiveWeakMap<K extends object, V> {
 	}
 }
 
+/**
+ * Reactive wrapper around JavaScript's Map class
+ * Tracks size changes, individual key operations, and collection-wide operations
+ */
 export class ReactiveMap<K, V> {
 	declare readonly [native]: Map<K, V>
 	declare readonly content: symbol

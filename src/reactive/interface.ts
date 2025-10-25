@@ -12,6 +12,7 @@ import {
 	nonReactiveMark,
 	nonReactiveObjects,
 	options,
+	reactive,
 	type ScopedCallback,
 	touched1,
 	unreactiveProperties,
@@ -22,7 +23,7 @@ import {
 //#region computed
 let computedInvalidations: (() => void)[] | undefined
 /**
- * When used in a computed property computation, it will register the callback to be called when the computed property is invalidated
+ * Registers a callback to be called when a computed property is invalidated
  * @param cb - The callback to register
  * @param warn - Whether to warn if used outside of a computed property
  */
@@ -63,48 +64,82 @@ function computedFunction<T>(getter: ComputedFunction<T>): T {
 }
 
 /**
- * Get the cached value of a computed function - cache is invalidated when the dependencies change
+ * Decorator and function for creating computed properties that cache their values
+ * Only recomputes when dependencies change
  */
-export const computed = decorator({
-	getter(original, propertyKey) {
-		const computers = new WeakMap<any, () => any>()
-		return function (this: any) {
-			if (!computers.has(this)) {
-				computers.set(
-					this,
-					renamed(
-						() => original.call(this),
-						`${String(this.constructor.name)}.${String(propertyKey)}`
+export const computed = Object.assign(
+	decorator({
+		getter(original, propertyKey) {
+			const computers = new WeakMap<any, () => any>()
+			return function (this: any) {
+				if (!computers.has(this)) {
+					computers.set(
+						this,
+						renamed(
+							() => original.call(this),
+							`${String(this.constructor.name)}.${String(propertyKey)}`
+						)
 					)
-				)
+				}
+				return computedFunction(computers.get(this)!)
 			}
-			return computedFunction(computers.get(this)!)
-		}
-	},
-	default<T>(getter: ComputedFunction<T>): T {
-		return computedFunction(getter)
-	},
-})
+		},
+		default<T>(getter: ComputedFunction<T>): T {
+			return computedFunction(getter)
+		},
+	}),
+	{
+		values: computedMapValues,
+		//filter: computedFilter,
+	}
+)
 
 //#endregion
 
 //#region watch
 
 const unsetYet = Symbol('unset-yet')
+/**
+ * Options for the watch function
+ */
 export interface WatchOptions {
+	/** Whether to call the callback immediately */
 	immediate?: boolean
+	/** Whether to watch nested properties */
 	deep?: boolean
 }
+
+/**
+ * Watches a computed value and calls a callback when it changes
+ * @param value - Function that returns the value to watch
+ * @param changed - Callback to call when the value changes
+ * @param options - Watch options
+ * @returns Cleanup function to stop watching
+ */
 export function watch<T>(
 	value: (dep: DependencyFunction) => T,
 	changed: (value: T, oldValue?: T) => void,
 	options?: Omit<WatchOptions, 'deep'> & { deep?: false }
 ): ScopedCallback
+/**
+ * Watches a computed value with deep watching enabled
+ * @param value - Function that returns the value to watch
+ * @param changed - Callback to call when the value changes
+ * @param options - Watch options with deep watching enabled
+ * @returns Cleanup function to stop watching
+ */
 export function watch<T extends object | any[]>(
 	value: (dep: DependencyFunction) => T,
 	changed: (value: T, oldValue?: T) => void,
 	options?: Omit<WatchOptions, 'deep'> & { deep: true }
 ): ScopedCallback
+/**
+ * Watches a reactive object directly
+ * @param value - The reactive object to watch
+ * @param changed - Callback to call when the object changes
+ * @param options - Watch options
+ * @returns Cleanup function to stop watching
+ */
 export function watch<T extends object | any[]>(
 	value: T,
 	changed: (value: T) => void,
@@ -216,6 +251,10 @@ function unreactiveApplication<T extends object>(
 				return original // Return the class
 			}) as GenericClassDecorator<T>)
 }
+/**
+ * Decorator that marks classes or properties as non-reactive
+ * Prevents objects from being made reactive
+ */
 export const unreactive = decorator({
 	class(original) {
 		// Called without arguments, mark entire class as non-reactive
@@ -229,3 +268,175 @@ export const unreactive = decorator({
 import { profileInfo } from './core'
 
 Object.assign(profileInfo, { computedCache })
+
+function cleanedBy<T extends object>(obj: T, cleanup: ScopedCallback) {
+	Object.defineProperty(obj, 'cleanup', {
+		value: cleanup,
+		writable: false,
+		enumerable: false,
+		configurable: true,
+	})
+	return obj as T & { cleanup: () => void }
+}
+
+//#region greedy caching
+
+/**
+ * Creates a derived value that automatically recomputes when dependencies change
+ * Unlike computed, this always recomputes immediately when dependencies change
+ * @param compute - Function that computes the derived value
+ * @returns Object with value and cleanup function
+ */
+export function derived<T>(compute: (dep: DependencyFunction) => T): {
+	value: T
+	cleanup: ScopedCallback
+} {
+	const rv = { value: undefined }
+	return cleanedBy(
+		rv,
+		effect(
+			markWithRoot((dep) => {
+				rv.value = compute(dep)
+			}, compute)
+		)
+	)
+}
+
+export const usualKeys = new Set<PropertyKey>(['key'])
+
+export type ComputedMapInput<T> = {
+	value: T
+	readonly index: number
+	readonly array: T[]
+}
+
+function computedMapValues<T, U>(
+	inputs: T[],
+	compute: (input: ComputedMapInput<T>, oldValue?: U) => U
+): U[] & { cleanup: () => void } {
+	const result = reactive([])
+	function input(index: number) {
+		const input = Object.defineProperties(
+			{},
+			{
+				value: {
+					get() {
+						return inputs[index]
+					},
+					set(value) {
+						inputs[index] = value
+					},
+				},
+				index: {
+					value: index,
+				},
+				array: {
+					value: inputs,
+				},
+			}
+		) as ComputedMapInput<T>
+		return effect(() => {
+			result[index] = compute(input, result[index])
+		})
+	}
+	const cleanups: ScopedCallback[] = []
+	const cleanup = watch(
+		() => inputs.length,
+		(length) => {
+			if (length <= result.length) {
+				const toCleanup = cleanups.splice(length)
+				for (const cleanup of toCleanup) cleanup()
+				result.length = length
+			} else for (let i = result.length; i < length; i++) cleanups.push(input(i))
+		},
+		{ immediate: true }
+	)
+	return cleanedBy(result, () => {
+		cleanup()
+		for (const cleanup of cleanups) cleanup()
+	})
+}
+/*
+
+const generatedObjectKeys = new WeakMap<object, symbol>()
+function computedMap<T, U>(
+	input: T[],
+	compute: (input: T, oldValue?: U) => U,
+	key?: (input: T, index: number) => string | number | symbol
+): U[] & { cleanup: () => void } {
+	key ??= (input: T, index: number) => {
+		if (!input || (typeof input !== 'object' && typeof input !== 'function')) return index
+		for (const key of usualKeys) if (key in input) return String(input[key])
+		if (generatedObjectKeys.has(input)) return generatedObjectKeys.get(input)!
+		const key = Symbol(`generated-key:${String(input)}`)
+		generatedObjectKeys.set(input, key)
+		return key
+	}
+	type CacheEntry = { value: U; item: T; cleanup: ScopedCallback }
+	const cache = new Map<PropertyKey, CacheEntry>()
+	const result = reactive([])
+	return cleanedBy(
+		result,
+		effect(() => {
+			const keys = input.map(key)
+			const keySet = new Set<PropertyKey>(keys)
+			for (const [k, v] of cache.entries())
+				if (!keySet.has(k)) {
+					v.cleanup()
+					cache.delete(k)
+				}
+			result.length = 0
+			const cleanups: ScopedCallback[] = []
+			for (const [i, k] of keys.entries())
+				((k, i) => {
+					const item = input[i]
+					let c: CacheEntry
+					if (cache.has(k)) {
+						c = cache.get(k)
+						c.item = item
+					} else {
+						c = reactive({ item }) as CacheEntry
+						cache.set(
+							k,
+							cleanedBy(
+								c,
+								effect(() => {
+									c.value = compute(c.item)
+								})
+							)
+						)
+					}
+					cleanups.push(
+						effect(() => {
+							result[i] = c.value
+						})
+					)
+				})(k, i)
+			return () => {
+				while (cleanups.length) cleanups.pop()!()
+			}
+		})
+	)
+}
+
+function computedFilter<Input>(input: Input[], predicate: (input: Input) => boolean): Input[] {
+	const rv: Input[] = reactive([])
+	const stop = effect(() => {
+		const mapped = computedMap(input, (item) => Boolean(predicate(item)))
+		const cleanup = watch(
+			mapped,
+			function computedFilterRedo(mapped) {
+				rv.length = 0
+				for (let i = 0; i < mapped.length; i++) if (mapped[i]) rv.push(input[i])
+			},
+			{ immediate: true }
+		)
+		return () => {
+			mapped.cleanup()
+			cleanup()
+		}
+	})
+	return cleanedBy(rv, stop)
+}
+*/
+//#endregion

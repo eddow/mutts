@@ -8,6 +8,10 @@ type Resolved<T> = T extends Promise<infer U>
 				}
 			: T
 type PromiseAnd<T> = Resolved<T> & Promise<Resolved<T>>
+/**
+ * Type that transforms promises into chainable objects
+ * Allows calling methods directly on promise results without awaiting them first
+ */
 export type PromiseChain<T> = T extends (...args: infer Args) => infer R
 	? PromiseAnd<(...args: Args) => PromiseChain<Resolved<R>>>
 	: T extends object
@@ -75,6 +79,12 @@ function chainObject<T extends object | Function>(given: T): PromiseChain<T> {
 function chainable(x: any): x is object | Function {
 	return x && ['function', 'object'].includes(typeof x)
 }
+/**
+ * Transforms a promise or value into a chainable object
+ * Allows calling methods directly on promise results without awaiting them first
+ * @param given - The promise or value to make chainable
+ * @returns A chainable version of the input
+ */
 export function chainPromise<T>(given: Promise<T> | T): PromiseChain<T> {
 	if (!chainable(given)) return given as PromiseChain<T>
 	if (alreadyChained.has(given)) return alreadyChained.get(given) as PromiseChain<T>

@@ -4,19 +4,32 @@
 import { decorator } from '../decorator'
 import { mixin } from '../mixins'
 
+/**
+ * Function type for dependency tracking in effects and computed values
+ * Restores the active effect context for dependency tracking
+ */
 export type DependencyFunction = <T>(cb: () => T) => T
 // TODO: proper async management, read when fn returns a promise and let the effect as "running",
 //  either to cancel the running one or to avoid running 2 in "parallel" and debounce the second one
 
 // TODO: generic "batch" forcing even if not in an effect (perhaps when calling a reactive' function ?)
 // example: storage will make 2 modifications (add slot, modify count), they could raise 2 effects
+/**
+ * Type for effect cleanup functions
+ */
 export type ScopedCallback = () => void
 
+/**
+ * Type for property evolution events
+ */
 export type PropEvolution = {
 	type: 'set' | 'del' | 'add' | 'invalidate'
 	prop: any
 }
 
+/**
+ * Type for collection operation evolution events
+ */
 export type BunchEvolution = {
 	type: 'bunch'
 	method: string
@@ -49,6 +62,9 @@ const deepWatchers = new WeakMap<object, Set<ScopedCallback>>()
 const effectToDeepWatchedObjects = new WeakMap<ScopedCallback, Set<object>>()
 
 // Track objects that should never be reactive and cannot be modified
+/**
+ * WeakSet containing objects that should never be made reactive
+ */
 export const nonReactiveObjects = new WeakSet<object>()
 const absent = Symbol('absent')
 /**
@@ -77,6 +93,9 @@ export function* makeReactiveEntriesIterator<K, V>(iterator: Iterator<[K, V]>): 
 // Track effects per reactive object and property
 const watchers = new WeakMap<object, Map<any, Set<ScopedCallback>>>()
 
+/**
+ * Object containing internal reactive system state for debugging and profiling
+ */
 export const profileInfo: any = {
 	objectToProxy,
 	proxyToObject,
@@ -91,22 +110,32 @@ export const profileInfo: any = {
 // Track native reactivity
 const nativeReactive = Symbol('native-reactive')
 
-// Symbol to mark individual objects as non-reactive
+/**
+ * Symbol to mark individual objects as non-reactive
+ */
 export const nonReactiveMark = Symbol('non-reactive')
-// Symbol to mark class properties as non-reactive
+/**
+ * Symbol to mark class properties as non-reactive
+ */
 export const unreactiveProperties = Symbol('unreactive-properties')
+/**
+ * Symbol for prototype forwarding in reactive objects
+ */
 export const prototypeForwarding: unique symbol = Symbol('prototype-forwarding')
 
+/**
+ * Symbol representing all properties in reactive tracking
+ */
 export const allProps = Symbol('all-props')
 
 // Symbol to mark functions with their root function
 const rootFunction = Symbol('root-function')
 
 /**
- * Mark a function with its root function. If the function already has a root,
- * the root becomes the root of the new root (transitive root tracking).
+ * Marks a function with its root function for effect tracking
  * @param fn - The function to mark
- * @param root - The root function to associate with fn
+ * @param root - The root function
+ * @returns The marked function
  */
 export function markWithRoot<T extends Function>(fn: T, root: Function): T {
 	// Mark fn with the new root
@@ -117,14 +146,17 @@ export function markWithRoot<T extends Function>(fn: T, root: Function): T {
 }
 
 /**
- * Retrieve the root function from a callback. Returns the function itself if it has no root.
- * @param fn - The function to get the root from
- * @returns The root function, or the function itself if no root exists
+ * Gets the root function of a function for effect tracking
+ * @param fn - The function to get the root of
+ * @returns The root function
  */
 export function getRoot<T extends Function | undefined>(fn: T): T {
 	return (fn as any)?.[rootFunction] || fn
 }
 
+/**
+ * Error class for reactive system errors
+ */
 export class ReactiveError extends Error {
 	constructor(message: string) {
 		super(message)
@@ -134,7 +166,7 @@ export class ReactiveError extends Error {
 
 // biome-ignore-start lint/correctness/noUnusedFunctionParameters: Interface declaration with empty defaults
 /**
- * Options for the reactive system, can be configured at runtime
+ * Global options for the reactive system
  */
 export const options = {
 	/**
@@ -193,25 +225,46 @@ export const options = {
 
 //#region evolution
 
-function raiseDeps(objectWatchers: Map<any, Set<ScopedCallback>>, ...keyChains: Iterable<any>[]) {
+function collectEffects(
+	effects: Set<ScopedCallback>,
+	objectWatchers: Map<any, Set<ScopedCallback>>,
+	...keyChains: Iterable<any>[]
+) {
 	for (const keys of keyChains)
 		for (const key of keys) {
 			const deps = objectWatchers.get(key)
-			if (deps) for (const effect of Array.from(deps)) atomicEffect(effect)
+			if (deps) for (const effect of Array.from(deps)) effects.add(effect)
 		}
 }
 
+/**
+ * Triggers effects for a single property change
+ * @param obj - The object that changed
+ * @param evolution - The type of change
+ * @param prop - The property that changed
+ */
 export function touched1(obj: any, evolution: Evolution, prop: any) {
 	touched(obj, evolution, [prop])
 }
 
+/**
+ * Triggers effects for property changes
+ * @param obj - The object that changed
+ * @param evolution - The type of change
+ * @param props - The properties that changed
+ */
 export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 	obj = unwrap(obj)
 	addState(obj, evolution)
 	const objectWatchers = watchers.get(obj)
 	if (objectWatchers) {
-		if (props) raiseDeps(objectWatchers, [allProps], props)
-		else raiseDeps(objectWatchers, objectWatchers.keys())
+		// Note: we have to collect effects to remove duplicates in the specific case when no batch is running
+		const effects = new Set<ScopedCallback>()
+		if (props) {
+			props = Array.from(props) // For debug purposes only
+			collectEffects(effects, objectWatchers, [allProps], props)
+		} else collectEffects(effects, objectWatchers, objectWatchers.keys())
+		for (const effect of effects) atomicEffect(effect)
 	}
 
 	// Bubble up changes if this object has deep watchers
@@ -230,6 +283,11 @@ function addState(obj: any, evolution: Evolution) {
 	states.set(obj, next)
 }
 
+/**
+ * Gets the current state of a reactive object for evolution tracking
+ * @param obj - The reactive object
+ * @returns The current state object
+ */
 export function getState(obj: any) {
 	obj = unwrap(obj)
 	let state = states.get(obj)
@@ -240,6 +298,11 @@ export function getState(obj: any) {
 	return state
 }
 
+/**
+ * Marks a property as a dependency of the current effect
+ * @param obj - The object containing the property
+ * @param prop - The property name (defaults to allProps)
+ */
 export function dependant(obj: any, prop: any = allProps) {
 	obj = unwrap(obj)
 	if (activeEffect && (typeof prop !== 'symbol' || prop === allProps)) {
@@ -273,7 +336,16 @@ let parentEffect: ScopedCallback | undefined
 // Track currently executing effects to prevent re-execution
 // These are all the effects triggered under `activeEffect`
 let batchedEffects: Map<Function, ScopedCallback> | undefined
+const batchCleanups = new Set<ScopedCallback>()
 
+/**
+ * Adds a cleanup function to be called when the current batch of effects completes
+ * @param cleanup - The cleanup function to add
+ */
+export function addBatchCleanup(cleanup: ScopedCallback) {
+	if (!batchedEffects) cleanup()
+	else batchCleanups.add(cleanup)
+}
 // Track which sub-effects have been executed to prevent infinite loops
 // These are all the effects triggered under `activeEffect` and all their sub-effects
 function atomicEffect(effect: ScopedCallback, immediate?: 'immediate') {
@@ -314,6 +386,9 @@ function atomicEffect(effect: ScopedCallback, immediate?: 'immediate') {
 				if (!('value' in firstReturn)) firstReturn.value = rv
 				batchedEffects.delete(root)
 			}
+			const cleanups = Array.from(batchCleanups)
+			batchCleanups.clear()
+			for (const cleanup of cleanups) cleanup()
 			return firstReturn.value
 		} finally {
 			batchedEffects = undefined
@@ -322,6 +397,9 @@ function atomicEffect(effect: ScopedCallback, immediate?: 'immediate') {
 	}
 }
 
+/**
+ * Decorator that makes methods atomic - batches all effects triggered within the method
+ */
 export const atomic = decorator({
 	method(original) {
 		return function (...args: any[]) {
@@ -343,16 +421,23 @@ export const atomic = decorator({
 	},
 })
 
+/**
+ * Executes a function with a specific effect context
+ * @param effect - The effect to use as context
+ * @param fn - The function to execute
+ * @param keepParent - Whether to keep the parent effect context
+ * @returns The result of the function
+ */
 export function withEffect<T>(
 	effect: ScopedCallback | undefined,
 	fn: () => T,
-	keepParent?: true
+	_keepParent?: true
 ): T {
 	if (getRoot(effect) === getRoot(activeEffect)) return fn()
 	const oldActiveEffect = activeEffect
 	const oldParentEffect = parentEffect
 	activeEffect = effect
-	if (!keepParent) parentEffect = effect
+	if (effect) parentEffect = effect
 	try {
 		return fn()
 	} finally {
@@ -428,6 +513,13 @@ function bubbleUpChange(changedObject: object, evolution: Evolution) {
 	}
 }
 
+/**
+ * Tracks property changes and manages back-references for deep watching
+ * @param obj - The object that changed
+ * @param prop - The property that changed
+ * @param oldVal - The old value
+ * @param newValue - The new value
+ */
 export function track1(obj: object, prop: any, oldVal: any, newValue: any) {
 	// Manage back-references if this object has deep watchers
 	if (objectsWithDeepWatchers.has(obj)) {
@@ -487,7 +579,7 @@ const reactiveHandlers = {
 			return true
 		}
 
-		const oldVal = Reflect.has(receiver, prop) ? Reflect.get(obj, prop, receiver) : absent
+		const oldVal = Reflect.has(receiver, prop) ? unwrap(Reflect.get(obj, prop, receiver)) : absent
 		track1(obj, prop, oldVal, newValue)
 
 		if (oldVal !== newValue) {
@@ -535,6 +627,10 @@ const reactiveHandlers = {
 const reactiveClasses = new WeakSet<Function>()
 
 // Create the ReactiveBase mixin
+/**
+ * Base mixin for reactive classes that provides proper constructor reactivity
+ * Solves constructor reactivity issues in complex inheritance trees
+ */
 export const ReactiveBase = mixin((base) => {
 	class ReactiveMixin extends base {
 		constructor(...args: any[]) {
@@ -547,6 +643,10 @@ export const ReactiveBase = mixin((base) => {
 	}
 	return ReactiveMixin
 })
+/**
+ * Always-reactive mixin that makes classes inherently reactive
+ * Can be used as both a base class and a mixin function
+ */
 export const Reactive = mixin((base) => {
 	class ReactiveMixin extends base {
 		constructor(...args: any[]) {
@@ -583,6 +683,10 @@ function reactiveObject<T>(anyTarget: T): T {
 	return proxy as T
 }
 
+/**
+ * Main decorator for making classes reactive
+ * Automatically makes class instances reactive when created
+ */
 export const reactive = decorator({
 	class(original) {
 		if (original.prototype instanceof ReactiveBase) {
@@ -624,16 +728,38 @@ export const reactive = decorator({
 	default: reactiveObject,
 })
 
+/**
+ * Gets the original, non-reactive object from a reactive proxy
+ * @param proxy - The reactive proxy
+ * @returns The original object
+ */
 export function unwrap<T>(proxy: T): T {
 	// Return the original object
 	return (proxyToObject.get(proxy as any) as T) ?? proxy
 }
 
+/**
+ * Checks if an object is a reactive proxy
+ * @param obj - The object to check
+ * @returns True if the object is reactive
+ */
 export function isReactive(obj: any): boolean {
 	return proxyToObject.has(obj)
 }
-export function untracked(fn: () => ScopedCallback | undefined | void) {
-	withEffect(undefined, fn, true)
+/**
+ * Executes a function without tracking dependencies
+ * @param fn - The function to execute
+ */
+export function untracked<T>(fn: () => T): T {
+	let rv: T
+	withEffect(
+		undefined,
+		() => {
+			rv = fn()
+		},
+		true
+	)
+	return rv
 }
 
 // runEffect -> set<cleanup>
@@ -644,6 +770,12 @@ const fr = new FinalizationRegistry<() => void>((f) => f())
  * @param fn - The effect function to run - provides the cleaner
  * @returns The cleanup function
  */
+/**
+ * Creates a reactive effect that automatically re-runs when dependencies change
+ * @param fn - The effect function that provides dependencies and may return a cleanup function
+ * @param args - Additional arguments that are forwarded to the effect function
+ * @returns A cleanup function to stop the effect
+ */
 export function effect<Args extends any[]>(
 	fn: (dep: DependencyFunction, ...args: Args) => ScopedCallback | undefined | void,
 	...args: Args
@@ -653,13 +785,15 @@ export function effect<Args extends any[]>(
 	let effectStopped = false
 
 	function runEffect() {
+		// The effect has been stopped after having been planned
+		if (effectStopped) return
 		// Clear previous dependencies
 		cleanup?.()
 
 		options.enter(fn)
-		const reactionCleanup = withEffect(effectStopped ? undefined : runEffect, () =>
-			fn(dep, ...args)
-		) as undefined | ScopedCallback
+		const reactionCleanup = withEffect(runEffect, () => fn(dep, ...args)) as
+			| undefined
+			| ScopedCallback
 		options.leave(fn)
 
 		// Create cleanup function for next run
@@ -751,14 +885,15 @@ function nonReactive<T extends object[]>(...obj: T): T[0] {
 }
 
 /**
- * Set of functions to test if an object is immutable
+ * Set of functions that test if objects are immutable
+ * Objects that pass these tests will not be made reactive
  */
 export const immutables = new Set<(tested: any) => boolean>()
 
 /**
- * Check if an object is marked as non-reactive (for testing purposes)
+ * Checks if an object is marked as non-reactive
  * @param obj - The object to check
- * @returns true if the object is marked as non-reactive
+ * @returns True if the object is non-reactive
  */
 export function isNonReactive(obj: any): boolean {
 	// Don't make primitives reactive
@@ -777,8 +912,9 @@ export function isNonReactive(obj: any): boolean {
 }
 
 /**
- * Mark a class as non-reactive. All instances of this class will automatically be non-reactive.
- * @param cls - The class constructor to mark as non-reactive
+ * Marks classes as non-reactive
+ * @param cls - Classes to mark as non-reactive
+ * @returns The first class (for chaining)
  */
 export function nonReactiveClass<T extends (new (...args: any[]) => any)[]>(...cls: T): T[0] {
 	for (const c of cls) if (c) (c.prototype as any)[nonReactiveMark] = true
@@ -789,6 +925,11 @@ nonReactiveClass(Date, RegExp, Error, Promise, Function)
 if (typeof window !== 'undefined') nonReactive(window, document)
 //if (typeof Element !== 'undefined') nonReactiveClass(Element, Node)
 
+/**
+ * Registers a native class to use a specialized reactive wrapper
+ * @param originalClass - The original class to register
+ * @param reactiveClass - The reactive wrapper class
+ */
 export function registerNativeReactivity(
 	originalClass: new (...args: any[]) => any,
 	reactiveClass: new (...args: any[]) => any
@@ -803,6 +944,13 @@ export function registerNativeReactivity(
  * @param callback - The callback to call when any nested property changes
  * @param options - Options for the deep watch
  * @returns A cleanup function to stop watching
+ */
+/**
+ * Sets up deep watching for an object, tracking all nested property changes
+ * @param target - The object to watch
+ * @param callback - The callback to call when changes occur
+ * @param options - Options for deep watching
+ * @returns A cleanup function to stop deep watching
  */
 export function deepWatch<T extends object>(
 	target: T,

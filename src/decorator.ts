@@ -3,6 +3,9 @@
 
 import { isConstructor } from './utils'
 
+/**
+ * Error thrown when decorator operations fail
+ */
 export class DecoratorError extends Error {
 	constructor(message: string) {
 		super(message)
@@ -12,22 +15,43 @@ export class DecoratorError extends Error {
 //#region all decorator types
 
 // Used for get/set and method decorators
+/**
+ * Legacy property decorator type for methods, getters, and setters
+ */
 export type LegacyPropertyDecorator<T> = (
 	target: T,
 	name: string | symbol,
 	descriptor: PropertyDescriptor
 ) => any
 
+/**
+ * Legacy class decorator type
+ */
 export type LegacyClassDecorator<T> = (target: T) => any
 
+/**
+ * Modern method decorator type
+ */
 export type ModernMethodDecorator<T> = (target: T, context: ClassMethodDecoratorContext) => any
 
+/**
+ * Modern getter decorator type
+ */
 export type ModernGetterDecorator<T> = (target: T, context: ClassGetterDecoratorContext) => any
 
+/**
+ * Modern setter decorator type
+ */
 export type ModernSetterDecorator<T> = (target: T, context: ClassSetterDecoratorContext) => any
 
+/**
+ * Modern accessor decorator type
+ */
 export type ModernAccessorDecorator<T> = (target: T, context: ClassAccessorDecoratorContext) => any
 
+/**
+ * Modern class decorator type
+ */
 export type ModernClassDecorator<T> = (target: T, context: ClassDecoratorContext) => any
 
 //#endregion
@@ -47,14 +71,26 @@ type DDSetter<T> = (
 type DDClass<T> = <Ctor extends new (...args: any[]) => T = new (...args: any[]) => T>(
 	target: Ctor
 ) => Ctor | void
+/**
+ * Description object for creating decorators that work with both Legacy and Modern decorator proposals
+ */
 export interface DecoratorDescription<T> {
+	/** Handler for method decorators */
 	method?: DDMethod<T>
+	/** Handler for class decorators */
 	class?: DDClass<T>
+	/** Handler for getter decorators */
 	getter?: DDGetter<T>
+	/** Handler for setter decorators */
 	setter?: DDSetter<T>
+	/** Default handler for any decorator type not explicitly defined */
 	default?: (...args: any[]) => any
 }
 
+/**
+ * Type for decorators that work with both Legacy and Modern decorator proposals
+ * Automatically infers the correct decorator type based on the description
+ */
 export type Decorator<T, Description extends DecoratorDescription<T>> = (Description extends {
 	method: DDMethod<T>
 }
@@ -72,6 +108,9 @@ export type Decorator<T, Description extends DecoratorDescription<T>> = (Descrip
 		: unknown) &
 	(Description extends { default: infer Signature } ? Signature : unknown)
 
+/**
+ * Factory type for creating decorators that work with both Legacy and Modern decorator proposals
+ */
 export type DecoratorFactory<T> = <Description extends DecoratorDescription<T>>(
 	description: Description
 ) => (Description extends { method: DDMethod<T> }
@@ -89,6 +128,11 @@ export type DecoratorFactory<T> = <Description extends DecoratorDescription<T>>(
 		: unknown) &
 	(Description extends { default: infer Signature } ? Signature : unknown)
 
+/**
+ * Creates a decorator that works with Legacy decorator proposals
+ * @param description - The decorator description object
+ * @returns A decorator function compatible with Legacy decorators
+ */
 export function legacyDecorator<T = any>(description: DecoratorDescription<T>): any {
 	return function (
 		target: any,
@@ -130,6 +174,11 @@ export function legacyDecorator<T = any>(description: DecoratorDescription<T>): 
 	}
 }
 
+/**
+ * Creates a decorator that works with Modern decorator proposals
+ * @param description - The decorator description object
+ * @returns A decorator function compatible with Modern decorators
+ */
 export function modernDecorator<T = any>(description: DecoratorDescription<T>): any {
 	return function (target: any, context?: DecoratorContext, ...args: any[]) {
 		if (!context?.kind || typeof context.kind !== 'string') {
@@ -192,6 +241,11 @@ function detectDecoratorMode(
 	return 'legacy'
 }
 
+/**
+ * Main decorator factory that automatically detects and works with both Legacy and Modern decorator proposals
+ * @param description - The decorator description object
+ * @returns A decorator that works in both Legacy and Modern environments
+ */
 export const decorator: DecoratorFactory<any> = (description: DecoratorDescription<any>) => {
 	return ((target: any, contextOrKey?: any, ...args: any[]) => {
 		const mode = detectDecoratorMode(target, contextOrKey, args[0])
@@ -201,5 +255,8 @@ export const decorator: DecoratorFactory<any> = (description: DecoratorDescripti
 	}) as any
 }
 
+/**
+ * Generic class decorator type that works with both Legacy and Modern decorator proposals
+ */
 export type GenericClassDecorator<T> = LegacyClassDecorator<abstract new (...args: any[]) => T> &
 	ModernClassDecorator<abstract new (...args: any[]) => T>

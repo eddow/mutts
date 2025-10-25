@@ -10,6 +10,10 @@ import {
 
 const native = Symbol('native')
 
+/**
+ * Reactive wrapper around JavaScript's WeakSet class
+ * Only tracks individual value operations, no size tracking (WeakSet limitation)
+ */
 export class ReactiveWeakSet<T extends object> {
 	declare readonly [native]: WeakSet<T>
 	declare readonly content: symbol
@@ -47,6 +51,10 @@ export class ReactiveWeakSet<T extends object> {
 	}
 }
 
+/**
+ * Reactive wrapper around JavaScript's Set class
+ * Tracks size changes, individual value operations, and collection-wide operations
+ */
 export class ReactiveSet<T> {
 	declare readonly [native]: Set<T>
 	declare readonly content: symbol

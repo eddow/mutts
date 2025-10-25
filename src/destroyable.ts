@@ -2,8 +2,17 @@ import { decorator } from './decorator'
 
 // Integrated with `using` statement via Symbol.dispose
 const fr = new FinalizationRegistry<() => void>((f) => f())
+/**
+ * Symbol for marking destructor methods
+ */
 export const destructor = Symbol('destructor')
+/**
+ * Symbol for accessing allocated values in destroyable objects
+ */
 export const allocatedValues = Symbol('allocated')
+/**
+ * Error thrown when attempting to access a destroyed object
+ */
 export class DestructionError extends Error {
 	static throw<_T = void>(msg: string) {
 		return () => {
@@ -32,6 +41,12 @@ interface Destructor<Allocated> {
 	destructor(allocated: Allocated): void
 }
 
+/**
+ * Creates a destroyable class with a base class and destructor object
+ * @param base - The base class to extend
+ * @param destructorObj - Object containing the destructor method
+ * @returns A destroyable class with static destroy and isDestroyable methods
+ */
 export function Destroyable<
 	T extends new (
 		...args: any[]
@@ -47,6 +62,11 @@ export function Destroyable<
 	isDestroyable(obj: InstanceType<T>): boolean
 }
 
+/**
+ * Creates a destroyable class with only a destructor object (no base class)
+ * @param destructorObj - Object containing the destructor method
+ * @returns A destroyable class with static destroy and isDestroyable methods
+ */
 export function Destroyable<Allocated extends Record<PropertyKey, any> = Record<PropertyKey, any>>(
 	destructorObj: Destructor<Allocated>
 ): (new () => { [allocatedValues]: Allocated }) & {
@@ -54,6 +74,11 @@ export function Destroyable<Allocated extends Record<PropertyKey, any> = Record<
 	isDestroyable(obj: any): boolean
 }
 
+/**
+ * Creates a destroyable class with a base class (requires [destructor] method)
+ * @param base - The base class to extend
+ * @returns A destroyable class with static destroy and isDestroyable methods
+ */
 export function Destroyable<
 	T extends new (
 		...args: any[]
@@ -68,6 +93,10 @@ export function Destroyable<
 	isDestroyable(obj: InstanceType<T>): boolean
 }
 
+/**
+ * Creates an abstract destroyable base class
+ * @returns An abstract destroyable class with static destroy and isDestroyable methods
+ */
 export function Destroyable<
 	Allocated extends Record<PropertyKey, any> = Record<PropertyKey, any>,
 >(): abstract new () => (AbstractDestroyable<Allocated> & {
@@ -131,6 +160,10 @@ export function Destroyable<
 }
 
 const forwardProperties = Symbol('forwardProperties')
+/**
+ * Decorator that marks properties to be stored in the allocated object and passed to the destructor
+ * Use with accessor properties or explicit get/set pairs
+ */
 export const allocated = decorator({
 	setter(original, propertyKey) {
 		return function (value) {
@@ -140,6 +173,11 @@ export const allocated = decorator({
 	},
 })
 
+/**
+ * Registers a callback to be called when an object is garbage collected
+ * @param cb - The callback function to execute on garbage collection
+ * @returns The object whose reference can be collected
+ */
 export function callOnGC(cb: () => void) {
 	let called = false
 	const forward = () => {
@@ -151,7 +189,10 @@ export function callOnGC(cb: () => void) {
 	return forward
 }
 
-// Context Manager Protocol for `with` statement integration
+/**
+ * Context Manager Protocol for `using` statement integration
+ * Provides automatic resource cleanup when used with the `using` statement
+ */
 export interface ContextManager<T = any> {
 	[Symbol.dispose](): void
 	value?: T

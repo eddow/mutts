@@ -1,4 +1,10 @@
+/**
+ * Symbol for defining custom getter logic for numeric index access
+ */
 export const getAt = Symbol('getAt')
+/**
+ * Symbol for defining custom setter logic for numeric index access
+ */
 export const setAt = Symbol('setAt')
 
 interface IndexingAt<Items = any> {
@@ -16,6 +22,12 @@ abstract class AbstractGetAt<Items = any> {
 	abstract [getAt](index: number): Items
 }
 
+/**
+ * Creates an indexable class with a base class and accessor object
+ * @param base - The base class to extend
+ * @param accessor - Object containing get/set methods for numeric index access
+ * @returns A class that supports numeric index access
+ */
 export function Indexable<Items, Base extends abstract new (...args: any[]) => any>(
 	base: Base,
 	accessor: Accessor<InstanceType<Base>, Items>
@@ -23,14 +35,28 @@ export function Indexable<Items, Base extends abstract new (...args: any[]) => a
 	...args: ConstructorParameters<Base>
 ) => InstanceType<Base> & { [x: number]: Items }
 
+/**
+ * Creates an indexable class with only an accessor object (no base class)
+ * @param accessor - Object containing get/set methods for numeric index access
+ * @returns A class that supports numeric index access
+ */
 export function Indexable<Items>(accessor: Accessor<any, Items>): new () => { [x: number]: Items }
 
+/**
+ * Creates an indexable class with a base class that has [getAt] method
+ * @param base - The base class that implements [getAt] method
+ * @returns A class that supports numeric index access using the base class's [getAt] method
+ */
 export function Indexable<Base extends new (...args: any[]) => IndexingAt>(
 	base: Base
 ): new (
 	...args: ConstructorParameters<Base>
 ) => InstanceType<Base> & { [x: number]: AtReturnType<InstanceType<Base>> }
 
+/**
+ * Creates an abstract indexable base class
+ * @returns An abstract class that supports numeric index access
+ */
 export function Indexable<Items>(): abstract new (
 	...args: any[]
 ) => AbstractGetAt & { [x: number]: Items }
