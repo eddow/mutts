@@ -3,7 +3,7 @@
 
 import { decorator } from '../decorator'
 import { mixin } from '../mixins'
-import { ReflectGet, ReflectSet } from '../utils'
+import { isOwnAccessor, ReflectGet, ReflectSet } from '../utils'
 
 /**
  * Function type for dependency tracking in effects and computed values
@@ -35,7 +35,7 @@ export type BunchEvolution = {
 	type: 'bunch'
 	method: string
 }
-type Evolution = PropEvolution | BunchEvolution
+export type Evolution = PropEvolution | BunchEvolution
 
 type State =
 	| {
@@ -196,6 +196,14 @@ export const options = {
 	 */
 	endChain: () => {},
 	/**
+	 * Debug purpose: called when an object is touched
+	 * @param obj - The object that is touched
+	 * @param evolution - The type of change
+	 * @param props - The properties that changed
+	 * @param deps - The dependencies that changed
+	 */
+	touched: (obj: any, evolution: Evolution, props?: any[], deps?: Set<ScopedCallback>) => {},
+	/**
 	 * Debug purpose: maximum effect chain (like call stack max depth)
 	 * Used to prevent infinite loops
 	 * @default 100
@@ -219,6 +227,11 @@ export const options = {
 	 * @default true
 	 */
 	instanceMembers: true,
+	/**
+	 * Ignore accessors (getters and setters) and only track direct properties
+	 * @default true
+	 */
+	ignoreAccessors: true,
 	// biome-ignore lint/suspicious/noConsole: This is the whole point here
 	warn: (...args: any[]) => console.warn(...args),
 }
@@ -265,6 +278,7 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 			props = Array.from(props) // For debug purposes only
 			collectEffects(effects, objectWatchers, [allProps], props)
 		} else collectEffects(effects, objectWatchers, objectWatchers.keys())
+		options.touched(obj, evolution, props as any[] | undefined, effects)
 		for (const effect of effects) atomicEffect(effect)
 	}
 
@@ -548,7 +562,11 @@ const reactiveHandlers = {
 		if (unwrap(obj)[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
 			return ReflectGet(obj, prop, receiver)
 		// Depend if...
-		if (!options.instanceMembers || Object.hasOwn(receiver, prop) || !Reflect.has(receiver, prop))
+		if (
+			!Reflect.has(receiver, prop) ||
+			(!(options.instanceMembers && !Object.hasOwn(receiver, prop)) &&
+				!(options.ignoreAccessors && isOwnAccessor(receiver, prop)))
+		)
 			dependant(obj, prop)
 
 		const value = ReflectGet(obj, prop, receiver)

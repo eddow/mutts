@@ -43,7 +43,7 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 	set(i: number, value: any) {
 		const added = i >= this[native].length
 		this[native][i] = value
-		touched(this[native], { type: 'bunch', method: 'set' }, index(i, { length: added }))
+		touched(this[native], { type: 'set', prop: i }, index(i, { length: added }))
 	},
 	getLength() {
 		dependant(this[native], 'length')

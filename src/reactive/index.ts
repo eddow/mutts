@@ -1,6 +1,7 @@
 export {
 	addBatchCleanup,
 	atomic,
+	type Evolution,
 	effect,
 	getState,
 	immutables,

@@ -247,11 +247,13 @@ function detectDecoratorMode(
  * @returns A decorator that works in both Legacy and Modern environments
  */
 export const decorator: DecoratorFactory<any> = (description: DecoratorDescription<any>) => {
+	const modern = modernDecorator(description)
+	const legacy = legacyDecorator(description)
 	return ((target: any, contextOrKey?: any, ...args: any[]) => {
 		const mode = detectDecoratorMode(target, contextOrKey, args[0])
 		return mode === 'modern'
-			? modernDecorator(description)(target, contextOrKey, ...args)
-			: legacyDecorator(description)(target, contextOrKey, ...args)
+			? modern(target, contextOrKey, ...args)
+			: legacy(target, contextOrKey, ...args)
 	}) as any
 }
 

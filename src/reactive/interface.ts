@@ -86,9 +86,7 @@ export const computed = Object.assign(
 				return computedFunction(computers.get(this)!)
 			}
 		},
-		default<T>(getter: ComputedFunction<T>): T {
-			return computedFunction(getter)
-		},
+		default: computedFunction,
 	}),
 	{
 		map: computedMap,

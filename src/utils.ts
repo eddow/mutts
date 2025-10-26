@@ -85,3 +85,8 @@ export function ReflectSet(obj: any, prop: any, value: any, receiver: any) {
 	}
 	return Reflect.set(obj, prop, value, receiver)
 }
+
+export function isOwnAccessor(obj: any, prop: any) {
+	const opd = Object.getOwnPropertyDescriptor(obj, prop)
+	return !!(opd?.get || opd?.set)
+}
