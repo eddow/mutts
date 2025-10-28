@@ -1,6 +1,7 @@
 import { decorator, GenericClassDecorator } from '../decorator'
 import { renamed } from '../utils'
 import {
+	activeEffect,
 	addBatchCleanup,
 	type DependencyFunction,
 	deepWatch,
@@ -8,6 +9,7 @@ import {
 	effect,
 	getRoot,
 	isNonReactive,
+	ladder,
 	markWithRoot,
 	nonReactiveClass,
 	nonReactiveMark,
@@ -15,11 +17,11 @@ import {
 	options,
 	reactive,
 	type ScopedCallback,
-	touched,
 	touched1,
 	unreactiveProperties,
 	untracked,
 	unwrap,
+	withEffect,
 } from './core'
 
 //#region computed
@@ -90,6 +92,7 @@ export const computed = Object.assign(
 	}),
 	{
 		map: computedMap,
+		memo: computedMapMemo,
 	}
 )
 
@@ -164,11 +167,14 @@ function watchObject(
 	changed: (value: object) => void,
 	{ immediate = false, deep = false } = {}
 ): ScopedCallback {
+	const myParentEffect = activeEffect
 	if (deep) return deepWatch(value, changed, { immediate })
 	return effect(
-		markWithRoot(() => {
+		markWithRoot(function watchObjectEffect() {
 			dependant(value)
-			if (immediate) untracked(() => changed(value))
+			if (immediate)
+				//untracked(() => changed(value))
+				withEffect(myParentEffect, () => changed(value))
 			immediate = true
 		}, changed)
 	)
@@ -179,13 +185,15 @@ function watchCallBack<T>(
 	changed: (value: T, oldValue?: T) => void,
 	{ immediate = false, deep = false } = {}
 ): ScopedCallback {
+	const myParentEffect = activeEffect
 	let oldValue: T | typeof unsetYet = unsetYet
 	let deepCleanup: ScopedCallback | undefined
 	const cbCleanup = effect(
-		markWithRoot((dep) => {
+		markWithRoot(function watchCallBackEffect(dep) {
 			const newValue = value(dep)
 			if (oldValue !== newValue)
-				untracked(
+				withEffect(
+					myParentEffect,
 					markWithRoot(() => {
 						if (oldValue === unsetYet) {
 							if (immediate) changed(newValue)
@@ -268,14 +276,13 @@ import { profileInfo } from './core'
 
 Object.assign(profileInfo, { computedCache })
 
-function cleanedBy<T extends object>(obj: T, cleanup: ScopedCallback) {
-	Object.defineProperty(obj, 'cleanup', {
+export function cleanedBy<T extends object>(obj: T, cleanup: ScopedCallback) {
+	return Object.defineProperty(obj, 'cleanup', {
 		value: cleanup,
 		writable: false,
 		enumerable: false,
 		configurable: true,
-	})
-	return obj as T & { cleanup: () => void }
+	}) as T & { cleanup: () => void }
 }
 
 //#region greedy caching
@@ -293,146 +300,107 @@ export function derived<T>(compute: (dep: DependencyFunction) => T): {
 	const rv = { value: undefined }
 	return cleanedBy(
 		rv,
-		effect(
-			markWithRoot((dep) => {
-				rv.value = compute(dep)
-			}, compute)
+		untracked(() =>
+			effect(
+				markWithRoot(function derivedEffect(dep) {
+					rv.value = compute(dep)
+				}, compute)
+			)
 		)
 	)
 }
 
-export const usualKeys = new Set<PropertyKey>(['key'])
-
-export type ComputedMapInput<T> = {
-	value: T
-	readonly index: number
-	readonly array: T[]
-}
-
 function computedMap<T, U>(
 	inputs: T[],
-	compute: (input: ComputedMapInput<T>, oldValue?: U) => U,
-	computeKey?: (input: T) => any
-): U[] & { cleanup: () => void } {
-	computeKey ??= (input: T) => input
-	const cache = new Map<any, { output: U; input: ComputedMapInput<T> }>()
+	compute: (input: T, index: number, oldValue?: U) => U,
+	resize?: (length: number) => void
+): U[] {
 	const result = reactive([])
-	const keys: any[] = []
-	function keysCleanup() {
-		const usedKeys = new Set<any>(keys)
-		for (const key of cache.keys()) if (!usedKeys.has(key)) cache.delete(key)
-	}
-	const nonKeyed = new Set<number>()
+	const cleanups: ScopedCallback[] = []
 	function input(index: number) {
-		return effect(() => {
-			const item = inputs[index]
-			const key = computeKey
-				? computeKey(item)
-				: ['object', 'function'].includes(typeof item)
-					? item
-					: undefined
-			if (key === undefined) {
-				if (nonKeyed.has(index)) return
-				nonKeyed.add(index)
-				const input = Object.defineProperties(
-					{},
-					{
-						value: {
-							get() {
-								return inputs[index]
-							},
-							set(value) {
-								inputs[index] = value
-							},
-						},
-						index: {
-							value: index,
-						},
-						array: {
-							value: inputs,
-						},
-					}
-				) as ComputedMapInput<T>
-				return effect(() => {
-					result[index] = compute(input, result[index])
-				})
-			}
-			nonKeyed.delete(index)
-			keys[index] = key
-			addBatchCleanup(keysCleanup)
-			if (cache.has(key)) {
-				const cached = cache.get(key)!
-				result[index] = cached.output
-				const changedProps = []
-				if (cached.input.index !== index) {
-					changedProps.push('index')
-					Object.defineProperty(cached.input, 'index', { value: index, configurable: true })
-				}
-				if (cached.input.value !== item) {
-					changedProps.push('value')
-					Object.defineProperty(cached.input, 'value', {
-						get: () => item,
-						set: (value) => {
-							inputs[index] = value
-						},
-						configurable: true,
-					})
-				}
-				if (changedProps.length)
-					touched(cached.input, { type: 'invalidate', prop: changedProps }, changedProps)
-			} else {
-				const input = Object.defineProperties(
-					{},
-					{
-						value: {
-							get() {
-								return item
-							},
-							set(value) {
-								inputs[index] = value
-							},
-							configurable: true,
-						},
-						index: {
-							get() {
-								dependant(input, 'index')
-								return index
-							},
-							configurable: true,
-						},
-						array: {
-							value: inputs,
-						},
-					}
-				) as ComputedMapInput<T>
-				return effect(() => {
-					const output = compute(input)
-					cache.set(key, {
-						output,
-						input,
-					})
-					result[index] = output
-				})
-			}
+		return effect(function computedIndexedMapInputEffect() {
+			result[index] = compute(inputs[index], index, result[index])
 		})
 	}
-	const cleanups: ScopedCallback[] = []
-	const cleanup = watch(
-		() => inputs.length,
-		(length) => {
-			if (length < result.length) {
+	ladder(function computedMapLengthEffect(ascend) {
+		const length = inputs.length
+		ascend(function computedMapResize() {
+			resize?.(length)
+			const resultLength = untracked(() => result.length)
+			if (length < resultLength) {
 				const toCleanup = cleanups.splice(length)
 				for (const cleanup of toCleanup) cleanup()
 				result.length = length
-				addBatchCleanup(keysCleanup)
-			} else if (length > result.length)
-				for (let i = result.length; i < length; i++) cleanups.push(input(i))
-		},
-		{ immediate: true }
-	)
-	return cleanedBy(result, () => {
-		cleanup()
-		keysCleanup()
-		for (const cleanup of cleanups) cleanup()
+			} else if (length > resultLength)
+				for (let i = resultLength; i < length; i++) cleanups.push(input(i))
+		})
 	})
+	return result
+}
+
+type MemoEntry<O> = {
+	value: O
+	cleanup: ScopedCallback
+}
+
+@unreactive
+export class Memoized<I, O> {
+	constructor(private compute: (input: I) => O) {
+		ladder((ascend) => {
+			this.inEffect = ascend
+		})
+	}
+	private inEffect: DependencyFunction
+	private cache = new Map<I, MemoEntry<O>>()
+	get(input: I): O {
+		dependant(this, input)
+		let cached: any
+		if (this.cache.has(input)) {
+			cached = this.cache.get(input)!
+		} else {
+			cached = {}
+			cached.cleanup = this.inEffect(() =>
+				effect(
+					Object.defineProperties(
+						() => {
+							if ('value' in cached) {
+								this.cache.delete(input)
+								touched1(this, { type: 'invalidate', prop: input }, input)
+							} else {
+								cached.value = this.compute(input)
+							}
+						},
+						{ name: { value: 'Memoize' } }
+					)
+				)
+			)
+			this.cache.set(input, cached)
+		}
+		return cached.value
+	}
+
+	reduceInputs(inputs: Set<I> | ((input: I) => boolean)) {
+		for (const input of this.cache.keys()) {
+			if (typeof inputs === 'function' ? !inputs(input) : !inputs.has(input)) {
+				const entry = this.cache.get(input)!
+				entry.cleanup()
+				this.cache.delete(input)
+			}
+		}
+	}
+}
+
+function computedMapMemo<I, O>(inputs: I[], compute: (input: I) => O): O[] {
+	const memo = new Memoized(compute)
+	function reduceKeys() {
+		memo.reduceInputs(new Set(inputs))
+	}
+	return computedMap(
+		inputs,
+		(input) => {
+			addBatchCleanup(reduceKeys)
+			return memo.get(input)
+		},
+		() => addBatchCleanup(reduceKeys)
+	)
 }

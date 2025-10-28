@@ -3,7 +3,7 @@
 
 import { decorator } from '../decorator'
 import { mixin } from '../mixins'
-import { isOwnAccessor, ReflectGet, ReflectSet } from '../utils'
+import { isObject, isOwnAccessor, ReflectGet, ReflectSet } from '../utils'
 
 /**
  * Function type for dependency tracking in effects and computed values
@@ -185,12 +185,12 @@ export const options = {
 	 * @param target - The effect that is being triggered
 	 * @param caller - The effect that is calling the target
 	 */
-	chain: (target: Function, caller?: Function) => {},
+	chain: (targets: Function[], caller?: Function) => {},
 	/**
 	 * Debug purpose: called when an effect chain is started
 	 * @param target - The effect that is being triggered
 	 */
-	beginChain: (target: Function) => {},
+	beginChain: (targets: Function[]) => {},
 	/**
 	 * Debug purpose: called when an effect chain is ended
 	 */
@@ -279,7 +279,7 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 			collectEffects(effects, objectWatchers, [allProps], props)
 		} else collectEffects(effects, objectWatchers, objectWatchers.keys())
 		options.touched(obj, evolution, props as any[] | undefined, effects)
-		for (const effect of effects) atomicEffect(effect)
+		batch(Array.from(effects))
 	}
 
 	// Bubble up changes if this object has deep watchers
@@ -343,8 +343,8 @@ export function dependant(obj: any, prop: any = allProps) {
 	}
 }
 
-// Stack of active effects to handle nested effects
-let activeEffect: ScopedCallback | undefined
+// Active effects to handle nested effects
+export let activeEffect: ScopedCallback | undefined
 // Parent effect used for lifecycle/cleanup relationships (can diverge later)
 let parentEffect: ScopedCallback | undefined
 
@@ -363,22 +363,24 @@ export function addBatchCleanup(cleanup: ScopedCallback) {
 }
 // Track which sub-effects have been executed to prevent infinite loops
 // These are all the effects triggered under `activeEffect` and all their sub-effects
-function atomicEffect(effect: ScopedCallback, immediate?: 'immediate') {
-	const root = getRoot(effect)
+function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'immediate') {
+	if (!Array.isArray(effect)) effect = [effect]
+	const roots = effect.map(getRoot)
 
 	if (batchedEffects) {
-		options?.chain(getRoot(effect), getRoot(activeEffect))
-		batchedEffects.set(root, effect)
+		options?.chain(roots, getRoot(activeEffect))
+		for (let i = 0; i < effect.length; i++) batchedEffects.set(roots[i], effect[i])
 		if (immediate)
-			try {
-				return effect()
-			} finally {
-				batchedEffects.delete(root)
-			}
+			for (let i = 0; i < effect.length; i++)
+				try {
+					return effect[i]()
+				} finally {
+					batchedEffects.delete(roots[i])
+				}
 	} else {
-		options.beginChain(root)
+		options.beginChain(roots)
 		const runEffects: any[] = []
-		batchedEffects = new Map<Function, ScopedCallback>([[root, effect]])
+		batchedEffects = new Map<Function, ScopedCallback>(roots.map((root, i) => [root, effect[i]]))
 		const firstReturn: { value?: any } = {}
 		try {
 			while (batchedEffects.size) {
@@ -418,7 +420,7 @@ function atomicEffect(effect: ScopedCallback, immediate?: 'immediate') {
 export const atomic = decorator({
 	method(original) {
 		return function (...args: any[]) {
-			return atomicEffect(
+			return batch(
 				markWithRoot(() => original.apply(this, args), original),
 				'immediate'
 			)
@@ -428,7 +430,7 @@ export const atomic = decorator({
 		original: (...args: Args) => Return
 	): (...args: Args) => Return {
 		return function (...args: Args) {
-			return atomicEffect(
+			return batch(
 				markWithRoot(() => original.apply(this, args), original),
 				'immediate'
 			)
@@ -446,13 +448,13 @@ export const atomic = decorator({
 export function withEffect<T>(
 	effect: ScopedCallback | undefined,
 	fn: () => T,
-	_keepParent?: true
+	keepParent?: true
 ): T {
 	if (getRoot(effect) === getRoot(activeEffect)) return fn()
 	const oldActiveEffect = activeEffect
 	const oldParentEffect = parentEffect
 	activeEffect = effect
-	if (effect) parentEffect = effect
+	if (!keepParent) parentEffect = effect
 	try {
 		return fn()
 	} finally {
@@ -521,7 +523,7 @@ function bubbleUpChange(changedObject: object, evolution: Evolution) {
 	for (const { parent } of parents) {
 		// Trigger deep watchers on parent
 		const parentDeepWatchers = deepWatchers.get(parent)
-		if (parentDeepWatchers) for (const watcher of parentDeepWatchers) atomicEffect(watcher)
+		if (parentDeepWatchers) for (const watcher of parentDeepWatchers) batch(watcher)
 
 		// Continue bubbling up
 		bubbleUpChange(parent, evolution)
@@ -775,13 +777,13 @@ export function untracked<T>(fn: () => T): T {
 		undefined,
 		() => {
 			rv = fn()
-		},
-		true
+		} /*,
+		true*/
 	)
 	return rv
 }
 
-// runEffect -> set<cleanup>
+// runEffect -> set<stop>
 const effectChildren = new WeakMap<ScopedCallback, Set<ScopedCallback>>()
 const fr = new FinalizationRegistry<() => void>((f) => f())
 
@@ -809,11 +811,13 @@ export function effect<Args extends any[]>(
 		// Clear previous dependencies
 		cleanup?.()
 
-		options.enter(fn)
-		const reactionCleanup = withEffect(runEffect, () => fn(dep, ...args)) as
-			| undefined
-			| ScopedCallback
-		options.leave(fn)
+		options.enter(getRoot(fn))
+		let reactionCleanup: ScopedCallback | undefined
+		try {
+			reactionCleanup = withEffect(runEffect, () => fn(dep, ...args)) as undefined | ScopedCallback
+		} finally {
+			options.leave(fn)
+		}
 
 		// Create cleanup function for next run
 		cleanup = () => {
@@ -838,47 +842,46 @@ export function effect<Args extends any[]>(
 				}
 				effectToReactiveObjects.delete(runEffect)
 			}
+			// Invoke all child stops (recursive via subEffectCleanup calling its own mainCleanup)
+			const children = effectChildren.get(runEffect)
+			if (children) {
+				for (const childCleanup of children) childCleanup()
+				effectChildren.delete(runEffect)
+			}
 		}
 	}
 	// Mark the runEffect callback with the original function as its root
 	markWithRoot(runEffect, fn)
 
-	atomicEffect(runEffect, 'immediate')
+	batch(runEffect, 'immediate')
 
-	const mainCleanup = (): void => {
+	const stopEffect = (): void => {
 		if (effectStopped) return
 		effectStopped = true
 		cleanup?.()
-		// Invoke all child cleanups (recursive via subEffectCleanup calling its own mainCleanup)
-		const children = effectChildren.get(runEffect)
-		if (children) {
-			for (const childCleanup of children) childCleanup()
-			effectChildren.delete(runEffect)
-		}
-
-		fr.unregister(mainCleanup)
+		fr.unregister(stopEffect)
 	}
 
+	const parent = parentEffect
 	// Only ROOT effects are registered for GC cleanup
-	if (!parentEffect) {
-		const callIfCollected = () => mainCleanup()
-		fr.register(callIfCollected, mainCleanup, callIfCollected)
+	if (!parent) {
+		const callIfCollected = () => stopEffect()
+		fr.register(callIfCollected, stopEffect, stopEffect)
 		return callIfCollected
 	}
-	// Register this effect to be cleaned up with the parent effect
-	let children = effectChildren.get(parentEffect)
+	// Register this effect to be stopped when the parent effect is cleaned up
+	let children = effectChildren.get(parent)
 	if (!children) {
 		children = new Set()
-		effectChildren.set(parentEffect, children)
+		effectChildren.set(parent, children)
 	}
-	const parent = parentEffect
 	const subEffectCleanup = (): void => {
 		children.delete(subEffectCleanup)
 		if (children.size === 0) {
 			effectChildren.delete(parent)
 		}
 		// Execute this child effect cleanup (which triggers its own mainCleanup)
-		mainCleanup()
+		stopEffect()
 	}
 	children.add(subEffectCleanup)
 	return subEffectCleanup
@@ -1100,9 +1103,13 @@ export function deepWatch<T extends object>(
 	})
 }
 
-/**
- * Check if an object is an object (not null, not primitive)
- */
-function isObject(obj: any): obj is object {
-	return obj !== null && typeof obj === 'object'
+// TODO: rename, document, use
+export function ladder(fn: (ascend: <T>(cb: () => T) => T, dep: DependencyFunction) => any) {
+	const parent = activeEffect
+	return effect((dep) =>
+		fn(
+			markWithRoot(<T>(cb: () => T) => withEffect(parent, cb), fn),
+			dep
+		)
+	)
 }

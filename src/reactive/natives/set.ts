@@ -6,7 +6,7 @@ import {
 	reactive,
 	touched,
 	touched1,
-} from './core'
+} from '../core'
 
 const native = Symbol('native')
 

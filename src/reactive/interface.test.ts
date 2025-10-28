@@ -640,17 +640,13 @@ describe('computed', () => {
 
 		it('should handle computed with circular dependencies gracefully', () => {
 			const state = reactive({ a: 1, b: 2 })
-			let getter1Runs = 0
-			let getter2Runs = 0
-
+			// Note: it's not graceful at all, it's the default Max range exceeded exception
 			// Create circular dependency
 			const getter1 = () => {
-				getter1Runs++
 				return state.a + (state.b > 0 ? computed(getter2) : 0)
 			}
 
 			const getter2 = () => {
-				getter2Runs++
 				return state.b + (state.a > 0 ? computed(getter1) : 0)
 			}
 
@@ -2033,248 +2029,270 @@ describe('deep watch via watch({ deep: true })', () => {
 		// Note: WeakSet and WeakMap cannot be deeply reactive because they don't support iteration
 		// They can only have shallow reactivity (tracking when the collection itself changes)
 	})
+})
 
-	describe('computed.values', () => {
-		it('should create a reactive mapped array', () => {
-			const input = reactive([1, 2, 3])
-			const mapped = computed.map(input, ({ value }) => value * 2)
+describe('computed.values', () => {
+	it('should create a reactive mapped array', () => {
+		const input = reactive([1, 2, 3])
+		const mapped = computed.map(input, (value) => value * 2)
 
-			expect(unwrap(mapped)).toEqual([2, 4, 6])
-			expect(Array.isArray(mapped)).toBe(true)
+		expect(unwrap(mapped)).toEqual([2, 4, 6])
+		expect(Array.isArray(mapped)).toBe(true)
+	})
+
+	it('should update when input array changes', () => {
+		const input = reactive([1, 2, 3])
+		const mapped = computed.map(input, (value) => value * 2)
+
+		expect(unwrap(mapped)).toEqual([2, 4, 6])
+
+		input.push(4)
+		expect(unwrap(mapped)).toEqual([2, 4, 6, 8])
+
+		input[0] = 10
+		expect(unwrap(mapped)).toEqual([20, 4, 6, 8])
+	})
+
+	it('should provide index in compute function', () => {
+		const input = reactive([10, 20, 30])
+		const mapped = computed.map(input, (value, index) => `[${index}]: ${value}`)
+
+		expect(unwrap(mapped)).toEqual(['[0]: 10', '[1]: 20', '[2]: 30'])
+
+		input.push(40)
+		expect(mapped[3]).toBe('[3]: 40')
+	})
+
+	it('should provide array reference in compute function', () => {
+		const input = reactive([1, 2, 3])
+		const mapped = computed.map(input, (value, _index, _oldValue) => `${value}`)
+
+		expect(unwrap(mapped)).toEqual(['1', '2', '3'])
+
+		input.push(4)
+		expect(unwrap(mapped)).toEqual(['1', '2', '3', '4'])
+	})
+
+	it('should handle empty arrays', () => {
+		const input = reactive([])
+		const mapped = computed.map(input, (value) => value * 2)
+
+		expect(unwrap(mapped)).toEqual([])
+		expect(mapped.length).toBe(0)
+	})
+
+	it('should track compute function call count', () => {
+		const input = reactive([1, 2, 3])
+		let computeCount = 0
+		const mapped = computed.map(input, (value) => {
+			computeCount++
+			return value * 2
 		})
 
-		it('should update when input array changes', () => {
-			const input = reactive([1, 2, 3])
-			const mapped = computed.map(input, ({ value }) => value * 2)
+		expect(unwrap(mapped)).toEqual([2, 4, 6])
+		expect(computeCount).toBe(3) // Initial computation for 3 items
 
-			expect(unwrap(mapped)).toEqual([2, 4, 6])
+		// Modify one item - should recompute only that item
+		input[0] = 10
+		expect(mapped[0]).toBe(20)
+		expect(computeCount).toBe(4) // One more computation
 
-			input.push(4)
-			expect(unwrap(mapped)).toEqual([2, 4, 6, 8])
+		// Modify another item
+		input[1] = 20
+		expect(mapped[1]).toBe(40)
+		expect(computeCount).toBe(5) // One more computation
+	})
 
-			input[0] = 10
-			expect(unwrap(mapped)).toEqual([20, 4, 6, 8])
+	it('should track effect count when input array length changes', () => {
+		const input = reactive([1, 2, 3])
+		let computeCount = 0
+		let effectCount = 0
+
+		const mapped = computed.map(input, (value) => {
+			computeCount++
+			return value * 2
 		})
 
-		it('should provide index in compute function', () => {
-			const input = reactive([10, 20, 30])
-			const mapped = computed.map(input, ({ value, index }) => `[${index}]: ${value}`)
-
-			expect(unwrap(mapped)).toEqual(['[0]: 10', '[1]: 20', '[2]: 30'])
-
-			input.push(40)
-			expect(mapped[3]).toBe('[3]: 40')
+		// Track effects that watch the mapped array
+		effect(() => {
+			effectCount++
+			mapped.length // Access length to track it
 		})
 
-		it('should provide array reference in compute function', () => {
-			const input = reactive([1, 2, 3])
-			const mapped = computed.map(input, ({ value, array }) => `${value} (total: ${array.length})`)
+		expect(computeCount).toBe(3) // Initial computation
+		expect(effectCount).toBe(1) // Initial effect
 
-			expect(unwrap(mapped)).toEqual(['1 (total: 3)', '2 (total: 3)', '3 (total: 3)'])
+		// Add item should trigger effect
+		input.push(4)
+		expect(computeCount).toBe(4) // One more computation for new item
+		expect(effectCount).toBe(2) // Effect triggered by length change
 
-			input.push(4)
-			expect(unwrap(mapped)).toEqual([
-				'1 (total: 4)',
-				'2 (total: 4)',
-				'3 (total: 4)',
-				'4 (total: 4)',
-			])
+		// Remove item should trigger effect
+		input.pop()
+		expect(computeCount).toBe(4) // Nothing computed
+		expect(effectCount).toBe(3) // Effect triggered by length change
+	})
+
+	it('should track effect count when watching mapped values', () => {
+		const input = reactive([1, 2, 3])
+		let computeCount = 0
+		let effectCount = 0
+
+		const mapped = computed.map(input, (value) => {
+			computeCount++
+			return value * 2
 		})
 
-		it('should handle empty arrays', () => {
-			const input = reactive([])
-			const mapped = computed.map(input, ({ value }) => value * 2)
-
-			expect(unwrap(mapped)).toEqual([])
-			expect(mapped.length).toBe(0)
+		// Track effects that watch the mapped values
+		effect(() => {
+			effectCount++
+			// Access mapped values to track them
+			mapped.forEach((v) => v)
 		})
 
-		it('should track compute function call count', () => {
-			const input = reactive([1, 2, 3])
-			let computeCount = 0
-			const mapped = computed.map(input, ({ value }) => {
-				computeCount++
-				return value * 2
+		expect(computeCount).toBe(3) // Initial computation
+		expect(effectCount).toBe(1) // Initial effect
+
+		// Modify input should trigger effect
+		input[0] = 10
+		expect(computeCount).toBe(4) // One more computation
+		expect(effectCount).toBe(2) // Effect triggered by value change
+
+		// Modify another input should trigger effect
+		input[1] = 20
+		expect(computeCount).toBe(5) // One more computation
+		expect(effectCount).toBe(3) // Effect triggered by value change
+	})
+
+	it('should track effect count for complex transformations', () => {
+		const users = reactive([
+			{ name: 'John', age: 30 },
+			{ name: 'Jane', age: 25 },
+		])
+		let computeCount = 0
+		let effectCount = 0
+
+		const mapped = computed.map(users, (user) => {
+			computeCount++
+			return `${user.name} (${user.age})`
+		})
+
+		effect(() => {
+			effectCount++
+			mapped.forEach((v) => v)
+		})
+
+		expect(unwrap(mapped)).toEqual(['John (30)', 'Jane (25)'])
+		expect(computeCount).toBe(2) // Initial computation for 2 users
+		expect(effectCount).toBe(1) // Initial effect
+
+		// Modify user property
+		users[0].age = 31
+		expect(unwrap(mapped)).toEqual(['John (31)', 'Jane (25)'])
+		expect(computeCount).toBe(3) // One more computation for modified user
+		expect(effectCount).toBe(2) // Effect triggered by value change
+
+		// Add new user
+		users.push({ name: 'Bob', age: 35 })
+		expect(computeCount).toBe(4) // One more computation for new user
+		expect(effectCount).toBe(3) // Effect triggered by length change
+	})
+
+	it('should cache with keys', () => {
+		const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+		let computeCount = 0
+
+		const mapped = computed.memo(inputs, (item) => {
+			computeCount++
+			const result = {
+				setName(newName: string) {
+					item.name = newName
+				},
+			} as any
+			effect(() => {
+				result.name = item.name.toUpperCase()
 			})
-
-			expect(unwrap(mapped)).toEqual([2, 4, 6])
-			expect(computeCount).toBe(3) // Initial computation for 3 items
-
-			// Modify one item - should recompute only that item
-			input[0] = 10
-			expect(mapped[0]).toBe(20)
-			expect(computeCount).toBe(4) // One more computation
-
-			// Modify another item
-			input[1] = 20
-			expect(mapped[1]).toBe(40)
-			expect(computeCount).toBe(5) // One more computation
+			return result
 		})
 
-		it('should track effect count when input array length changes', () => {
-			const input = reactive([1, 2, 3])
-			let computeCount = 0
-			let effectCount = 0
+		expect(computeCount).toBe(3) // Initial computation
 
-			const mapped = computed.map(input, ({ value }) => {
-				computeCount++
-				return value * 2
-			})
+		// Modify through method that sets item.value
+		mapped[0].setName('Johnny')
+		expect(computeCount).toBe(3) // Initial computation
+		expect(mapped[0].name).toBe('JOHNNY')
+		mapped[0].added = true
+		const buf = inputs.pop()!
+		expect(computeCount).toBe(3) // Initial computation
+		inputs.unshift(buf)
+		expect(computeCount).toBe(4) // One more computation
+		expect(mapped[1].name).toBe('JOHNNY')
+		expect(mapped[1].added).toBe(true)
 
-			// Track effects that watch the mapped array
+		inputs.push({ name: 'Alice' })
+		expect(computeCount).toBe(5) // One more computation
+		expect(mapped[3].name).toBe('ALICE')
+	})
+
+	it('should demonstrate computed.map vs computed.memo with three arrays', () => {
+		// Source array: strings
+		const sourceNames = reactive(['John', 'Jane', 'Bob'])
+
+		// Intermediate array: objects managed by computed.map
+		let mapComputeCount = 0
+		const intermediateObjects = computed.map(sourceNames, (name) => {
+			mapComputeCount++
+			return { name, id: Math.random().toString(36) }
+		})
+
+		// Final array: uppercase names managed by computed.memo
+		let memoComputeCount = 0
+		let effectCount = 0
+		const finalNames = computed.memo(intermediateObjects, (obj) => {
+			memoComputeCount++
+			const result: any = {}
+
+			// Track effects that watch the object
 			effect(() => {
 				effectCount++
-				mapped.length // Access length to track it
+				result.uppercase = obj.name.toUpperCase()
 			})
 
-			expect(computeCount).toBe(3) // Initial computation
-			expect(effectCount).toBe(1) // Initial effect
-
-			// Add item should trigger effect
-			input.push(4)
-			expect(computeCount).toBe(4) // One more computation for new item
-			expect(effectCount).toBe(2) // Effect triggered by length change
-
-			// Remove item should trigger effect
-			input.pop()
-			expect(computeCount).toBe(4) // Nothing computed
-			expect(effectCount).toBe(3) // Effect triggered by length change
+			return result
 		})
 
-		it('should track effect count when watching mapped values', () => {
-			const input = reactive([1, 2, 3])
-			let computeCount = 0
-			let effectCount = 0
+		// Initial state
+		expect(mapComputeCount).toBe(3) // Initial map computation
+		expect(memoComputeCount).toBe(3) // Initial memo computation
+		expect(effectCount).toBe(3) // Initial effects
+		expect(finalNames[0].uppercase).toBe('JOHN')
+		expect(finalNames[1].uppercase).toBe('JANE')
+		expect(finalNames[2].uppercase).toBe('BOB')
 
-			const mapped = computed.map(input, ({ value }) => {
-				computeCount++
-				return value * 2
-			})
+		// Test push operation - should trigger both map and memo
+		sourceNames.push('Alice')
+		expect(mapComputeCount).toBe(4) // One more map computation
+		expect(memoComputeCount).toBe(4) // One more memo computation
+		expect(effectCount).toBe(4) // One more effect
+		expect(finalNames[3].uppercase).toBe('ALICE')
 
-			// Track effects that watch the mapped values
-			effect(() => {
-				effectCount++
-				// Access mapped values to track them
-				mapped.forEach((v) => v)
-			})
+		// Test pop and unshift - memo should preserve cached objects
+		const buf = sourceNames.pop()!
+		expect(mapComputeCount).toBe(4) // No new map computation
+		expect(memoComputeCount).toBe(4) // No new memo computation
+		expect(effectCount).toBe(4) // No new effects
 
-			expect(computeCount).toBe(3) // Initial computation
-			expect(effectCount).toBe(1) // Initial effect
+		sourceNames.push(buf)
+		expect(mapComputeCount).toBe(5) // One more map computation (new index)
+		expect(memoComputeCount).toBe(5) // No new memo computation (same object)
+		expect(effectCount).toBe(5) // No new effects
+		expect(finalNames[3].uppercase).toBe('ALICE') // Same cached result
 
-			// Modify input should trigger effect
-			input[0] = 10
-			expect(computeCount).toBe(4) // One more computation
-			expect(effectCount).toBe(2) // Effect triggered by value change
-
-			// Modify another input should trigger effect
-			input[1] = 20
-			expect(computeCount).toBe(5) // One more computation
-			expect(effectCount).toBe(3) // Effect triggered by value change
-		})
-
-		it('should track effect count for complex transformations', () => {
-			const users = reactive([
-				{ name: 'John', age: 30 },
-				{ name: 'Jane', age: 25 },
-			])
-			let computeCount = 0
-			let effectCount = 0
-
-			const mapped = computed.map(users, ({ value: user }) => {
-				computeCount++
-				return `${user.name} (${user.age})`
-			})
-
-			effect(() => {
-				effectCount++
-				mapped.forEach((v) => v)
-			})
-
-			expect(computeCount).toBe(2) // Initial computation for 2 users
-			expect(effectCount).toBe(1) // Initial effect
-
-			// Modify user property
-			users[0].age = 31
-			expect(computeCount).toBe(3) // One more computation for modified user
-			expect(effectCount).toBe(2) // Effect triggered by value change
-
-			// Add new user
-			users.push({ name: 'Bob', age: 35 })
-			expect(computeCount).toBe(4) // One more computation for new user
-			expect(effectCount).toBe(3) // Effect triggered by length change
-		})
-
-		it('should allow modifying primitive value through ComputedMapInput and track counts', () => {
-			const inputs = reactive(['a', 'b', 'c'])
-			let computeCount = 0
-			let effectCount = 0
-
-			// Create a mapped array where each value is an object with a method to modify the original value
-			const mapped = computed.map(inputs, (item) => {
-				computeCount++
-				return {
-					original: item.value,
-					uppercase: item.value.toUpperCase(),
-					// Method to modify the original value by directly assigning to item.value
-					setValue(newVal: string) {
-						item.value = newVal
-					},
-				}
-			})
-
-			// Track effects watching the mapped values
-			effect(() => {
-				effectCount++
-				mapped.forEach((v) => v)
-			})
-
-			expect(computeCount).toBe(3) // Initial computation for 3 items
-			expect(effectCount).toBe(1) // Initial effect
-
-			// Modify value through the ComputedMapInput by setting item.value
-			mapped[0].setValue('z')
-
-			// Verify the original array was updated
-			expect(inputs[0]).toBe('z')
-
-			// Verify the mapped value was recomputed
-			expect(mapped[0].original).toBe('z')
-			expect(mapped[0].uppercase).toBe('Z')
-
-			// Verify counts
-			expect(computeCount).toBe(4) // One more computation for the modified item
-			expect(effectCount).toBe(2) // Effect triggered by value change
-		})
-
-		it('should allow direct assignment to primitive value property', () => {
-			const inputs = reactive([1, 2, 3])
-			let computeCount = 0
-
-			const mapped = computed.map(inputs, (item) => {
-				computeCount++
-				return {
-					value: item.value,
-					squared: item.value * item.value,
-					// Direct assignment to primitive value
-					setValue(newVal: number) {
-						item.value = newVal
-					},
-				}
-			})
-
-			expect(computeCount).toBe(3) // Initial computation
-
-			// Modify through method that sets item.value
-			mapped[0].setValue(5)
-			expect(inputs[0]).toBe(5)
-			expect(mapped[0].squared).toBe(25) // Should be recomputed
-			expect(computeCount).toBe(4) // One more computation
-
-			// Test with different values
-			mapped[1].setValue(10)
-			expect(inputs[1]).toBe(10)
-			expect(mapped[1].squared).toBe(100) // Should be recomputed
-			expect(computeCount).toBe(5) // One more computation
-		})
+		// Test direct modification of intermediate object
+		intermediateObjects[1].name = 'Janet'
+		expect(mapComputeCount).toBe(5) // No new map computation
+		expect(memoComputeCount).toBe(5) // No new memo computation
+		expect(effectCount).toBe(6) // One more effect (reactive to obj.name change)
+		expect(finalNames[1].uppercase).toBe('JANET')
 	})
 })

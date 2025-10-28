@@ -17,12 +17,18 @@ export {
 	untracked,
 	unwrap,
 } from './core'
-export { computed, derived, invalidateComputed, unreactive, watch } from './interface'
+export {
+	cleanedBy,
+	computed,
+	invalidateComputed,
+	unreactive,
+	watch,
+} from './interface'
 
-import { ReactiveArray } from './array'
 import { registerNativeReactivity } from './core'
-import { ReactiveMap, ReactiveWeakMap } from './map'
-import { ReactiveSet, ReactiveWeakSet } from './set'
+import { ReactiveArray } from './natives/array'
+import { ReactiveMap, ReactiveWeakMap } from './natives/map'
+import { ReactiveSet, ReactiveWeakSet } from './natives/set'
 
 // Register native collection types to use specialized reactive wrappers
 registerNativeReactivity(WeakMap, ReactiveWeakMap)

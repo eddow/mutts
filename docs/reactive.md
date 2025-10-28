@@ -254,20 +254,20 @@ The reactive system provides **automatic cleanup** for effects, making memory ma
 
 #### How Automatic Cleanup Works
 
-1. **Parent-Child Independence**: When an effect is created inside another effect, it becomes a "child" of the parent effect. However, when the parent effect is cleaned up, child effects become independent and are NOT automatically cleaned up - they continue to run until they're garbage collected or explicitly cleaned up.
+1. **Parent-Child Cleanup**: When an effect is created inside another effect, it becomes a "child" of the parent effect. When the parent effect is cleaned up, it also cleans up its child effects.
 
-2. **Garbage Collection Cleanup**: For top-level effects (not created inside other effects) and orphaned child effects, the system uses JavaScript's garbage collection to automatically clean them up when they're no longer referenced.
+2. **Garbage Collection Cleanup**: For top-level effects (not created inside other effects), the system uses JavaScript's garbage collection to automatically clean them up when their cleanup function no longer referenced.
 
 #### Examples
 
-**Parent-Child Independence:**
+**Parent-Child Cleanup:**
 ```typescript
 const state = reactive({ a: 1, b: 2 })
 
 const stopParent = effect(() => {
     state.a
     
-    // Child effect - becomes independent when parent is cleaned up
+    // Child effect - tied to the parent lifecycle
     effect(() => {
         state.b
         return () => console.log('Child cleanup')
@@ -276,8 +276,8 @@ const stopParent = effect(() => {
     return () => console.log('Parent cleanup')
 })
 
-// Only cleans up the parent - child becomes independent
-stopParent() // Logs: "Parent cleanup" (child continues running)
+// Cleans up both parent and child
+stopParent() // Logs (order may vary): "Child cleanup", then "Parent cleanup"
 ```
 
 **Garbage Collection Cleanup:**
@@ -295,7 +295,7 @@ effect(() => {
 
 **When You Should Store Cleanup Functions:**
 
-While cleanup is automatic, you should **store and remember** cleanup functions when your effects have side effects that need immediate cleanup:
+While cleanup can be automatic via GC, you should **store and remember** cleanup functions both to prevent the effect from being garbage-collected (keeping it alive) and to perform immediate cleanup when needed. If you don't hold a reference to the cleanup (or to the effect), the effect can be collected and its cleanup called automatically by GC; storing a reference keeps it active under your control:
 
 ```typescript
 const state = reactive({ value: 1 })
@@ -325,10 +325,10 @@ activeEffects.forEach(stop => stop())
 
 **Key Points:**
 
-- **You do not have to call cleanup** - the system handles it automatically via garbage collection
+- **You do not have to call cleanup** - GC may clean up effects when no references remain
 - **You may want to call cleanup** - especially for effects with side effects
-- **You have to store and remember cleanup** - when you need immediate control over when effects stop
-- **Child effects become independent** - when their parent effect is cleaned up, they continue running
+- **Store cleanup references to keep effects alive** - holding a reference prevents GC cleanup and gives you explicit stop control
+- **Parent cleanup cleans child effects** - stopping a parent also stops its child effects
 - **All effects use garbage collection** - as the primary cleanup mechanism
 
 ### Effect Dependencies
@@ -1626,11 +1626,11 @@ state.a = 5 // Both computed values update
 
 ### `computed.map()`
 
-Creates a reactive array that automatically maps over an input array with intelligent caching and memoization. This is optimized for scenarios where you have expensive computations that should only re-run when inputs change.
+Creates a reactive array by mapping over an input array. The mapper receives the current item value, its index, and the previous mapped value for that index.
 
 ```typescript
 const input = reactive([1, 2, 3])
-const mapped = computed.map(input, x => x * 2)
+const mapped = computed.map(input, (value, index, oldValue) => value * 2)
 
 console.log(mapped) // [2, 4, 6]
 
@@ -1639,13 +1639,21 @@ input.push(4)
 console.log(mapped) // [2, 4, 6, 8]
 ```
 
+**Mapper signature:**
+
+```typescript
+(value: T, index: number, oldValue?: U) => U
+```
+
+- **value**: current element from the input array
+- **index**: current element index
+- **oldValue**: previously computed value at the same index (useful for incremental updates)
+
 **Key Features:**
 
-- **Live Reactivity**: The output array automatically updates when the input array changes
-- **Intelligent Caching**: Results are cached per input item, only recomputing when items change
-- **Primitive Optimization**: Non-object primitives are computed directly without caching overhead
-- **Object Caching**: Objects are cached and only recomputed when their properties change
-- **Memory Efficient**: Proper cleanup prevents memory leaks when items are removed
+- **Live Reactivity**: Output array updates when the input array changes (push/pop/splice/assignments)
+- **Granular Recompute**: Only indices that change are recomputed; `oldValue` enables incremental updates
+- **Simple Contract**: Mapper works directly with `(value, index, oldValue)`
 
 **Performance Characteristics:**
 
@@ -1656,1355 +1664,7842 @@ const users = reactive([
 ])
 
 let computeCount = 0
-const processedUsers = computed.map(users, user => {
+const processedUsers = computed.map(users, (user) => {
   computeCount++
-  return {
-    ...user,
-    displayName: `${user.name} (${user.age})`,
-    isAdult: user.age >= 18
-  }
+  return `${user.name} (${user.age})`
 })
 
 console.log(computeCount) // 2 (initial computation)
 
-// Access again - uses cached values
-console.log(processedUsers[0].displayName) // "John (30)"
-console.log(computeCount) // 2 (no additional computation)
-
-// Modify one user - only that item recomputes
+// Modify one user - only that index recomputes
 users[0].age = 31
-console.log(processedUsers[0].displayName) // "John (31)"
-console.log(computeCount) // 3 (only one more computation)
-```
-
-**Use Cases:**
-
-- **Expensive Transformations**: When mapping involves complex calculations
-- **Derived Data**: Creating computed views of your data
-- **Performance-Critical Scenarios**: Large datasets with infrequent changes
-- **Real-time Updates**: When input data changes frequently but transformations are expensive
-
-**Comparison with `array.map`:**
-
-```typescript
-// Standard array.map - recomputes everything each time
-const standardMapped = input.map(expensiveFunction) // Recomputes all items
-
-// computed.map - only recomputes changed items
-const computedMapped = computed.map(input, expensiveFunction) // Caches results
+console.log(processedUsers[0]) // "John (31)"
+console.log(computeCount) // 3
 ```
 
 **Advanced Usage:**
 
 ```typescript
-// Complex object transformations
-const products = reactive([
-  { id: 1, price: 10, category: 'electronics' },
-  { id: 2, price: 20, category: 'clothing' }
-])
-
-const enrichedProducts = computed.map(products, product => ({
-  ...product,
-  tax: product.price * 0.1,
-  total: product.price * 1.1,
-  displayPrice: `$${product.price.toFixed(2)}`
-}))
-
-// Nested reactive objects
 const orders = reactive([
   { items: [{ price: 10 }, { price: 20 }] },
   { items: [{ price: 15 }] }
 ])
 
-const orderTotals = computed.map(orders, order => ({
-  ...order,
-  total: order.items.reduce((sum, item) => sum + item.price, 0)
-}))
+const orderTotals = computed.map(orders, (order) => (
+  order.items.reduce((sum, item) => sum + item.price, 0)
+))
 ```
 
-### `derived()` Function
+### `computed.memo()`
 
-Creates a derived value that automatically recomputes when dependencies change. Unlike `computed`, this always recomputes immediately when dependencies change.
-
-```typescript
-function derived<T>(compute: (dep: DependencyFunction) => T): {
-    value: T
-    stop: ScopedCallback
-}
-```
-
-**Parameters:**
-- `compute` - Function that computes the derived value
-
-**Returns:** Object with `value` (current computed value) and `stop` (cleanup function)
-
-**Example:**
-```typescript
-const state = reactive({ a: 1, b: 2 })
-const derived = derived(() => state.a + state.b)
-console.log(derived.value) // 3
-state.a = 5 // derived.value automatically becomes 7
-derived.stop() // cleanup
-```
-
-**Differences from `computed`:**
-
-| Aspect | `computed` | `derived` |
-|--------|-------------|-----------|
-| **Caching Strategy** | Lazy - only computes when accessed | Eager - always computes when dependencies change |
-| **Cross-Access** | Shared cache across multiple calls | Independent instances |
-| **Performance** | More efficient for infrequently accessed values | More efficient for frequently changing values |
-| **Memory Usage** | Lower (shared cache) | Higher (separate instances) |
-| **Complexity** | High (sophisticated invalidation) | Low (simple effect) |
-
-**When to use `derived`:**
-- You need immediate updates when dependencies change
-- You want simple, predictable behavior
-- You're okay with always recomputing (even if not accessed)
-
-**When to use `computed`:**
-- You have expensive computations that aren't always needed
-- Multiple parts of your code need the same computed value
-- You want lazy evaluation (compute only when accessed)
-
-### Caching and Invalidation
-
-Computed values are cached until their dependencies change:
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
 
 ```typescript
-const state = reactive({ x: 1, y: 2 })
-
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
 let computeCount = 0
-const expensive = () => {
-    computeCount++
-    console.log('Computing expensive value...')
-    return Math.pow(state.x, state.y)
-}
 
-console.log('First access:', computed(expensive)) // Computes once
-console.log('Second access:', computed(expensive)) // Uses cached value
-console.log('Compute count:', computeCount) // 1
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
 
-state.x = 2 // Invalidates cache
-console.log('After change:', computed(expensive)) // Recomputes
-console.log('Compute count:', computeCount) // 2
-```
-
-### Computed vs Effects
-
-Choose between computed and effects based on your needs:
-
-```typescript
-const state = reactive({ count: 0 })
-
-// Use computed when you need a value
-const doubled = () => state.count * 2
-
-// Use effect when you need side effects
-effect(() => {
-    console.log('Count doubled:', computed(doubled))
-    document.title = `Count: ${state.count}`
-})
-
-state.count = 5
-// computed(doubled) returns 10
-// effect logs and updates title
-```
-
-## Atomic Operations
-
-The `atomic` function and `@atomic` decorator are powerful tools for batching reactive effects. When applied to a method or function, they ensure that all effects triggered by reactive state changes within that scope are batched together and executed only once, rather than after each individual change.
-
-### Overview
-
-In reactive systems, each state change typically triggers its dependent effects immediately. However, when you need to make multiple related changes as a single unit, this can lead to:
-
-- Multiple unnecessary effect executions
-- Inconsistent intermediate states being observed
-- Performance overhead from redundant computations
-
-The `atomic` function and `@atomic` decorator solve this by deferring effect execution until the function or method completes, treating all changes as a single atomic operation.
-
-### Basic Usage
-
-#### Decorator Syntax
-
-```typescript
-import { reactive, effect, atomic } from 'mutts'
-
-const state = reactive({ a: 0, b: 0, c: 0 })
-let effectCount = 0
-
-effect(() => {
-  effectCount++
-  console.log(`Effect ran: a=${state.a}, b=${state.b}, c=${state.c}`)
-})
-
-class StateManager {
-  @atomic
-  updateAll() {
-    state.a = 1
-    state.b = 2
-    state.c = 3
-  }
-}
-
-const manager = new StateManager()
-manager.updateAll()
-
-// Output:
-// Effect ran: a=0, b=0, c=0  (initial run)
-// Effect ran: a=1, b=2, c=3  (only one additional run despite 3 changes)
-```
-
-#### Function Syntax
-
-For standalone functions or when you need more flexibility, you can use the `atomic` function directly:
-
-```typescript
-import { reactive, effect, atomic } from 'mutts'
-
-const state = reactive({ a: 0, b: 0, c: 0 })
-let effectCount = 0
-
-effect(() => {
-  effectCount++
-  console.log(`Effect ran: a=${state.a}, b=${state.b}, c=${state.c}`)
-})
-
-// Using atomic function
-atomic(() => {
-  state.a = 1
-  state.b = 2
-  state.c = 3
-})
-
-// Output:
-// Effect ran: a=0, b=0, c=0  (initial run)
-// Effect ran: a=1, b=2, c=3  (only one additional run despite 3 changes)
-```
-
-#### Returning Values
-
-The atomic function can return values:
-
-```typescript
-const result = atomic(() => {
-  state.a = 10
-  state.b = 20
-  return state.a + state.b
-})
-
-console.log(result) // 30
-```
-
-#### Atomic Method Return Values
-
-The `@atomic` decorator also supports return values from methods:
-
-```typescript
-@reactive
-class Calculator {
-  @atomic
-  updateAndCalculate(a: number, b: number) {
-    this.a = a
-    this.b = b
-    return { sum: a + b, product: a * b }
-  }
-}
-
-const calc = new Calculator()
-const result = calc.updateAndCalculate(5, 10)
-console.log(result) // { sum: 15, product: 50 }
-```
-
-**Key Points:**
-- Atomic methods can return any value type (primitives, objects, functions)
-- Return values are computed during method execution
-- Effects are batched until the method completes, regardless of return values
-- Both read-only and state-modifying methods can return values
-
-```typescript
-@reactive
-class DataProcessor {
-  @atomic
-  processData(items: Item[]) {
-    // Read-only method with return value
-    const total = items.reduce((sum, item) => sum + item.value, 0)
-    return total
-  }
-
-  @atomic
-  updateAndProcess(items: Item[]) {
-    // State-modifying method with return value
-    this.items = items
-    this.processedCount = items.length
-    this.lastProcessed = new Date()
-    
-    return {
-      count: items.length,
-      total: items.reduce((sum, item) => sum + item.value, 0)
-    }
-  }
-}
-```
-
-### When to Use Each Approach
-
-#### Use `@atomic` Decorator When:
-- You're working with class methods
-- You want to declare atomic behavior at the method level
-- You prefer declarative syntax
-- The method is part of a reactive class
-
-```typescript
-@reactive
-class TodoManager {
-  @atomic
-  addTodo(text: string) {
-    this.todos.push({ id: Date.now(), text, completed: false })
-    this.updateStats()
-  }
-}
-```
-
-#### Use `atomic()` Function When:
-- You need atomic behavior for standalone functions
-- You're working with functional code
-- You need to conditionally apply atomic behavior
-- You're working outside of classes
-
-```typescript
-// Conditional atomic behavior
-const updateState = (shouldBatch: boolean) => {
-  const updateFn = () => {
-    state.a = 1
-    state.b = 2
-  }
-  
-  return shouldBatch ? atomic(updateFn) : updateFn()
-}
-
-// Functional approach
-const processItems = (items: Item[]) => {
-  return atomic(() => {
-    items.forEach(item => state.items.set(item.id, item))
-    state.count = state.items.size
-    return state.count
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
   })
-}
-```
 
-### Key Behaviors
-
-#### Immediate Execution, Batched Effects
-
-The decorated method executes immediately, but effects are deferred until completion:
-
-```typescript
-class TestClass {
-  @atomic
-  updateAndLog() {
-    console.log('Method starts')
-    state.a = 1
-    console.log('After setting a')
-    state.b = 2
-    console.log('After setting b')
-    console.log('Method ends')
-  }
-}
-
-// Execution order:
-// Method starts
-// After setting a
-// After setting b
-// Method ends
-// Effect runs with final values
-```
-
-#### Nested Atomic Methods
-
-Multiple atomic methods can be nested, and all effects are batched at the outermost level:
-
-```typescript
-class TestClass {
-  @atomic
-  updateA() {
-    state.a = 1
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
   }
 
-  @atomic
-  updateB() {
-    state.b = 2
-  }
-
-  @atomic
-  updateAll() {
-    this.updateA()
-    this.updateB()
-    state.c = 3
-  }
-}
-
-// Calling updateAll() will batch all effects from updateA, updateB, and the direct assignment
-```
-
-#### Cascading Effects
-
-Effects that trigger other effects are also batched within atomic methods:
-
-```typescript
-// Create cascading effects
-effect(() => {
-  state.b = state.a * 2
-})
-effect(() => {
-  state.c = state.b + 1
+  return result
 })
 
-class TestClass {
-  @atomic
-  triggerCascade() {
-    state.a = 5  // This triggers the cascade
-  }
-}
+// Initial computations
+console.log(computeCount) // 3
 
-// All cascading effects are batched together
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
 ```
 
-### Advanced Usage
+**When to use which:**
 
-#### Working with Reactive Classes
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
 
-The `@atomic` decorator works seamlessly with `@reactive` classes:
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
 
 ```typescript
-@reactive
-class Counter {
-  value = 0
-  multiplier = 1
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
 
-  @atomic
-  updateBoth(newValue: number, newMultiplier: number) {
-    this.value = newValue
-    this.multiplier = newMultiplier
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
   }
-}
 
-const counter = new Counter()
-let effectCount = 0
-
-effect(() => {
-  effectCount++
-  console.log(`Counter: ${counter.value} * ${counter.multiplier}`)
+  return result
 })
 
-counter.updateBoth(5, 2)
-// Effect runs only once despite two property changes
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
 ```
 
-#### Complex Data Structures
+**When to use which:**
 
-Atomic methods work with arrays, maps, sets, and other complex data structures:
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
 
 ```typescript
-const state = reactive({
-  items: [1, 2, 3],
-  metadata: new Map([['count', 3]]),
-  tags: new Set(['active'])
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
 })
 
-class DataManager {
-  @atomic
-  addItem(item: number) {
-    state.items.push(item)
-    state.metadata.set('count', state.items.length)
-    state.tags.add('modified')
-  }
+// Initial computations
+console.log(computeCount) // 3
 
-  @atomic
-  clearAll() {
-    state.items.length = 0
-    state.metadata.clear()
-    state.tags.clear()
-  }
-}
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
 ```
 
-#### Error Handling
+**When to use which:**
 
-If an atomic method throws an error, effects are still executed for the changes that were made before the error:
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
 
 ```typescript
-class TestClass {
-  @atomic
-  updateWithError() {
-    state.a = 1
-    throw new Error('Something went wrong')
-    // state.b = 2  // This line never executes
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
   }
-}
 
-// Effect will run once for the change to state.a
-// state.b remains unchanged due to the error
-```
-
-#### Async Operations
-
-Atomic methods can be async, but effects are still batched:
-
-```typescript
-class TestClass {
-  @atomic
-  async updateAsync() {
-    state.a = 1
-    await someAsyncOperation()
-    state.b = 2
-  }
-}
-
-// Effects are batched even with async operations
-```
-
-### Performance Benefits
-
-#### Reduced Effect Executions
-
-Without `atomic`:
-```typescript
-// This would trigger the effect 3 times
-state.a = 1  // Effect runs
-state.b = 2  // Effect runs
-state.c = 3  // Effect runs
-```
-
-With `atomic`:
-```typescript
-@atomic
-updateAll() {
-  state.a = 1
-  state.b = 2
-  state.c = 3
-}
-// Effect runs only once
-```
-
-#### Consistent State
-
-Atomic operations ensure that effects always see a consistent state:
-
-```typescript
-effect(() => {
-  // This will never see inconsistent intermediate states
-  if (state.a > 0 && state.b > 0) {
-    console.log('Both values are positive')
-  }
+  return result
 })
 
-@atomic
-updateBoth() {
-  state.a = 1  // Effect doesn't run yet
-  state.b = 2  // Effect doesn't run yet
-  // Effect runs once with both values updated
-}
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
 ```
 
-### Best Practices
+**When to use which:**
 
-#### Use for Related Changes
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
 
-Apply `atomic` to methods that make logically related changes:
+### `computed.memo()`
 
-```typescript
-// Good: Related user profile updates
-@atomic
-updateProfile(name: string, age: number, email: string) {
-  this.name = name
-  this.age = age
-  this.email = email
-}
-
-// Good: Complex state initialization
-@atomic
-initialize() {
-  this.loading = false
-  this.data = fetchedData
-  this.error = null
-  this.lastUpdated = new Date()
-}
-```
-
-#### Combine with Other Decorators
-
-The `@atomic` decorator works well with other decorators:
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
 
 ```typescript
-@reactive
-class UserManager {
-  @atomic
-  updateUser(id: string, updates: Partial<User>) {
-    this.users.set(id, { ...this.users.get(id), ...updates })
-    this.lastModified = new Date()
-  }
-}
-```
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
 
-#### Consider Performance
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
 
-For methods that make many changes, `atomic` provides significant performance benefits:
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
 
-```typescript
-@atomic
-updateManyItems(items: Item[]) {
-  for (const item of items) {
-    this.items.set(item.id, item)
-  }
-  this.count = this.items.size
-  this.lastUpdate = new Date()
-}
-// Without @atomic: effect would run for each item + count + timestamp
-// With @atomic: effect runs only once
-```
-
-### Limitations
-
-- **Method-only**: The decorator only works on class methods, not standalone functions (use `atomic()` function instead)
-- **Synchronous batching**: Effects are batched until the method completes, but async operations within the method don't affect the batching
-- **Error handling**: If a method throws, effects still run for changes made before the error
-
-### Integration
-
-The `atomic` function and `@atomic` decorator integrate seamlessly with:
-
-- `@reactive` classes
-- `@unreactive` property marking
-- `effect()` functions
-- `computed()` values
-- Native collection types (Array, Map, Set, etc.)
-
-### Complete Example
-
-```typescript
-import { reactive, effect, atomic } from 'mutts'
-
-@reactive
-class TodoManager {
-  todos: Todo[] = []
-  filter: 'all' | 'active' | 'completed' = 'all'
-  loading = false
-
-  @atomic
-  addTodo(text: string) {
-    const todo: Todo = {
-      id: Date.now().toString(),
-      text,
-      completed: false,
-      createdAt: new Date()
-    }
-    this.todos.push(todo)
-    this.updateStats()
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
   }
 
-  @atomic
-  toggleTodo(id: string) {
-    const todo = this.todos.find(t => t.id === id)
-    if (todo) {
-      todo.completed = !todo.completed
-      this.updateStats()
-    }
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
   }
 
-  @atomic
-  setFilter(filter: 'all' | 'active' | 'completed') {
-    this.filter = filter
-    this.loading = false
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
   }
 
-  private updateStats() {
-    // This method is called from within atomic methods
-    // Effects will be batched until the calling atomic method completes
-    const activeCount = this.todos.filter(t => !t.completed).length
-    const completedCount = this.todos.length - activeCount
-    
-    // Update derived state
-    this.activeCount = activeCount
-    this.completedCount = completedCount
-    this.allCompleted = completedCount === this.todos.length && this.todos.length > 0
-  }
-}
-
-// Usage
-const todoManager = new TodoManager()
-
-effect(() => {
-  console.log(`Active: ${todoManager.activeCount}, Completed: ${todoManager.completedCount}`)
+  return result
 })
 
-// Adding a todo triggers updateStats, but effect runs only once
-todoManager.addTodo('Learn MutTs atomic operations')
+// Initial computations
+console.log(computeCount) // 3
 
-// Toggling a todo also triggers updateStats, effect runs only once
-todoManager.toggleTodo('some-id')
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
 ```
 
-This example demonstrates how `atomic` ensures that complex state updates are treated as single, consistent operations, improving both performance and reliability.
+**When to use which:**
 
-## Advanced Patterns
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
 
-### Custom Reactive Objects
+### `computed.memo()`
 
-Create custom reactive objects with specialized behavior:
-
-```typescript
-import { dependant, touched, allProps } from 'mutts/reactive'
-
-class ReactiveArray<T> {
-    private items: T[] = []
-    
-    push(item: T) {
-        this.items.push(item)
-        touched(this, { type: 'add', prop: this.items.length - 1 }, 'length')
-        touched(this, { type: 'bunch', method: 'push' }, allProps)
-    }
-    
-    get length() {
-        dependant(this, 'length')
-        return this.items.length
-    }
-    
-    get(index: number) {
-        dependant(this, index)
-        return this.items[index]
-    }
-}
-
-const array = new ReactiveArray<number>()
-effect(() => {
-    console.log('Array length:', array.length)
-})
-
-array.push(1) // Triggers effect
-```
-
-### Native Reactivity Registration
-
-The library automatically registers native collection types (Array, Map, Set, WeakMap, WeakSet) to use specialized reactive wrappers. This happens automatically when you import from `'mutts/reactive'`.
-
-**Note:** Library users typically don't need to register native types as this is handled automatically. The `registerNativeReactivity` function is primarily for library internals.
-
-If you need to create custom reactive collections, you can extend the existing reactive collection classes or create your own reactive wrapper:
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
 
 ```typescript
-import { ReactiveMap } from 'mutts/reactive'
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
 
-class CustomReactiveMap<K, V> extends ReactiveMap<K, V> {
-    // Add custom methods while maintaining reactivity
-    customMethod() {
-        // Your custom logic here
-        return this.size
-    }
-}
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
 
-const customMap = new CustomReactiveMap()
-// CustomMap instances are automatically reactive
-```
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
 
-### Memory Management
-
-The reactive system uses WeakMaps to avoid memory leaks:
-
-```typescript
-// Objects can be garbage collected when no longer referenced
-let obj = { data: 'large object' }
-const reactiveObj = reactive(obj)
-
-effect(() => {
-    console.log(reactiveObj.data)
-})
-
-// Remove reference
-obj = null
-reactiveObj = null
-
-// The original object and its reactive wrapper can be GC'd
-```
-
-### Performance Optimization
-
-Optimize reactive performance:
-
-```typescript
-// 1. Use non-reactive for static data
-const staticConfig = unreactive({
-    apiUrl: 'https://api.example.com',
-    version: '1.0.0'
-})
-
-// 2. Batch changes when possible
-const state = reactive({ a: 1, b: 2, c: 3 })
-
-// Instead of:
-state.a = 10
-state.b = 20
-state.c = 30
-
-// Consider batching or using a single update method
-
-// 3. Avoid unnecessary reactivity
-@reactive
-@unreactive('internalId')
-class User {
-    private internalId = crypto.randomUUID() // Never changes
-    
-    name: string = 'John' // Changes, should be reactive
-}
-
-// 4. Use appropriate collection types
-const smallSet = new ReactiveSet(new Set()) // For small collections
-const largeMap = new ReactiveMap(new Map()) // For large collections with key access
-```
-
-## Debugging and Development
-
-### Debug Options
-
-Configure debug behavior:
-
-```typescript
-import { options as reactiveOptions } from 'mutts/reactive'
-
-// Track effect entry/exit
-reactiveOptions.enter = (effect) => {
-    console.log('🔵 Entering effect:', effect.name || 'anonymous')
-}
-
-reactiveOptions.leave = (effect) => {
-    console.log('🔴 Leaving effect:', effect.name || 'anonymous')
-}
-
-// Track effect chaining
-reactiveOptions.chain = (caller, target) => {
-    console.log('⛓️ Effect chain:', caller.name || 'anonymous', '->', target.name || 'anonymous')
-}
-
-// Set maximum chain depth
-reactiveOptions.maxEffectChain = 50
-
-// Set maximum deep watch traversal depth
-reactiveOptions.maxDeepWatchDepth = 200
-```
-
-### Effect Stack Traces
-
-Debug effect execution:
-
-```typescript
-const state = reactive({ count: 0 })
-
-effect(() => {
-    console.trace('Effect running')
-    console.log('Count:', state.count)
-})
-
-// This will show the call stack when the effect runs
-state.count = 5
-```
-
-### Evolution Inspection
-
-Inspect object evolution history:
-
-```typescript
-const obj = reactive({ x: 1 })
-let state = getState(obj)
-
-effect(() => {
-    console.log('=== Evolution History ===')
-    let depth = 0
-    while ('evolution' in state) {
-        console.log(`${'  '.repeat(depth)}${state.evolution.type}: ${state.evolution.prop}`)
-        state = state.next
-        depth++
-    }
-    console.log('=== End History ===')
-    
-    // Reset state reference
-    state = getState(obj)
-})
-
-obj.x = 2
-obj.y = 'new'
-delete obj.x
-```
-
-## API Reference
-
-### Decorators
-
-#### `@computed`
-
-Marks a class accessor as computed. The computed value will be cached and invalidated when dependencies change.
-
-```typescript
-class MyClass {
-  private _value = 0;
-  
-  @computed
-  get doubled() {
-    return this._value * 2;
-  }
-}
-
-// Function usage
-function myExpensiveCalculus() {
-
-}
-...
-const result = computed(myExpensiveCalculus);
-```
-
-**Use Cases:**
-- Caching expensive calculations
-- Derived state that depends on reactive values
-- Computed properties in classes
-- Performance optimization for frequently accessed values
-
-**Notes:**
-The `computed()` function works correctly with arrow functions. The library handles the caching and dependency tracking automatically.
-
-#### `@atomic`
-
-Marks a class method as atomic, batching all effects triggered within the method until it completes.
-
-```typescript
-class MyClass {
-  @atomic
-  updateMultiple() {
-    this.a = 1
-    this.b = 2
-    this.c = 3
-    // Effects are batched and run only once after this method completes
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
   }
 
-  @atomic
-  updateAndReturn() {
-    this.a = 10
-    this.b = 20
-    return { sum: this.a + this.b, product: this.a * this.b }
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
   }
-}
 
-// Function usage
-const result = atomic(() => {
-  state.a = 1
-  state.b = 2
-  return state.a + state.b
-})
-```
-
-**Use Cases:**
-- Batching multiple related state changes
-- Performance optimization for methods with multiple updates
-- Ensuring consistent state in effects
-- Reducing unnecessary effect executions
-- Returning computed values from atomic operations
-
-**Notes:**
-- Effects are deferred until the method/function completes
-- Nested atomic methods are batched at the outermost level
-- Works with both class methods and standalone functions
-- Methods and functions can return values (primitives, objects, functions)
-
-#### `@unreactive`
-
-Marks class properties as non-reactive using class-level syntax. The property changes will not be tracked by the reactive system.
-
-Can also mark an entire class (and its descendants) as non-reactive when used without arguments.
-
-```typescript
-// Property-level usage (class-level syntax)
-@reactive
-@unreactive('config', 'internalState')
-class MyClass {
-  private config = { theme: 'dark' };
-  private internalState = {};
-  
-  name: string = 'John'; // This will be reactive
-}
-
-// Class-level usage (entire class non-reactive)
-@unreactive
-class NonReactiveClass {
-  // All instances will be non-reactive
-}
-
-// Function usage for objects
-const nonReactiveObj = unreactive({ config: { theme: 'dark' } });
-```
-
-**Use Cases:**
-- Configuration objects that shouldn't trigger reactivity
-- Static data that never changes
-- Performance optimization for objects that don't need tracking
-- Third-party objects that shouldn't be made reactive
-
-### Core Functions
-
-#### `reactive<T>(target: T): T`
-
-Creates a reactive proxy of the target object. All property access and mutations will be tracked.
-
-**Use Cases:**
-- Converting plain objects to reactive objects
-- Making class instances reactive
-- Creating reactive arrays, maps, and sets
-- Setting up reactive state management
-
-```typescript
-const state = reactive({ count: 0, name: 'John' });
-const items = reactive([1, 2, 3]);
-const map = reactive(new Map([['key', 'value']]));
-```
-
-#### `effect(fn, ...args): ScopedCallback`
-
-Creates a reactive effect that runs when its dependencies change.
-
-**Use Cases:**
-- Side effects like DOM updates
-- Logging and debugging
-- Data synchronization
-- Cleanup operations
-
-```typescript
-const cleanup = effect((dep) => {
-  console.log('Count changed:', state.count);
-  return () => {
-    // Cleanup function
-  };
-});
-```
-
-#### `atomic<T>(fn: () => T): T`
-
-Creates an atomic operation that batches all effects triggered within the function until it completes.
-
-**Use Cases:**
-- Batching multiple related state changes
-- Performance optimization for functions with multiple updates
-- Ensuring consistent state in effects
-- Reducing unnecessary effect executions
-
-```typescript
-const result = atomic(() => {
-  state.a = 1
-  state.b = 2
-  return state.a + state.b
-})
-```
-
-#### `computed<T>(getter: ComputedFunction<T>): T`
-
-Creates a computed value that caches its result and recomputes when dependencies change.
-
-**Use Cases:**
-- Derived state calculations
-- Expensive computations
-- Data transformations
-- Conditional logic based on reactive state
-
-```typescript
-const getter = () => someExpensiveCalculus();
-const result = computed(getter); // Call computed(getter) to get cached value
-```
-
-#### `derived<T>(compute: ComputedFunction<T>): {value: T, stop: ScopedCallback}`
-
-Creates a derived value that automatically recomputes when dependencies change. Unlike `computed`, this always recomputes immediately when dependencies change.
-
-**Use Cases:**
-- Immediate updates when dependencies change
-- Simple, predictable behavior
-- When you're okay with always recomputing (even if not accessed)
-- Real-time derived values that need to stay current
-
-```typescript
-const state = reactive({ a: 1, b: 2 })
-const derived = derived(() => state.a + state.b)
-console.log(derived.value) // 3
-state.a = 5 // derived.value automatically becomes 7
-derived.stop() // cleanup
-```
-
-**Key Differences from `computed`:**
-- **Eager computation**: Always recomputes when dependencies change
-- **Independent instances**: Each `derived()` call creates a separate effect
-- **Simple behavior**: No complex caching or invalidation logic
-- **Immediate updates**: Value is always current when accessed
-
-#### `watch(value, callback, options?): ScopedCallback`
-
-Watches a reactive value or function and calls a callback when it changes.
-
-**Use Cases:**
-- Reacting to specific value changes
-- Debugging reactive state
-- Side effects for specific properties
-- Data validation
-
-```typescript
-// Watch a specific value
-const stop = watch(() => state.count, (newVal, oldVal) => {
-  console.log(`Count changed from ${oldVal} to ${newVal}`);
-});
-
-// Watch an object with deep option
-const stopDeep = watch(state, (newState) => {
-  console.log('State changed:', newState);
-}, { deep: true, immediate: true });
-```
-
-#### `unwrap<T>(proxy: T): T`
-
-Returns the original object from a reactive proxy.
-
-**Use Cases:**
-- Accessing original object for serialization
-- Passing to non-reactive functions
-- Performance optimization
-- Debugging
-
-```typescript
-const original = unwrap(reactiveState);
-JSON.stringify(original); // Safe to serialize
-```
-
-#### `isReactive(obj: any): boolean`
-
-Checks if an object is a reactive proxy.
-
-**Use Cases:**
-- Type checking
-- Debugging
-- Conditional logic
-- Validation
-
-```typescript
-if (isReactive(obj)) {
-  console.log('Object is reactive');
-}
-```
-
-#### `isNonReactive(obj: any): boolean`
-
-Checks if an object is marked as non-reactive.
-
-**Use Cases:**
-- Validation
-- Debugging
-- Conditional logic
-- Type checking
-
-```typescript
-if (isNonReactive(obj)) {
-  console.log('Object is non-reactive');
-}
-```
-
-#### `untracked(fn: () => void): void`
-
-Executes a function without tracking dependencies.
-
-**Use Cases:**
-- Performance optimization
-- Avoiding circular dependencies
-- Side effects that shouldn't trigger reactivity
-- Batch operations
-
-```typescript
-untracked(() => {
-  // This won't create dependencies
-  console.log('Untracked operation');
-});
-```
-
-#### `getState(obj)`
-
-Gets the current state of a reactive object. Used internally for tracking changes.
-
-**Use Cases:**
-- Debugging reactive state
-- Custom reactive implementations
-- State inspection
-
-#### `invalidateComputed(callback, warn?)`
-
-Registers a callback to be called when a computed property is invalidated.
-
-**Use Cases:**
-- Custom computed implementations
-- Cleanup operations
-- Performance monitoring
-
-```typescript
-const expensiveGetter = () => {
-  invalidateComputed(() => {
-    console.log('Computed invalidated');
-  });
-  return expensiveCalculation();
-};
-
-const result = computed(expensiveGetter);
-```
-
-### Configuration
-
-#### `reactiveOptions`
-
-Global options for the reactive system.
-
-**Properties:**
-- `enter(effect: Function)`: Called when an effect is entered
-- `leave(effect: Function)`: Called when an effect is left
-- `chain(target: Function, caller?: Function)`: Called when effects are chained
-- `maxEffectChain: number`: Maximum effect chain depth (default: 100)
-- `maxDeepWatchDepth: number`: Maximum deep watch traversal depth (default: 100)
-- `instanceMembers: boolean`: Only react on instance members (default: true)
-- `warn(...args: any[])`: Warning function (default: console.warn)
-
-**Use Cases:**
-- Debugging reactive behavior
-- Performance tuning
-- Custom logging
-- Error handling
-
-```typescript
-reactiveOptions.maxEffectChain = 50;
-reactiveOptions.enter = (effect) => console.log('Effect entered:', effect.name);
-```
-
-### Classes
-
-#### `ReactiveBase`
-
-Base class for reactive objects. When extended and combined with the `@reactive` decorator, instances are automatically made reactive.
-
-**Use Cases:**
-- Creating reactive classes with proper constructor reactivity
-- Solving constructor reactivity issues in complex inheritance trees
-- Type safety for reactive objects
-- Preventing reactivity from being added to prototype chains
-
-```typescript
-import { ReactiveBase, reactive } from 'mutts/reactive'
-
-class MyState extends ReactiveBase {
-  count = 0;
-  name = '';
-}
-
-@reactive
-class ReactiveMyState extends MyState {
-  // Now instances will be automatically reactive
-}
-
-const state = new ReactiveMyState(); // Automatically reactive
-```
-
-**Note:** `ReactiveBase` alone does not make instances reactive. You must use the `@reactive` decorator on the class for instances to be automatically reactive.
-
-#### `ReactiveError`
-
-Error class for reactive system errors.
-
-**Use Cases:**
-- Error handling in reactive code
-- Debugging reactive issues
-- Custom error types
-
-### Collections
-
-Collections (Array, Map, Set, WeakMap, WeakSet) can be automatically made reactive when passed to `reactive()`:
-
-```typescript
-const items = reactive([1, 2, 3]);
-items.push(4); // Triggers reactivity
-
-const map = reactive(new Map([['key', 'value']]));
-map.set('newKey', 'newValue'); // Triggers reactivity
-
-const set = reactive(new Set([1, 2, 3]));
-set.add(4); // Triggers reactivity
-```
-
-#### Automatic Collection Reactivity
-
-All native collections have their specific management:
-
-```typescript
-// Collections still need to be wrapped with reactive()
-const arr = reactive([1, 2, 3]) // ReactiveArray
-const map = reactive(new Map()) // ReactiveMap
-const set = reactive(new Set()) // ReactiveSet
-const weakMap = reactive(new WeakMap()) // ReactiveWeakMap
-const weakSet = reactive(new WeakSet()) // ReactiveWeakSet
-
-effect(() => {
-    console.log('Array length:', arr.length)
-    console.log('Map size:', map.size)
-    console.log('Set size:', set.size)
+  return result
 })
 
-arr.push(4) // Triggers effect
-map.set('key', 'value') // Triggers effect
-set.add('item') // Triggers effect
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
 ```
 
-**Use Cases:**
-- Applications that primarily work with reactive collections
-- Global reactive state management
-- Ensuring collection methods (push, set, add, etc.) trigger reactivity
-- Performance optimization for collection-heavy applications
+**When to use which:**
 
-**Note:** The reactive module automatically registers native collection types to use specialized reactive wrappers. When you import from `'mutts/reactive'`, collections wrapped with `reactive()` automatically use the appropriate reactive wrappers - collection methods like `map.set()`, `array.push()`, etc. will trigger effects properly. The `reactive()` wrapper is still required, but the module ensures proper reactive behavior for collection-specific operations.
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
 
-### Types
+### `computed.memo()`
 
-#### `ScopedCallback`
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
 
-Type for effect cleanup functions.
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
 
-#### `DependencyFunction`
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
 
-Type for dependency tracking functions used in effects and computed values.
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
 
-#### `WatchOptions`
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
 
-Options for the watch function:
-- `immediate?: boolean`: Call callback immediately
-- `deep?: boolean`: Watch nested properties
+  return result
+})
 
-### Profile Information
+// Initial computations
+console.log(computeCount) // 3
 
-#### `profileInfo`
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
 
-Object containing internal reactive system state for debugging and profiling.
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
 
-**Properties:**
-- `objectToProxy`: WeakMap of original objects to their proxies
-- `proxyToObject`: WeakMap of proxies to their original objects
-- `effectToReactiveObjects`: WeakMap of effects to watched objects
-- `watchers`: WeakMap of objects to their property watchers
-- `objectParents`: WeakMap of objects to their parent relationships
-- `objectsWithDeepWatchers`: WeakSet of objects with deep watchers
-- `deepWatchers`: WeakMap of objects to their deep watchers
-- `effectToDeepWatchedObjects`: WeakMap of effects to deep watched objects
-- `nonReactiveObjects`: WeakSet of non-reactive objects
-- `computedCache`: WeakMap of computed functions to their cached values
+**When to use which:**
 
-**Use Cases:**
-- Debugging reactive behavior
-- Performance profiling
-- Memory leak detection
-- System state inspection
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
 
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNNY' still present for John
+```
+
+**When to use which:**
+
+- Use `computed.map` for simple per-index mapping with `(value, index, oldValue)` when you don't need identity-based caching across reorders.
+- Use `computed.memo` when you want to cache per input object and preserve mapped outputs (and their internal reactive state) across array reordering operations.
+
+### `computed.memo()`
+
+Creates a reactive mapped array with memoization by input identity. Results are cached per input object so that reordering (e.g., `splice`, `push`, `pop`, `unshift`) preserves the computed output and its internal state for the same input reference.
+
+```typescript
+const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
+let computeCount = 0
+
+const mapped = computed.memo(inputs, (input) => {
+  computeCount++
+  const result: any = {}
+
+  // Example of internal reactive state derived from the input
+  effect(() => {
+    result.name = input.name.toUpperCase()
+  })
+
+  // You can also expose helpers that mutate the original input
+  result.setName = (newName: string) => {
+    input.name = newName
+  }
+
+  return result
+})
+
+// Initial computations
+console.log(computeCount) // 3
+
+// Update through helper; no new compute, internal effect updates
+mapped[0].setName('Johnny')
+console.log(computeCount) // 3
+console.log(mapped[0].name) // 'JOHNNY'
+
+// Move an item out and back in; memoization keeps the same mapped object
+const buf = inputs.pop()!
+console.log(computeCount) // 3
+inputs.unshift(buf)
+console.log(computeCount) // 3 (no recompute for existing inputs)
+console.log(mapped[1].name) // Previous 'JOHNN

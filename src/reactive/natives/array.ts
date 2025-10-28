@@ -1,4 +1,4 @@
-import { Indexable } from '../indexable'
+import { Indexable } from '../../indexable'
 import {
 	dependant,
 	makeReactiveEntriesIterator,
@@ -6,7 +6,7 @@ import {
 	prototypeForwarding,
 	reactive,
 	touched,
-} from './core'
+} from '../core'
 
 const native = Symbol('native')
 const isArray = Array.isArray
