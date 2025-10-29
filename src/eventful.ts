@@ -75,8 +75,3 @@ export class Eventful<Events extends EventsBase> {
 		for (const cb of this.#hooks) cb.call(this, event, ...args)
 	}
 }
-
-/* TODO:
-this.on.click(() => {...}))
-this.raise.click(args)
-*/

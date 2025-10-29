@@ -14,6 +14,7 @@ export {
 	ReactiveError,
 	reactive,
 	type ScopedCallback,
+	trackEffect,
 	untracked,
 	unwrap,
 } from './core'

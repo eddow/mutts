@@ -3,13 +3,13 @@ import { renamed } from '../utils'
 import {
 	activeEffect,
 	addBatchCleanup,
+	type DependencyAccess,
 	type DependencyFunction,
 	deepWatch,
 	dependant,
 	effect,
 	getRoot,
 	isNonReactive,
-	ladder,
 	markWithRoot,
 	nonReactiveClass,
 	nonReactiveMark,
@@ -35,7 +35,7 @@ export function invalidateComputed(cb: () => void, warn = true) {
 	if (computedInvalidations) computedInvalidations.push(cb)
 	else if (warn) options.warn('Using `invalidateComputed` outside of a computed property')
 }
-type ComputedFunction<T> = (dep: DependencyFunction) => T
+type ComputedFunction<T> = (dep: DependencyAccess) => T
 const computedCache = new WeakMap<ComputedFunction<any>, any>()
 function computedFunction<T>(getter: ComputedFunction<T>): T {
 	const key = getRoot(getter)
@@ -44,7 +44,7 @@ function computedFunction<T>(getter: ComputedFunction<T>): T {
 	if (computedCache.has(key)) return computedCache.get(key)
 	let stopped = false
 	const once = effect(
-		markWithRoot((dep) => {
+		markWithRoot((access) => {
 			if (stopped) return
 			const oldCI = computedInvalidations
 			if (computedCache.has(key)) {
@@ -58,7 +58,7 @@ function computedFunction<T>(getter: ComputedFunction<T>): T {
 			} else
 				try {
 					computedInvalidations = invalidations
-					computedCache.set(key, getter(dep))
+					computedCache.set(key, getter(access))
 				} finally {
 					computedInvalidations = oldCI
 				}
@@ -119,7 +119,7 @@ export interface WatchOptions {
  * @returns Cleanup function to stop watching
  */
 export function watch<T>(
-	value: (dep: DependencyFunction) => T,
+	value: (dep: DependencyAccess) => T,
 	changed: (value: T, oldValue?: T) => void,
 	options?: Omit<WatchOptions, 'deep'> & { deep?: false }
 ): ScopedCallback
@@ -131,7 +131,7 @@ export function watch<T>(
  * @returns Cleanup function to stop watching
  */
 export function watch<T extends object | any[]>(
-	value: (dep: DependencyFunction) => T,
+	value: (dep: DependencyAccess) => T,
 	changed: (value: T, oldValue?: T) => void,
 	options?: Omit<WatchOptions, 'deep'> & { deep: true }
 ): ScopedCallback
@@ -149,7 +149,7 @@ export function watch<T extends object | any[]>(
 ): ScopedCallback
 
 export function watch(
-	value: any, //object | ((dep: DependencyFunction) => object),
+	value: any, //object | ((dep: DependencyAccess) => object),
 	changed: (value?: object, oldValue?: object) => void,
 	options: any = {}
 ) {
@@ -172,16 +172,14 @@ function watchObject(
 	return effect(
 		markWithRoot(function watchObjectEffect() {
 			dependant(value)
-			if (immediate)
-				//untracked(() => changed(value))
-				withEffect(myParentEffect, () => changed(value))
+			if (immediate) withEffect(myParentEffect, () => changed(value))
 			immediate = true
 		}, changed)
 	)
 }
 
 function watchCallBack<T>(
-	value: (dep: DependencyFunction) => T,
+	value: (dep: DependencyAccess) => T,
 	changed: (value: T, oldValue?: T) => void,
 	{ immediate = false, deep = false } = {}
 ): ScopedCallback {
@@ -189,8 +187,8 @@ function watchCallBack<T>(
 	let oldValue: T | typeof unsetYet = unsetYet
 	let deepCleanup: ScopedCallback | undefined
 	const cbCleanup = effect(
-		markWithRoot(function watchCallBackEffect(dep) {
-			const newValue = value(dep)
+		markWithRoot(function watchCallBackEffect(access) {
+			const newValue = value(access)
 			if (oldValue !== newValue)
 				withEffect(
 					myParentEffect,
@@ -293,7 +291,7 @@ export function cleanedBy<T extends object>(obj: T, cleanup: ScopedCallback) {
  * @param compute - Function that computes the derived value
  * @returns Object with value and cleanup function
  */
-export function derived<T>(compute: (dep: DependencyFunction) => T): {
+export function derived<T>(compute: (dep: DependencyAccess) => T): {
 	value: T
 	cleanup: ScopedCallback
 } {
@@ -302,8 +300,8 @@ export function derived<T>(compute: (dep: DependencyFunction) => T): {
 		rv,
 		untracked(() =>
 			effect(
-				markWithRoot(function derivedEffect(dep) {
-					rv.value = compute(dep)
+				markWithRoot(function derivedEffect(access) {
+					rv.value = compute(access)
 				}, compute)
 			)
 		)
@@ -313,7 +311,7 @@ export function derived<T>(compute: (dep: DependencyFunction) => T): {
 function computedMap<T, U>(
 	inputs: T[],
 	compute: (input: T, index: number, oldValue?: U) => U,
-	resize?: (length: number) => void
+	resize?: (newLength: number, oldLength: number) => void
 ): U[] {
 	const result = reactive([])
 	const cleanups: ScopedCallback[] = []
@@ -322,20 +320,24 @@ function computedMap<T, U>(
 			result[index] = compute(inputs[index], index, result[index])
 		})
 	}
-	ladder(function computedMapLengthEffect(ascend) {
+	effect(function computedMapLengthEffect({ ascend }) {
 		const length = inputs.length
-		ascend(function computedMapResize() {
-			resize?.(length)
-			const resultLength = untracked(() => result.length)
-			if (length < resultLength) {
-				const toCleanup = cleanups.splice(length)
-				for (const cleanup of toCleanup) cleanup()
-				result.length = length
-			} else if (length > resultLength)
+		const resultLength = untracked(() => result.length)
+		resize?.(length, resultLength)
+		if (length < resultLength) {
+			const toCleanup = cleanups.splice(length)
+			for (const cleanup of toCleanup) cleanup()
+			result.length = length
+		} else if (length > resultLength)
+			// the input effects will be registered as the call's children, so they will remain not cleaned with this effect on length
+			ascend(function computedMapNewElements() {
 				for (let i = resultLength; i < length; i++) cleanups.push(input(i))
-		})
+			})
 	})
-	return result
+	return cleanedBy(result, () => {
+		for (const cleanup of cleanups) cleanup()
+		cleanups.length = 0
+	})
 }
 
 type MemoEntry<O> = {
@@ -346,9 +348,17 @@ type MemoEntry<O> = {
 @unreactive
 export class Memoized<I, O> {
 	constructor(private compute: (input: I) => O) {
-		ladder((ascend) => {
+		this.keepCleanups = effect(({ ascend }) => {
 			this.inEffect = ascend
+			return () => {
+				this.cleanup()
+			}
 		})
+	}
+	private keepCleanups: ScopedCallback
+	cleanup() {
+		for (const { cleanup } of this.cache.values()) cleanup()
+		this.cache.clear()
 	}
 	private inEffect: DependencyFunction
 	private cache = new Map<I, MemoEntry<O>>()
@@ -390,17 +400,30 @@ export class Memoized<I, O> {
 	}
 }
 
-function computedMapMemo<I, O>(inputs: I[], compute: (input: I) => O): O[] {
+function computedMapMemo<I, O>(inputs: I[] | (() => I[]), compute: (input: I) => O): O[] {
 	const memo = new Memoized(compute)
-	function reduceKeys() {
-		memo.reduceInputs(new Set(inputs))
-	}
-	return computedMap(
-		inputs,
-		(input) => {
-			addBatchCleanup(reduceKeys)
-			return memo.get(input)
-		},
-		() => addBatchCleanup(reduceKeys)
+	const result = reactive([])
+	return cleanedBy(
+		result,
+		effect(() => {
+			const inputArray = typeof inputs === 'function' ? inputs() : inputs
+			function reduceKeys() {
+				untracked(() => {
+					memo.reduceInputs(new Set(inputArray))
+				})
+			}
+			const map = computedMap(
+				inputArray,
+				(input) => {
+					addBatchCleanup(reduceKeys)
+					return memo.get(input)
+				},
+				() => addBatchCleanup(reduceKeys)
+			)
+			effect(() => {
+				result.length = 0
+				result.push(...map)
+			})
+		})
 	)
 }

@@ -10,11 +10,64 @@ import { isObject, isOwnAccessor, ReflectGet, ReflectSet } from '../utils'
  * Restores the active effect context for dependency tracking
  */
 export type DependencyFunction = <T>(cb: () => T) => T
+/**
+ * Dependency access passed to user callbacks within effects/computed/watch
+ * Provides functions to track dependencies and information about the effect execution
+ */
+export interface DependencyAccess {
+	/**
+	 * Tracks dependencies in the current effect context
+	 * Use this for normal dependency tracking within the effect
+	 * @example
+	 * ```typescript
+	 * effect(({ tracked }) => {
+	 *   // In async context, use tracked to restore dependency tracking
+	 *   await someAsyncOperation()
+	 *   const value = tracked(() => state.count) // Tracks state.count in this effect
+	 * })
+	 * ```
+	 */
+	tracked: DependencyFunction
+	/**
+	 * Tracks dependencies in the parent effect context
+	 * Use this when child effects should track dependencies in the parent,
+	 * allowing parent cleanup to manage child effects while dependencies trigger the parent
+	 * @example
+	 * ```typescript
+	 * effect(({ ascend }) => {
+	 *   const length = inputs.length
+	 *   if (length > 0) {
+	 *     ascend(() => {
+	 *       // Dependencies here are tracked in the parent effect
+	 *       inputs.forEach(item => console.log(item))
+	 *     })
+	 *   }
+	 * })
+	 * ```
+	 */
+	ascend: DependencyFunction
+	/**
+	 * Indicates whether this is the initial execution of the effect
+	 * - `true`: First execution when the effect is created
+	 * - `false`: Subsequent executions triggered by dependency changes
+	 * @example
+	 * ```typescript
+	 * effect(({ init }) => {
+	 *   if (init) {
+	 *     console.log('Effect initialized')
+	 *     // Setup code that should only run once
+	 *   } else {
+	 *     console.log('Effect re-ran due to dependency change')
+	 *     // Code that runs on every update
+	 *   }
+	 * })
+	 * ```
+	 */
+	init: boolean
+}
 // TODO: proper async management, read when fn returns a promise and let the effect as "running",
 //  either to cancel the running one or to avoid running 2 in "parallel" and debounce the second one
 
-// TODO: generic "batch" forcing even if not in an effect (perhaps when calling a reactive' function ?)
-// example: storage will make 2 modifications (add slot, modify count), they could raise 2 effects
 /**
  * Type for effect cleanup functions
  */
@@ -238,8 +291,55 @@ export const options = {
 // biome-ignore-end lint/correctness/noUnusedFunctionParameters: Interface declaration with empty defaults
 
 //#region evolution
+type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
+/**
+ * Registers a debug callback that is called when the current effect is triggered by a dependency change
+ *
+ * This function is useful for debugging purposes as it pin-points exactly which reactive property
+ * change triggered the effect. The callback receives information about:
+ * - The object that changed
+ * - The type of change (evolution)
+ * - The specific property that changed
+ *
+ * **Note:** The tracker callback is automatically removed after being called once. If you need
+ * to track multiple triggers, call `trackEffect` again within the effect.
+ *
+ * @param onTouch - Callback function that receives (obj, evolution, prop) when the effect is triggered
+ * @throws {Error} If called outside of an effect context
+ *
+ * @example
+ * ```typescript
+ * const state = reactive({ count: 0, name: 'John' })
+ *
+ * effect(() => {
+ *   // Register a tracker to see what triggers this effect
+ *   trackEffect((obj, evolution, prop) => {
+ *     console.log(`Effect triggered by:`, {
+ *       object: obj,
+ *       change: evolution.type,
+ *       property: prop
+ *     })
+ *   })
+ *
+ *   // Access reactive properties
+ *   console.log(state.count, state.name)
+ * })
+ *
+ * state.count = 5
+ * // Logs: Effect triggered by: { object: state, change: 'set', property: 'count' }
+ * ```
+ */
+export function trackEffect(onTouch: EffectTracking) {
+	if (!activeEffect) throw new Error('Not in an effect')
+	if (!effectTrackers.has(activeEffect)) effectTrackers.set(activeEffect, new Set([onTouch]))
+	else effectTrackers.get(activeEffect)!.add(onTouch)
+}
+
+const effectTrackers = new WeakMap<ScopedCallback, Set<EffectTracking>>()
 
 function collectEffects(
+	obj: any,
+	evolution: Evolution,
 	effects: Set<ScopedCallback>,
 	objectWatchers: Map<any, Set<ScopedCallback>>,
 	...keyChains: Iterable<any>[]
@@ -247,7 +347,15 @@ function collectEffects(
 	for (const keys of keyChains)
 		for (const key of keys) {
 			const deps = objectWatchers.get(key)
-			if (deps) for (const effect of Array.from(deps)) effects.add(effect)
+			if (deps)
+				for (const effect of Array.from(deps)) {
+					effects.add(effect)
+					const trackers = effectTrackers.get(effect)
+					if (trackers) {
+						for (const tracker of trackers) tracker(obj, evolution, key)
+						trackers.delete(effect)
+					}
+				}
 		}
 }
 
@@ -276,8 +384,8 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 		const effects = new Set<ScopedCallback>()
 		if (props) {
 			props = Array.from(props) // For debug purposes only
-			collectEffects(effects, objectWatchers, [allProps], props)
-		} else collectEffects(effects, objectWatchers, objectWatchers.keys())
+			collectEffects(obj, evolution, effects, objectWatchers, [allProps], props)
+		} else collectEffects(obj, evolution, effects, objectWatchers, objectWatchers.keys())
 		options.touched(obj, evolution, props as any[] | undefined, effects)
 		batch(Array.from(effects))
 	}
@@ -571,7 +679,11 @@ const reactiveHandlers = {
 		)
 			dependant(obj, prop)
 
-		const value = ReflectGet(obj, prop, receiver)
+		const value = ReflectGet(
+			Object.hasOwn(obj, prop) ? obj : Object.getPrototypeOf(obj),
+			prop,
+			receiver
+		)
 		if (typeof value === 'object' && value !== null) {
 			const reactiveValue = reactive(value)
 
@@ -798,12 +910,19 @@ const fr = new FinalizationRegistry<() => void>((f) => f())
  * @returns A cleanup function to stop the effect
  */
 export function effect<Args extends any[]>(
-	fn: (dep: DependencyFunction, ...args: Args) => ScopedCallback | undefined | void,
+	fn: (access: DependencyAccess, ...args: Args) => ScopedCallback | undefined | void,
 	...args: Args
 ): ScopedCallback {
 	let cleanup: (() => void) | null = null
-	const dep = markWithRoot(<T>(cb: () => T) => withEffect(runEffect, cb), fn)
+	// capture the parent effect at creation time for ascend
+	const parentForAscend = parentEffect
+	const tracked = markWithRoot(<T>(cb: () => T) => withEffect(runEffect, cb), fn)
+	const ascend = markWithRoot(
+		<T>(cb: () => T) => withEffect(parentForAscend, cb),
+		getRoot(parentForAscend)
+	)
 	let effectStopped = false
+	let init = true
 
 	function runEffect() {
 		// The effect has been stopped after having been planned
@@ -814,8 +933,11 @@ export function effect<Args extends any[]>(
 		options.enter(getRoot(fn))
 		let reactionCleanup: ScopedCallback | undefined
 		try {
-			reactionCleanup = withEffect(runEffect, () => fn(dep, ...args)) as undefined | ScopedCallback
+			reactionCleanup = withEffect(runEffect, () => fn({ tracked, ascend, init }, ...args)) as
+				| undefined
+				| ScopedCallback
 		} finally {
+			init = false
 			options.leave(fn)
 		}
 
@@ -1101,15 +1223,4 @@ export function deepWatch<T extends object>(
 			}
 		}
 	})
-}
-
-// TODO: rename, document, use
-export function ladder(fn: (ascend: <T>(cb: () => T) => T, dep: DependencyFunction) => any) {
-	const parent = activeEffect
-	return effect((dep) =>
-		fn(
-			markWithRoot(<T>(cb: () => T) => withEffect(parent, cb), fn),
-			dep
-		)
-	)
 }

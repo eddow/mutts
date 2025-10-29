@@ -137,15 +137,24 @@ reactiveObj.count = 5 // Triggers effect
 Creates a reactive effect that automatically re-runs when dependencies change.
 
 ```typescript
+interface DependencyAccess {
+    tracked: DependencyFunction  // Track dependencies in the current effect
+    ascend: DependencyFunction    // Track dependencies in the parent effect
+}
+
 function effect(
-    fn: (dep: DependencyFunction, ...args: any[]) => (ScopedCallback | undefined | void),
+    fn: (access: DependencyAccess, ...args: any[]) => (ScopedCallback | undefined | void),
     ...args: any[]
 ): ScopedCallback
 ```
 
 **Parameters:**
-- `fn`: The effect function that provides dependencies and may return a cleanup function
+- `fn`: The effect function that receives dependency access and may return a cleanup function
 - `...args`: Additional arguments that are forwarded to the effect function
+
+**DependencyAccess:**
+- `tracked`: Function to track dependencies in the current effect (use this by default)
+- `ascend`: Function to track dependencies in the parent effect (useful for effects that should be cleaned up with their parent)
 
 **Returns:** A cleanup function to stop the effect
 
@@ -172,7 +181,7 @@ const items = reactive([{ id: 1 }, { id: 2 }, { id: 3 }])
 
 // Create effects in a loop, passing loop variables
 for (let i = 0; i < items.length; i++) {
-    effect((dep, index) => {
+    effect((access, index) => {
         console.log(`Item ${index}:`, items[index])
     }, i) // Pass the loop variable as argument
 }
@@ -349,15 +358,15 @@ state.b = 10 // Triggers effect
 state.c = 15 // Does NOT trigger effect
 ```
 
-### Async Effects and the `dep` Parameter
+### Async Effects and the `access` Parameter
 
-The `effect` function provides a special `dep` parameter that restores the active effect context for dependency tracking in asynchronous operations. This is crucial because async functions lose the global active effect context when they yield control.
+The `effect` function provides a special `access` parameter with `tracked` and `ascend` functions that restore the active effect context for dependency tracking in asynchronous operations. This is crucial because async functions lose the global active effect context when they yield control.
 
 #### The Problem with Async Effects
 
 When an effect function is synchronous, reactive property access automatically tracks dependencies, however, in async functions, the active effect context is lost when the function yields control. 
 
-The `dep` parameter restores the active effect context for dependency tracking.
+The `access.tracked()` function restores the active effect context for dependency tracking.
 
 #### Understanding the active effect context
 
@@ -383,22 +392,53 @@ effect(async () => {
     const another = state.name // ❌ NOT tracked (no active effect)
 })
 
-// Async effect with dep() - active effect is restored
-effect(async (dep) => {
+// Async effect with access.tracked() - active effect is restored
+effect(async ({ tracked }) => {
     // active effect = this effect
     const value = state.count // ✅ Tracked (active effect is set)
     
     await someAsyncOperation() // Function exits, active effect = undefined
     
-    // dep() temporarily restores active effect for the callback
-    const another = dep(() => state.name) // ✅ Tracked (active effect restored)
+    // tracked() temporarily restores active effect for the callback
+    const another = tracked(() => state.name) // ✅ Tracked (active effect restored)
 })
 ```
 
-#### Key Benefits of `dep()` in Async Effects
+#### Key Benefits of `access.tracked()` in Async Effects
 
-1. **Restored Context**: `dep()` temporarily restores the active effect context for dependency tracking
+1. **Restored Context**: `access.tracked()` temporarily restores the active effect context for dependency tracking
 2. **Consistent Tracking**: Reactive property access works the same way before and after `await`
+
+### Using `ascend` for Parent Effect Tracking
+
+The `ascend` function allows you to track dependencies in the parent effect instead of the current effect. This is useful when you want child effects to be cleaned up with their parent, but their dependencies should trigger the parent effect.
+
+```typescript
+const inputs = reactive([1, 2, 3])
+
+effect(({ ascend }) => {
+    // Track inputs.length in the parent effect
+    const length = inputs.length
+    
+    if (length > 0) {
+        // Use ascend to create effects that track dependencies in the parent
+        // When parent is cleaned up, these child effects are also cleaned up
+        ascend(() => {
+            // Dependencies here are tracked in the parent effect
+            inputs.forEach((item, index) => {
+                console.log(`Item ${index}:`, item)
+            })
+        })
+    }
+})
+```
+<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
+grep
+
+**When to use `ascend`:**
+- When creating child effects that should be cleaned up with their parent
+- When child effect dependencies should trigger the parent effect
+- For managing effect hierarchies where child effects depend on parent context
 
 ### Nested Effects
 
@@ -555,7 +595,7 @@ const items = reactive([
 const effectCleanups: (() => void)[] = []
 
 for (let i = 0; i < items.length; i++) {
-    const cleanup = effect((dep, index) => {
+    const cleanup = effect((access, index) => {
         console.log(`Item ${index}:`, items[index].name)
         
         // The index is captured in the closure and passed as argument
