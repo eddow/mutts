@@ -1,7 +1,7 @@
 {
   "name": "mutts",
   "description": "Modern UTility TS: A collection of TypeScript utilities",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
   "types": "dist/index.d.ts",

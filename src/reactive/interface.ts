@@ -407,7 +407,7 @@ function computedMapMemo<I, O>(inputs: I[] | (() => I[]), compute: (input: I) =>
 	return cleanedBy(
 		result,
 		effect(() => {
-			const inputArray = typeof inputs === 'function' ? inputs() : inputs
+			const inputArray = typeof inputs === 'function' ? computed(inputs) : inputs
 			function reduceKeys() {
 				untracked(() => {
 					memo.reduceInputs(new Set(inputArray))

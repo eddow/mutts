@@ -674,18 +674,24 @@ const reactiveHandlers = {
 		// Depend if...
 		if (
 			!Reflect.has(receiver, prop) ||
-			(!(options.instanceMembers && !Object.hasOwn(receiver, prop)) &&
+			(!(options.instanceMembers && !Object.hasOwn(receiver, prop) && obj instanceof Object) &&
 				!(options.ignoreAccessors && isOwnAccessor(receiver, prop)))
 		)
 			dependant(obj, prop)
 
-		const value = ReflectGet(
-			Object.hasOwn(obj, prop) ? obj : Object.getPrototypeOf(obj),
-			prop,
-			receiver
-		)
+		const isInheritedAccess = Reflect.has(receiver, prop) && !Object.hasOwn(receiver, prop)
+		// Watch the whole prototype chain when requested or for null-proto objects
+		if (isInheritedAccess && (!options.instanceMembers || !(obj instanceof Object))) {
+			let current = reactiveObject(Object.getPrototypeOf(obj))
+			while (current && current !== Object.prototype) {
+				dependant(current, prop)
+				if (Object.hasOwn(current, prop)) break
+				current = reactiveObject(Object.getPrototypeOf(current))
+			}
+		}
+		const value = ReflectGet(obj, prop, receiver)
 		if (typeof value === 'object' && value !== null) {
-			const reactiveValue = reactive(value)
+			const reactiveValue = reactiveObject(value)
 
 			// Only create back-references if this object needs them
 			if (needsBackReferences(obj)) {
@@ -712,12 +718,14 @@ const reactiveHandlers = {
 			return true
 		}
 
-		const oldVal = Reflect.has(receiver, prop) ? unwrap(ReflectGet(obj, prop, receiver)) : absent
+		const oldVal = Reflect.has(receiver, prop)
+			? unwrap(ReflectGet(obj, prop, unwrap(receiver)))
+			: absent
 		track1(obj, prop, oldVal, newValue)
 
 		if (oldVal !== newValue) {
 			ReflectSet(obj, prop, newValue, receiver)
-			// try to find a "generic" way to express that
+
 			touched1(obj, { type: oldVal !== absent ? 'set' : 'add', prop }, prop)
 		}
 		return true
