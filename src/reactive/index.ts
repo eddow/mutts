@@ -1,4 +1,5 @@
 export {
+	activeEffect,
 	addBatchCleanup,
 	atomic,
 	type Evolution,

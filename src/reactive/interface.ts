@@ -93,6 +93,7 @@ export const computed = Object.assign(
 	{
 		map: computedMap,
 		memo: computedMapMemo,
+		self: selfReferencing,
 	}
 )
 
@@ -426,4 +427,12 @@ function computedMapMemo<I, O>(inputs: I[] | (() => I[]), compute: (input: I) =>
 			})
 		})
 	)
+}
+
+function selfReferencing<T extends object>(compute: (dep: DependencyAccess) => T): T {
+	let rv: T | undefined
+	const cleanup = effect((access) => {
+		rv = compute(access)
+	})
+	return cleanedBy(rv, cleanup)
 }
