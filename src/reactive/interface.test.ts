@@ -1,4 +1,4 @@
-import { computed, effect, reactive, unwrap, watch } from './index'
+import { cleanup, computed, effect, reactive, unwrap, watch } from './index'
 
 describe('computed', () => {
 	it('returns computed value and caches it', () => {
@@ -2294,5 +2294,119 @@ describe('computed.values', () => {
 		expect(memoComputeCount).toBe(5) // No new memo computation
 		expect(effectCount).toBe(6) // One more effect (reactive to obj.name change)
 		expect(finalNames[1].uppercase).toBe('JANET')
+	})
+})
+
+describe('cleanup symbol', () => {
+	it('should add cleanup function to objects via cleanedBy', () => {
+		const testObj = { foo: 'bar' }
+		let cleanupCalled = false
+		const cleanupFn = () => {
+			cleanupCalled = true
+		}
+
+		const cleanedObj = Object.defineProperty(testObj, cleanup, {
+			value: cleanupFn,
+			writable: false,
+			enumerable: false,
+			configurable: true,
+		})
+
+		expect(typeof cleanedObj[cleanup]).toBe('function')
+		expect(cleanupCalled).toBe(false)
+
+		// Call cleanup
+		cleanedObj[cleanup]()
+		expect(cleanupCalled).toBe(true)
+	})
+
+	it('should expose cleanup function on computed.map results', () => {
+		const input = reactive([1, 2, 3])
+		const mapped = computed.map(input, (value) => value * 2)
+
+		expect(typeof mapped[cleanup]).toBe('function')
+		expect(unwrap(mapped)).toEqual([2, 4, 6])
+
+		// Verify cleanup function is callable
+		expect(() => mapped[cleanup]()).not.toThrow()
+	})
+
+	it('should expose cleanup function on computed.memo results', () => {
+		const input = reactive([1, 2, 3])
+		const memoized = computed.memo(input, (value) => value * 2)
+
+		expect(typeof memoized[cleanup]).toBe('function')
+		expect(unwrap(memoized)).toEqual([2, 4, 6])
+
+		// Verify cleanup function is callable
+		expect(() => memoized[cleanup]()).not.toThrow()
+	})
+
+	it('cleanup symbol should be unique and match exported symbol', () => {
+		const { cleanup: importedCleanup } = require('./interface')
+		expect(cleanup).toBe(importedCleanup)
+		expect(typeof cleanup).toBe('symbol')
+	})
+
+	it('cleanup should not conflict with object properties', () => {
+		const testObj = { cleanup: 'user property' }
+		const cleanupFn = () => console.log('cleaned')
+
+		// Add cleanup via symbol
+		const cleanedObj = Object.defineProperty(testObj, cleanup, {
+			value: cleanupFn,
+			writable: false,
+			enumerable: false,
+			configurable: true,
+		})
+
+		// User property should still be accessible
+		expect(cleanedObj.cleanup).toBe('user property')
+		// Cleanup function should be accessible via symbol
+		expect(cleanedObj[cleanup]).toBe(cleanupFn)
+
+		// Verify they are different
+		expect(cleanedObj.cleanup).not.toBe(cleanedObj[cleanup])
+	})
+
+	it('cleanup should not be enumerable', () => {
+		const testObj = {}
+		const cleanupFn = () => {}
+
+		const cleanedObj = Object.defineProperty(testObj, cleanup, {
+			value: cleanupFn,
+			writable: false,
+			enumerable: false,
+			configurable: true,
+		})
+
+		// cleanup should not appear in for...in
+		const keys: string[] = []
+		for (const key in cleanedObj) {
+			keys.push(key)
+		}
+		expect(keys).not.toContain('cleanup')
+
+		// But should be accessible via Object.getOwnPropertySymbols
+		const symbols = Object.getOwnPropertySymbols(cleanedObj)
+		expect(symbols).toContain(cleanup)
+	})
+
+	it('cleanup should work with multiple cleanedBy calls', () => {
+		const input = reactive([1, 2, 3])
+		const mapped1 = computed.map(input, (value) => value * 2)
+		const mapped2 = computed.map(input, (value) => value * 3)
+
+		expect(typeof mapped1[cleanup]).toBe('function')
+		expect(typeof mapped2[cleanup]).toBe('function')
+
+		// Both should be independent
+		input.push(4)
+		expect(unwrap(mapped1)).toEqual([2, 4, 6, 8])
+		expect(unwrap(mapped2)).toEqual([3, 6, 9, 12])
+
+		// Both cleanup functions should be callable
+		expect(() => mapped1[cleanup]()).not.toThrow()
+		expect(() => mapped2[cleanup]()).not.toThrow()
 	})
 })

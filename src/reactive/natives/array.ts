@@ -6,6 +6,7 @@ import {
 	prototypeForwarding,
 	reactive,
 	touched,
+	unwrap,
 } from '../core'
 
 const native = Symbol('native')
@@ -244,33 +245,64 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 
 	indexOf(searchElement: any, fromIndex?: number): number {
 		dependant(this)
-		return this[native].indexOf(searchElement, fromIndex)
+		return this[native].indexOf(unwrap(searchElement), fromIndex)
 	}
 
 	lastIndexOf(searchElement: any, fromIndex?: number): number {
 		dependant(this)
-		return this[native].lastIndexOf(searchElement, fromIndex)
+		return this[native].lastIndexOf(unwrap(searchElement), fromIndex)
 	}
 
 	includes(searchElement: any, fromIndex?: number): boolean {
 		dependant(this)
-		return this[native].includes(searchElement, fromIndex)
+		return this[native].includes(unwrap(searchElement), fromIndex)
 	}
 
-	find(
-		predicate: (this: any, value: any, index: number, obj: any[]) => boolean,
-		thisArg?: any
-	): any {
+	find(predicate: (this: any, value: any, index: number, obj: any[]) => boolean, thisArg?: any): any
+	find(searchElement: any, fromIndex?: number): any
+	find(predicateOrElement: any, thisArg?: any): any {
 		dependant(this)
-		return reactive(this[native].find(predicate, thisArg))
+		if (typeof predicateOrElement === 'function') {
+			const predicate = predicateOrElement as (
+				this: any,
+				value: any,
+				index: number,
+				obj: any[]
+			) => boolean
+			return reactive(
+				this[native].find(
+					(value, index, array) => predicate.call(thisArg, reactive(value), index, array),
+					thisArg
+				)
+			)
+		}
+		const fromIndex = typeof thisArg === 'number' ? thisArg : undefined
+		const index = this[native].indexOf(unwrap(predicateOrElement), fromIndex)
+		if (index === -1) return undefined
+		return reactive(this[native][index])
 	}
 
 	findIndex(
 		predicate: (this: any, value: any, index: number, obj: any[]) => boolean,
 		thisArg?: any
-	): number {
+	): number
+	findIndex(searchElement: any, fromIndex?: number): number
+	findIndex(predicateOrElement: any, thisArg?: any): number {
 		dependant(this)
-		return this[native].findIndex(predicate, thisArg)
+		if (typeof predicateOrElement === 'function') {
+			const predicate = predicateOrElement as (
+				this: any,
+				value: any,
+				index: number,
+				obj: any[]
+			) => boolean
+			return this[native].findIndex(
+				(value, index, array) => predicate.call(thisArg, reactive(value), index, array),
+				thisArg
+			)
+		}
+		const fromIndex = typeof thisArg === 'number' ? thisArg : undefined
+		return this[native].indexOf(unwrap(predicateOrElement), fromIndex)
 	}
 
 	flat(): any[] {

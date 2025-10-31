@@ -663,7 +663,9 @@ export function track1(obj: object, prop: any, oldVal: any, newValue: any) {
 }
 
 //#endregion
-
+/* TODO? Recursive touch.
+In case of same prototype (or both non-object, specific case), touch all the properties instead of the whole object.
+*/
 const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {

@@ -21,6 +21,7 @@ export {
 } from './core'
 export {
 	cleanedBy,
+	cleanup,
 	computed,
 	invalidateComputed,
 	unreactive,

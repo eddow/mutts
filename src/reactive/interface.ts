@@ -24,6 +24,11 @@ import {
 	withEffect,
 } from './core'
 
+/**
+ * Symbol for accessing the cleanup function on cleaned objects
+ */
+export const cleanup = Symbol('cleanup')
+
 //#region computed
 let computedInvalidations: (() => void)[] | undefined
 /**
@@ -275,13 +280,13 @@ import { profileInfo } from './core'
 
 Object.assign(profileInfo, { computedCache })
 
-export function cleanedBy<T extends object>(obj: T, cleanup: ScopedCallback) {
-	return Object.defineProperty(obj, 'cleanup', {
-		value: cleanup,
+export function cleanedBy<T extends object>(obj: T, cleanupFn: ScopedCallback) {
+	return Object.defineProperty(obj, cleanup, {
+		value: cleanupFn,
 		writable: false,
 		enumerable: false,
 		configurable: true,
-	}) as T & { cleanup: () => void }
+	}) as T & { [cleanup]: ScopedCallback }
 }
 
 //#region greedy caching
@@ -294,7 +299,7 @@ export function cleanedBy<T extends object>(obj: T, cleanup: ScopedCallback) {
  */
 export function derived<T>(compute: (dep: DependencyAccess) => T): {
 	value: T
-	cleanup: ScopedCallback
+	[cleanup]: ScopedCallback
 } {
 	const rv = { value: undefined }
 	return cleanedBy(
