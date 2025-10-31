@@ -666,6 +666,163 @@ export function track1(obj: object, prop: any, oldVal: any, newValue: any) {
 /* TODO? Recursive touch.
 In case of same prototype (or both non-object, specific case), touch all the properties instead of the whole object.
 */
+
+function isObjectLike(value: unknown): value is object {
+	return typeof value === 'object' && value !== null
+}
+
+function getPrototypeToken(value: any): object | null | undefined {
+	if (!isObjectLike(value)) return undefined
+	if (Array.isArray(value)) return Array.prototype
+	try {
+		return Object.getPrototypeOf(value)
+	} catch {
+		return undefined
+	}
+}
+
+function shouldRecurseTouch(oldValue: any, newValue: any): boolean {
+	if (oldValue === newValue) return false
+	if (!isObjectLike(oldValue) || !isObjectLike(newValue)) return false
+	if (Array.isArray(oldValue) || Array.isArray(newValue)) return false
+	if (isNonReactive(oldValue) || isNonReactive(newValue)) return false
+	return getPrototypeToken(oldValue) === getPrototypeToken(newValue)
+}
+
+type VisitedPairs = WeakMap<object, WeakSet<object>>
+type PendingNotification = { target: any; evolution: Evolution; prop: any }
+
+function hasVisitedPair(visited: VisitedPairs, oldObj: object, newObj: object): boolean {
+	let mapped = visited.get(oldObj)
+	if (!mapped) {
+		mapped = new WeakSet<object>()
+		visited.set(oldObj, mapped)
+	}
+	if (mapped.has(newObj)) return true
+	mapped.add(newObj)
+	return false
+}
+
+function collectObjectKeys(obj: any): PropertyKey[] {
+	const keys = new Set<PropertyKey>(Reflect.ownKeys(obj))
+	if (!(obj instanceof Object)) {
+		let proto = Object.getPrototypeOf(obj)
+		while (proto) {
+			for (const key of Reflect.ownKeys(proto)) keys.add(key)
+			proto = Object.getPrototypeOf(proto)
+		}
+	}
+	return Array.from(keys)
+}
+
+function recursiveTouch(
+	oldValue: any,
+	newValue: any,
+	visited: VisitedPairs = new WeakMap(),
+	notifications: PendingNotification[] = []
+): PendingNotification[] {
+	if (!shouldRecurseTouch(oldValue, newValue)) return notifications
+	if (!isObjectLike(oldValue) || !isObjectLike(newValue)) return notifications
+	if (hasVisitedPair(visited, oldValue, newValue)) return notifications
+
+	if (Array.isArray(oldValue) && Array.isArray(newValue)) {
+		diffArrayElements(oldValue, newValue, visited, notifications)
+		return notifications
+	}
+
+	diffObjectProperties(oldValue, newValue, visited, notifications)
+	return notifications
+}
+
+function diffArrayElements(
+	oldArray: any[],
+	newArray: any[],
+	_visited: VisitedPairs,
+	notifications: PendingNotification[]
+) {
+	const local: PendingNotification[] = []
+	const oldLength = oldArray.length
+	const newLength = newArray.length
+	const max = Math.max(oldLength, newLength)
+
+	for (let index = 0; index < max; index++) {
+		const hasOld = index < oldLength
+		const hasNew = index < newLength
+		if (hasOld && !hasNew) {
+			local.push({ target: oldArray, evolution: { type: 'del', prop: index }, prop: index })
+			continue
+		}
+		if (!hasOld && hasNew) {
+			local.push({ target: oldArray, evolution: { type: 'add', prop: index }, prop: index })
+			continue
+		}
+		if (!hasOld || !hasNew) continue
+		const oldEntry = unwrap(oldArray[index])
+		const newEntry = unwrap(newArray[index])
+		if (!Object.is(oldEntry, newEntry)) {
+			local.push({ target: oldArray, evolution: { type: 'set', prop: index }, prop: index })
+		}
+	}
+
+	if (oldLength !== newLength)
+		local.push({ target: oldArray, evolution: { type: 'set', prop: 'length' }, prop: 'length' })
+
+	notifications.push(...local)
+}
+
+function diffObjectProperties(
+	oldObj: any,
+	newObj: any,
+	visited: VisitedPairs,
+	notifications: PendingNotification[]
+) {
+	const oldKeys = new Set<PropertyKey>(collectObjectKeys(oldObj))
+	const newKeys = new Set<PropertyKey>(collectObjectKeys(newObj))
+	const local: PendingNotification[] = []
+
+	for (const key of oldKeys)
+		if (!newKeys.has(key))
+			local.push({ target: oldObj, evolution: { type: 'del', prop: key }, prop: key })
+
+	for (const key of newKeys)
+		if (!oldKeys.has(key))
+			local.push({ target: oldObj, evolution: { type: 'add', prop: key }, prop: key })
+
+	for (const key of newKeys) {
+		if (!oldKeys.has(key)) continue
+		const oldEntry = unwrap((oldObj as any)[key])
+		const newEntry = unwrap((newObj as any)[key])
+		if (shouldRecurseTouch(oldEntry, newEntry)) {
+			recursiveTouch(oldEntry, newEntry, visited, notifications)
+		} else if (!Object.is(oldEntry, newEntry)) {
+			local.push({ target: oldObj, evolution: { type: 'set', prop: key }, prop: key })
+		}
+	}
+
+	notifications.push(...local)
+}
+
+function dispatchNotifications(notifications: PendingNotification[]) {
+	if (!notifications.length) return
+	const combinedEffects = new Set<ScopedCallback>()
+	for (const { target, evolution, prop } of notifications) {
+		if (!isObjectLike(target)) continue
+		const obj = unwrap(target)
+		addState(obj, evolution)
+		const objectWatchers = watchers.get(obj)
+		let currentEffects: Set<ScopedCallback> | undefined
+		const propsArray = [prop]
+		if (objectWatchers) {
+			currentEffects = new Set<ScopedCallback>()
+			collectEffects(obj, evolution, currentEffects, objectWatchers, [allProps], propsArray)
+			for (const effect of currentEffects) combinedEffects.add(effect)
+		}
+		options.touched(obj, evolution, propsArray, currentEffects)
+		if (objectsWithDeepWatchers.has(obj)) bubbleUpChange(obj, evolution)
+	}
+	if (combinedEffects.size) batch(Array.from(combinedEffects))
+}
+
 const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
@@ -706,7 +863,8 @@ const reactiveHandlers = {
 	},
 	set(obj: any, prop: PropertyKey, value: any, receiver: any): boolean {
 		// Check if this property is marked as unreactive
-		if (unwrap(obj)[unreactiveProperties]?.has(prop)) return ReflectSet(obj, prop, value, receiver)
+		if (unwrap(obj)[unreactiveProperties]?.has(prop) || obj !== unwrap(receiver))
+			return ReflectSet(obj, prop, value, receiver)
 		// Really specific case for when Array is forwarder, in order to let it manage the reactivity
 		const isArrayCase =
 			prototypeForwarding in obj &&
@@ -728,7 +886,9 @@ const reactiveHandlers = {
 		if (oldVal !== newValue) {
 			ReflectSet(obj, prop, newValue, receiver)
 
-			touched1(obj, { type: oldVal !== absent ? 'set' : 'add', prop }, prop)
+			if (oldVal !== absent && shouldRecurseTouch(oldVal, newValue)) {
+				dispatchNotifications(recursiveTouch(oldVal, newValue))
+			} else touched1(obj, { type: oldVal !== absent ? 'set' : 'add', prop }, prop)
 		}
 		return true
 	},

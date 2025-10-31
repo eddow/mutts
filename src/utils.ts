@@ -77,21 +77,22 @@ export function ReflectGet(obj: any, prop: any, receiver: any) {
 	return Reflect.get(obj, prop, receiver)
 }
 
-export function ReflectSet(obj: any, prop: any, value: any, _receiver: any) {
+export function ReflectSet(obj: any, prop: any, value: any, receiver: any) {
 	// Check if Node is available and obj is an instance of Node
 	if (typeof Node !== 'undefined' && obj instanceof Node) {
 		obj[prop] = value
 		return value
 	}
-
-	Object.defineProperty(obj, prop, {
-		value,
-		configurable: true,
-		writable: true,
-		enumerable: true,
-	})
-	return true
-	//return Reflect.set(obj, prop, value, receiver)
+	const result = Reflect.set(obj, prop, value, receiver)
+	// Legacy fallback kept for reference if reflective propagation regresses:
+	// Object.defineProperty(obj, prop, {
+	// 	value,
+	// 	configurable: true,
+	// 	writable: true,
+	// 	enumerable: true,
+	// })
+	// return true
+	return result
 }
 
 export function isOwnAccessor(obj: any, prop: any) {
