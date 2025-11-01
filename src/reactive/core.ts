@@ -4,7 +4,7 @@
 import { decorator } from '../decorator'
 import { mixin } from '../mixins'
 import { isObject, isOwnAccessor, ReflectGet, ReflectSet } from '../utils'
-
+// TODO: __isReactiveMixin - WTF?
 /**
  * Function type for dependency tracking in effects and computed values
  * Restores the active effect context for dependency tracking
@@ -681,13 +681,19 @@ function getPrototypeToken(value: any): object | null | undefined {
 function shouldRecurseTouch(oldValue: any, newValue: any): boolean {
 	if (oldValue === newValue) return false
 	if (!isObjectLike(oldValue) || !isObjectLike(newValue)) return false
-	if (Array.isArray(oldValue) || Array.isArray(newValue)) return false
 	if (isNonReactive(oldValue) || isNonReactive(newValue)) return false
+	// TODO: check the case of pure objects, who should touche each value separately + their prototype?
+	//if(!(oldValue instanceof Object) || !(newValue instanceof Object)) return true
 	return getPrototypeToken(oldValue) === getPrototypeToken(newValue)
 }
 
 type VisitedPairs = WeakMap<object, WeakSet<object>>
-type PendingNotification = { target: any; evolution: Evolution; prop: any }
+type PendingNotification = {
+	target: any
+	evolution: Evolution
+	prop: any
+	origin?: { obj: object; prop: PropertyKey } // The property access that triggered this deep touch
+}
 
 function hasVisitedPair(visited: VisitedPairs, oldObj: object, newObj: object): boolean {
 	let mapped = visited.get(oldObj)
@@ -702,12 +708,13 @@ function hasVisitedPair(visited: VisitedPairs, oldObj: object, newObj: object): 
 
 function collectObjectKeys(obj: any): PropertyKey[] {
 	const keys = new Set<PropertyKey>(Reflect.ownKeys(obj))
-	if (!(obj instanceof Object)) {
-		let proto = Object.getPrototypeOf(obj)
-		while (proto) {
-			for (const key of Reflect.ownKeys(proto)) keys.add(key)
-			proto = Object.getPrototypeOf(proto)
-		}
+	let proto = Object.getPrototypeOf(obj)
+	// Continue walking while prototype exists and doesn't have its own constructor
+	// This stops at Object.prototype (has own constructor) and class prototypes (have own constructor)
+	// but continues for data prototypes (Object.create({}), Object.create(instance), etc.)
+	while (proto && !Object.hasOwn(proto, 'constructor')) {
+		for (const key of Reflect.ownKeys(proto)) keys.add(key)
+		proto = Object.getPrototypeOf(proto)
 	}
 	return Array.from(keys)
 }
@@ -716,18 +723,19 @@ function recursiveTouch(
 	oldValue: any,
 	newValue: any,
 	visited: VisitedPairs = new WeakMap(),
-	notifications: PendingNotification[] = []
+	notifications: PendingNotification[] = [],
+	origin?: { obj: object; prop: PropertyKey }
 ): PendingNotification[] {
 	if (!shouldRecurseTouch(oldValue, newValue)) return notifications
 	if (!isObjectLike(oldValue) || !isObjectLike(newValue)) return notifications
 	if (hasVisitedPair(visited, oldValue, newValue)) return notifications
 
 	if (Array.isArray(oldValue) && Array.isArray(newValue)) {
-		diffArrayElements(oldValue, newValue, visited, notifications)
+		diffArrayElements(oldValue, newValue, visited, notifications, origin)
 		return notifications
 	}
 
-	diffObjectProperties(oldValue, newValue, visited, notifications)
+	diffObjectProperties(oldValue, newValue, visited, notifications, origin)
 	return notifications
 }
 
@@ -735,7 +743,8 @@ function diffArrayElements(
 	oldArray: any[],
 	newArray: any[],
 	_visited: VisitedPairs,
-	notifications: PendingNotification[]
+	notifications: PendingNotification[],
+	origin?: { obj: object; prop: PropertyKey }
 ) {
 	const local: PendingNotification[] = []
 	const oldLength = oldArray.length
@@ -746,23 +755,28 @@ function diffArrayElements(
 		const hasOld = index < oldLength
 		const hasNew = index < newLength
 		if (hasOld && !hasNew) {
-			local.push({ target: oldArray, evolution: { type: 'del', prop: index }, prop: index })
+			local.push({ target: oldArray, evolution: { type: 'del', prop: index }, prop: index, origin })
 			continue
 		}
 		if (!hasOld && hasNew) {
-			local.push({ target: oldArray, evolution: { type: 'add', prop: index }, prop: index })
+			local.push({ target: oldArray, evolution: { type: 'add', prop: index }, prop: index, origin })
 			continue
 		}
 		if (!hasOld || !hasNew) continue
 		const oldEntry = unwrap(oldArray[index])
 		const newEntry = unwrap(newArray[index])
 		if (!Object.is(oldEntry, newEntry)) {
-			local.push({ target: oldArray, evolution: { type: 'set', prop: index }, prop: index })
+			local.push({ target: oldArray, evolution: { type: 'set', prop: index }, prop: index, origin })
 		}
 	}
 
 	if (oldLength !== newLength)
-		local.push({ target: oldArray, evolution: { type: 'set', prop: 'length' }, prop: 'length' })
+		local.push({
+			target: oldArray,
+			evolution: { type: 'set', prop: 'length' },
+			prop: 'length',
+			origin,
+		})
 
 	notifications.push(...local)
 }
@@ -771,7 +785,8 @@ function diffObjectProperties(
 	oldObj: any,
 	newObj: any,
 	visited: VisitedPairs,
-	notifications: PendingNotification[]
+	notifications: PendingNotification[],
+	origin?: { obj: object; prop: PropertyKey }
 ) {
 	const oldKeys = new Set<PropertyKey>(collectObjectKeys(oldObj))
 	const newKeys = new Set<PropertyKey>(collectObjectKeys(newObj))
@@ -779,29 +794,68 @@ function diffObjectProperties(
 
 	for (const key of oldKeys)
 		if (!newKeys.has(key))
-			local.push({ target: oldObj, evolution: { type: 'del', prop: key }, prop: key })
+			local.push({ target: oldObj, evolution: { type: 'del', prop: key }, prop: key, origin })
 
 	for (const key of newKeys)
 		if (!oldKeys.has(key))
-			local.push({ target: oldObj, evolution: { type: 'add', prop: key }, prop: key })
+			local.push({ target: oldObj, evolution: { type: 'add', prop: key }, prop: key, origin })
 
 	for (const key of newKeys) {
 		if (!oldKeys.has(key)) continue
 		const oldEntry = unwrap((oldObj as any)[key])
 		const newEntry = unwrap((newObj as any)[key])
 		if (shouldRecurseTouch(oldEntry, newEntry)) {
-			recursiveTouch(oldEntry, newEntry, visited, notifications)
+			recursiveTouch(oldEntry, newEntry, visited, notifications, origin)
 		} else if (!Object.is(oldEntry, newEntry)) {
-			local.push({ target: oldObj, evolution: { type: 'set', prop: key }, prop: key })
+			local.push({ target: oldObj, evolution: { type: 'set', prop: key }, prop: key, origin })
 		}
 	}
 
 	notifications.push(...local)
 }
 
+/**
+ * Checks if an effect or any of its ancestors is in the allowed set
+ */
+function hasAncestorInSet(effect: ScopedCallback, allowedSet: Set<ScopedCallback>): boolean {
+	let current: ScopedCallback | undefined = effect
+	const visited = new WeakSet<ScopedCallback>()
+	while (current && !visited.has(current)) {
+		visited.add(current)
+		if (allowedSet.has(current)) return true
+		current = effectParent.get(current)
+	}
+	return false
+}
+
 function dispatchNotifications(notifications: PendingNotification[]) {
 	if (!notifications.length) return
 	const combinedEffects = new Set<ScopedCallback>()
+
+	// Extract origin from first notification (all should have the same origin from a single deep touch)
+	const origin = notifications[0]?.origin
+	let allowedEffects: Set<ScopedCallback> | undefined
+
+	// If origin exists, compute allowed effects (those that depend on origin.obj[origin.prop])
+	if (origin) {
+		allowedEffects = new Set<ScopedCallback>()
+		const originWatchers = watchers.get(origin.obj)
+		if (originWatchers) {
+			const originEffects = new Set<ScopedCallback>()
+			collectEffects(
+				origin.obj,
+				{ type: 'set', prop: origin.prop },
+				originEffects,
+				originWatchers,
+				[allProps],
+				[origin.prop]
+			)
+			for (const effect of originEffects) allowedEffects.add(effect)
+		}
+		// If no allowed effects, skip all notifications (no one should be notified)
+		if (allowedEffects.size === 0) return
+	}
+
 	for (const { target, evolution, prop } of notifications) {
 		if (!isObjectLike(target)) continue
 		const obj = unwrap(target)
@@ -812,6 +866,20 @@ function dispatchNotifications(notifications: PendingNotification[]) {
 		if (objectWatchers) {
 			currentEffects = new Set<ScopedCallback>()
 			collectEffects(obj, evolution, currentEffects, objectWatchers, [allProps], propsArray)
+
+			// Filter effects by ancestor chain if origin exists
+			// Include effects that either directly depend on origin or have an ancestor that does
+			if (origin && allowedEffects) {
+				const filteredEffects = new Set<ScopedCallback>()
+				for (const effect of currentEffects) {
+					// Check if effect itself is allowed OR has an ancestor that is allowed
+					if (allowedEffects.has(effect) || hasAncestorInSet(effect, allowedEffects)) {
+						filteredEffects.add(effect)
+					}
+				}
+				currentEffects = filteredEffects
+			}
+
 			for (const effect of currentEffects) combinedEffects.add(effect)
 		}
 		options.touched(obj, evolution, propsArray, currentEffects)
@@ -875,8 +943,11 @@ const reactiveHandlers = {
 			return true
 		}
 
-		const oldVal = Reflect.has(receiver, prop)
-			? unwrap(ReflectGet(obj, prop, unwrap(receiver)))
+		// Read old value directly from unwrapped object to avoid triggering dependency tracking
+		const unwrappedObj = unwrap(obj)
+		const unwrappedReceiver = unwrap(receiver)
+		const oldVal = Reflect.has(unwrappedReceiver, prop)
+			? Reflect.get(unwrappedObj, prop, unwrappedReceiver)
 			: absent
 		track1(obj, prop, oldVal, newValue)
 
@@ -884,10 +955,17 @@ const reactiveHandlers = {
 			ReflectSet(obj, prop, newValue, receiver)
 
 			if (oldVal !== absent && shouldRecurseTouch(oldVal, newValue)) {
-				dispatchNotifications(recursiveTouch(oldVal, newValue))
+				const origin = { obj: unwrappedObj, prop }
+				// Deep touch: only notify nested property changes with origin filtering
+				// Don't notify direct property change - the whole point is to avoid parent effects re-running
+				dispatchNotifications(recursiveTouch(oldVal, newValue, new WeakMap(), [], origin))
 			} else touched1(obj, { type: oldVal !== absent ? 'set' : 'add', prop }, prop)
 		}
 		return true
+	},
+	has(obj: any, prop: PropertyKey): boolean {
+		dependant(obj, prop)
+		return Reflect.has(obj, prop)
 	},
 	deleteProperty(obj: any, prop: PropertyKey): boolean {
 		if (!Object.hasOwn(obj, prop)) return false
@@ -1064,6 +1142,8 @@ export function untracked<T>(fn: () => T): T {
 
 // runEffect -> set<stop>
 const effectChildren = new WeakMap<ScopedCallback, Set<ScopedCallback>>()
+// Track parent effect relationships for hierarchy traversal (used in deep touch filtering)
+const effectParent = new WeakMap<ScopedCallback, ScopedCallback | undefined>()
 const fr = new FinalizationRegistry<() => void>((f) => f())
 
 /**
@@ -1152,6 +1232,8 @@ export function effect<Args extends any[]>(
 	}
 
 	const parent = parentEffect
+	// Store parent relationship for hierarchy traversal
+	effectParent.set(runEffect, parent)
 	// Only ROOT effects are registered for GC cleanup
 	if (!parent) {
 		const callIfCollected = () => stopEffect()

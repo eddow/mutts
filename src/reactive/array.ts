@@ -170,14 +170,6 @@ class KeyedArrayClass<T, K extends PropertyKey = PropertyKey> extends KeyedArray
 		this.setKeyValue(key, value)
 	}
 
-	private removeKeyAt(index: number): T | undefined {
-		const [key] = this.#keys.splice(index, 1)
-		if (key === undefined) return undefined
-		const value = this.#values.get(key as K)
-		this.decrementUsage(key as K)
-		return value
-	}
-
 	private rebuildFrom(values: T[]) {
 		this.disposeKeyEffects()
 		this.#keys.splice(0, this.#keys.length)
@@ -201,7 +193,7 @@ class KeyedArrayClass<T, K extends PropertyKey = PropertyKey> extends KeyedArray
 			if (value === this.length) return
 			throw new RangeError('Increasing length directly is not supported')
 		}
-		for (let i = this.length - 1; i >= value; i--) this.removeKeyAt(i)
+		for (let i = this.length - 1; i >= value; i--) this.removeAt(i)
 	}
 
 	get keys(): ArrayIterator<number> {
@@ -237,12 +229,12 @@ class KeyedArrayClass<T, K extends PropertyKey = PropertyKey> extends KeyedArray
 
 	pop(): T | undefined {
 		if (!this.length) return undefined
-		return this.removeKeyAt(this.length - 1)
+		return this.removeAt(this.length - 1)
 	}
 
 	shift(): T | undefined {
 		if (!this.length) return undefined
-		return this.removeKeyAt(0)
+		return this.removeAt(0)
 	}
 
 	unshift(...items: T[]): number {
@@ -292,6 +284,22 @@ class KeyedArrayClass<T, K extends PropertyKey = PropertyKey> extends KeyedArray
 	}
 	set(key: K, value: T): void {
 		if (this.#values.has(key)) this.setKeyValue(key, value)
+	}
+
+	remove(key: K) {
+		let index: number = this.indexOfKey(key)
+		while (index !== -1) {
+			this.removeAt(index)
+			index = this.indexOfKey(key)
+		}
+	}
+
+	public removeAt(index: number): T | undefined {
+		const [key] = this.#keys.splice(index, 1)
+		if (key === undefined) return undefined
+		const value = this.#values.get(key as K)
+		this.decrementUsage(key as K)
+		return value
 	}
 
 	hasKey(key: K): boolean {

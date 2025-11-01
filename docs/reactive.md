@@ -7,6 +7,7 @@
 - [Core API](#core-api)
 - [Effect System](#effect-system)
 - [Evolution Tracking](#evolution-tracking)
+- [Prototype Chains and Pure Objects](#prototype-chains-and-pure-objects)
 - [Recursive Touching](#recursive-touching)
 - [Collections](#collections)
 - [ReactiveArray](#reactivearray)
@@ -134,6 +135,16 @@ reactiveObj.count = 5 // Triggers effect
 ```
 
 **Note:** The same object will always return the same proxy instance.
+
+**Pure Objects and Prototypes:**
+
+`reactive()` works with any object type, including:
+- Normal objects: `reactive({ x: 1 })`
+- Pure objects: `reactive(Object.create(null))`
+- Objects with prototypes: `reactive(Object.create(parent))`
+- Class instances: `reactive(new MyClass())`
+
+See [Prototype Chains and Pure Objects](#prototype-chains-and-pure-objects) for detailed information about prototype chain handling.
 
 ### `effect()`
 
@@ -926,13 +937,206 @@ effect(() => {
 })
 ```
 
+## Prototype Chains and Pure Objects
+
+The reactive system intelligently handles prototype chains, distinguishing between data prototypes (which should be tracked) and class prototypes (which should not). This enables powerful patterns like using instances as prototypes and working with pure objects created with `Object.create(null)`.
+
+### Pure Objects (Object.create(null))
+
+Pure objects are objects created with `Object.create(null)` that have no prototype. These objects are useful for creating data structures without inheriting properties from `Object.prototype`.
+
+```typescript
+// Create a pure object
+const pure = reactive(Object.create(null) as any)
+pure.x = 1
+pure.y = 2
+
+effect(() => {
+    console.log(`Pure object: x=${pure.x}, y=${pure.y}`)
+})
+
+pure.x = 10 // Triggers effect
+```
+
+### Prototype Chain Dependency Tracking
+
+When accessing a property that doesn't exist on an object but exists in its prototype chain, the system automatically tracks dependencies on both the object and the prototype where the property is defined.
+
+```typescript
+// Create parent with properties
+const parent = reactive({ shared: 'value' })
+
+// Create child that inherits from parent
+const child = reactive(Object.create(parent))
+
+effect(() => {
+    // Accesses 'shared' from parent through prototype chain
+    console.log(child.shared) // Tracks both child.shared AND parent.shared
+})
+
+// Changing parent property triggers the effect
+parent.shared = 'new value' // Effect runs again
+```
+
+### Data Prototypes vs Class Prototypes
+
+The system distinguishes between:
+
+1. **Data Prototypes**: Objects used as prototypes that don't have their own `constructor` property
+   - `Object.create({})` - Plain object as prototype
+   - `Object.create(instance)` - Reactive instance as prototype
+   - Pure object chains
+
+2. **Class Prototypes**: Class prototypes that have their own `constructor` property
+   - `Object.create(MyClass.prototype)` - Class prototype
+   - These are **not tracked** (we only care about data changes, not method overrides)
+
+### Pure Object Prototype Chains
+
+You can create chains of pure objects for efficient data structures:
+
+```typescript
+// Create root pure object
+const root = reactive(Object.create(null) as any)
+root.baseValue = 1
+
+// Create child that inherits from root
+const child = reactive(Object.create(root))
+child.derivedValue = 2
+
+// Create grandchild
+const grandchild = reactive(Object.create(child))
+
+effect(() => {
+    // Accesses baseValue from root through the chain
+    console.log(grandchild.baseValue) // 1
+    console.log(grandchild.derivedValue) // 2
+})
+
+root.baseValue = 10 // Triggers effect
+```
+
+### Using Instances as Prototypes
+
+A powerful pattern is using reactive instances as prototypes. This allows sharing reactive state across multiple objects:
+
+```typescript
+// Create a shared instance with reactive state
+const sharedState = reactive({ count: 0, name: 'Shared' })
+
+// Create multiple objects that share this instance as prototype
+const obj1 = reactive(Object.create(sharedState))
+const obj2 = reactive(Object.create(sharedState))
+
+effect(() => {
+    // obj1 accesses count from sharedState prototype
+    console.log(`obj1.count: ${obj1.count}`)
+})
+
+effect(() => {
+    // obj2 accesses name from sharedState prototype
+    console.log(`obj2.name: ${obj2.name}`)
+})
+
+// Changing shared state triggers both effects
+sharedState.count = 5  // Triggers first effect
+sharedState.name = 'New' // Triggers second effect
+```
+
+### Shadowing in Prototype Chains
+
+When an object defines its own property that exists in the prototype, it "shadows" the prototype property. The system only tracks the shadowing property, not the prototype property:
+
+```typescript
+const parent = reactive({ value: 'parent' })
+const child = reactive(Object.create(parent))
+child.value = 'child' // Shadows parent.value
+
+effect(() => {
+    console.log(child.value) // Tracks child.value, not parent.value
+})
+
+parent.value = 'parent-changed' // Does NOT trigger effect (shadowed)
+child.value = 'child-changed'   // Triggers effect
+```
+
+### Multi-Level Chains with Mixed Types
+
+You can create complex chains mixing pure objects and normal objects:
+
+```typescript
+// Pure object root
+const root = reactive(Object.create(null) as any)
+root.a = 1
+
+// Normal object with pure parent
+const mid = reactive(Object.create(root))
+mid.b = 2
+
+// Pure object with normal parent
+const leaf = reactive(Object.create(mid))
+
+effect(() => {
+    console.log(leaf.a) // From root
+    console.log(leaf.b) // From mid
+})
+
+root.a = 10 // Triggers effect
+mid.b = 20  // Triggers effect
+```
+
+### Deep Touch with Prototype Chains
+
+When recursive touch is performed on objects with prototype chains, the system compares both own properties and prototype chain properties. This ensures that changes to prototype-level properties are properly detected:
+
+```typescript
+const ProtoA = reactive({ x: 1, y: 2 })
+const ProtoB = reactive({ x: 10, y: 20 })
+
+const A = reactive(Object.create(ProtoA))
+const B = reactive(Object.create(ProtoB))
+
+const C = reactive({ something: A })
+
+effect(() => {
+    const val = C.something
+    effect(() => {
+        // Accesses x through prototype chain
+        const nested = val.x
+    })
+})
+
+// Deep touch replacement - compares prototype chains
+C.something = B
+// Nested effect runs because ProtoB.x differs from ProtoA.x
+```
+
+### Best Practices
+
+1. **Use pure objects for data-only structures**: Pure objects are ideal when you want to avoid inheriting methods from `Object.prototype`.
+
+2. **Use instance prototypes for shared state**: Creating multiple objects with the same instance as prototype is an efficient way to share reactive state.
+
+3. **Avoid class prototypes in data chains**: Don't use class prototypes (`MyClass.prototype`) in data prototype chains - the system won't track them.
+
+4. **Be mindful of shadowing**: Remember that properties defined on an object shadow prototype properties, so changes to the prototype won't trigger effects on the shadowing property.
+
 ## Recursive Touching
 
 When you replace a reactive object with another object that shares the same prototype (including `null`-prototype objects and class instances), the system performs a **recursive touch** instead of notifying watchers as if the entire branch changed. This means:
 
-- Watchers attached to the container are *not* re-fired if the container's prototype did not change.
+- Watchers attached to the container are *not* re-fired if the container's prototype did not change (this avoids unnecessary parent effect re-runs).
 - Watchers attached to nested properties are re-evaluated only for keys that actually changed (added, removed, or whose values differ).
 - For arrays, the behaviour stays index-oriented: replacing an element at index `i` fires a touch for that index (and `length` if needed) rather than diffing the element recursively. This preserves reorder detection.
+- Prototype chain properties are compared when both objects have prototype chains, ensuring changes to prototype-level properties are detected.
+
+**Integration with Prototype Chains:**
+
+When comparing objects with prototype chains during recursive touch, the system:
+- Compares own properties of both objects
+- Walks and compares prototype chains (for data prototypes only, not class prototypes)
+- Generates notifications for properties that differ at any level of the prototype chain
+- Applies origin filtering to ensure only effects that came through the replacement property are notified
 
 ### Example
 
@@ -959,6 +1163,7 @@ state.nested = {
 }
 
 // containerWatcher runs only once (initial run)
+// Deep touch avoids parent effects when only sub-properties change
 expect(containerWatcher).toHaveBeenCalledTimes(1)
 
 // titleWatcher reacts to the changed title
@@ -969,6 +1174,48 @@ expect(viewsWatcher).toHaveBeenCalledTimes(2)
 ```
 
 This behaviour keeps container-level watchers stable while still delivering fine-grained updates to nested effects—ideal when you replace data structures with freshly fetched objects that share the same prototype.
+
+### Origin Filtering
+
+When recursive touch is triggered (e.g., `C.something = A` replaced with `C.something = B`), the system applies **origin filtering** to ensure only effects that came through the replacement property are notified:
+
+```typescript
+const A = reactive({ x: 1, y: 2 })
+const B = reactive({ x: 10, y: 20 })
+const C = reactive({ something: A })
+const D = reactive({ other: A })
+
+let effect1Runs = 0
+let effect2Runs = 0
+
+// Effect1 depends on C.something
+effect(() => {
+    effect1Runs++
+    const val = C.something
+    effect(() => {
+        // Nested effect accesses A.x through C.something
+        const nested = A.x
+    })
+})
+
+// Effect2 depends on A.x directly (not through C.something)
+effect(() => {
+    effect2Runs++
+    const val = A.x
+})
+
+// Replace C.something
+C.something = B
+
+// Effect1's nested effect runs (it came through C.something)
+// Effect2 does NOT run (it doesn't depend on C.something)
+```
+
+**Key Points:**
+- Effects that depend only on the container property (e.g., `C.something`) do **not** run
+- Only nested effects that accessed properties through the container are notified
+- Independent effects on the replaced object (e.g., direct dependency on `A.x`) are filtered out
+- This minimizes unnecessary re-computations while keeping data consistent
 
 ## Collections
 
