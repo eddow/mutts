@@ -1,6 +1,8 @@
 import { decorator } from '../decorator'
 import { renamed } from '../utils'
-import { dependant, effect, getRoot, markWithRoot, touched1 } from './core'
+import { touched1 } from './change'
+import { effect } from './effects'
+import { dependant, getRoot, markWithRoot } from './tracking'
 
 export type Memoizable = object | any[] | symbol | ((...args: any[]) => any)
 

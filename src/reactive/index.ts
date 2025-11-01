@@ -1,25 +1,7 @@
 export { KeyedArray, keyedArray, mapped } from './array'
-export {
-	activeEffect,
-	addBatchCleanup,
-	atomic,
-	type Evolution,
-	effect,
-	getState,
-	immutables,
-	isNonReactive,
-	isReactive,
-	options as reactiveOptions,
-	profileInfo,
-	Reactive,
-	ReactiveBase,
-	ReactiveError,
-	reactive,
-	type ScopedCallback,
-	trackEffect,
-	untracked,
-	unwrap,
-} from './core'
+export { getState, touched, touched1 } from './change'
+export { deepWatch } from './deep-watch'
+export { addBatchCleanup, atomic, effect, trackEffect, withEffect } from './effects'
 export {
 	cleanedBy,
 	cleanup,
@@ -29,11 +11,23 @@ export {
 	watch,
 } from './interface'
 export { type Memoizable, memoize } from './memoize'
+export { immutables, isNonReactive, registerNativeReactivity } from './non-reactive'
+export { isReactive, Reactive, ReactiveBase, reactive, unwrap } from './proxy'
+export { activeEffect } from './tracking'
+export {
+	type DependencyAccess,
+	type DependencyFunction,
+	type Evolution,
+	options as reactiveOptions,
+	ReactiveError,
+	type ScopedCallback,
+} from './types'
+export { profileInfo, untracked } from './utilities'
 
-import { registerNativeReactivity } from './core'
 import { ReactiveArray } from './natives/array'
 import { ReactiveMap, ReactiveWeakMap } from './natives/map'
 import { ReactiveSet, ReactiveWeakSet } from './natives/set'
+import { registerNativeReactivity } from './non-reactive'
 
 // Register native collection types to use specialized reactive wrappers
 registerNativeReactivity(WeakMap, ReactiveWeakMap)

@@ -1,12 +1,8 @@
-import {
-	dependant,
-	makeReactiveEntriesIterator,
-	makeReactiveIterator,
-	prototypeForwarding,
-	reactive,
-	touched,
-	touched1,
-} from '../core'
+import { prototypeForwarding } from '../types'
+import { dependant } from '../tracking'
+import { makeReactiveEntriesIterator, makeReactiveIterator } from '../non-reactive'
+import { reactive } from '../proxy'
+import { touched, touched1 } from '../change'
 
 const native = Symbol('native')
 

@@ -1,13 +1,9 @@
 import { getAt, Indexable, setAt } from '../indexable'
-import {
-	DependencyFunction,
-	effect,
-	prototypeForwarding,
-	reactive,
-	ScopedCallback,
-	untracked,
-} from './core'
+import { effect } from './effects'
 import { cleanedBy, unreactive } from './interface'
+import { reactive } from './proxy'
+import { type DependencyFunction, prototypeForwarding, type ScopedCallback } from './types'
+import { untracked } from './utilities'
 
 type KeyFunction<T, K extends PropertyKey> = (item: T) => K
 

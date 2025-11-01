@@ -1,28 +1,20 @@
 import { decorator, GenericClassDecorator } from '../decorator'
 import { renamed } from '../utils'
+import { touched1 } from './change'
+import { deepWatch } from './deep-watch'
+import { addBatchCleanup, effect, withEffect } from './effects'
+import { isNonReactive, nonReactiveClass, nonReactiveObjects } from './non-reactive'
+import { reactive, unwrap } from './proxy'
+import { activeEffect, dependant, getRoot, markWithRoot } from './tracking'
 import {
-	activeEffect,
-	addBatchCleanup,
 	type DependencyAccess,
 	type DependencyFunction,
-	deepWatch,
-	dependant,
-	effect,
-	getRoot,
-	isNonReactive,
-	markWithRoot,
-	nonReactiveClass,
 	nonReactiveMark,
-	nonReactiveObjects,
 	options,
-	reactive,
 	type ScopedCallback,
-	touched1,
 	unreactiveProperties,
-	untracked,
-	unwrap,
-	withEffect,
-} from './core'
+} from './types'
+import { untracked } from './utilities'
 
 /**
  * Symbol for accessing the cleanup function on cleaned objects
@@ -277,7 +269,7 @@ export const unreactive = decorator({
 
 //#endregion
 
-import { profileInfo } from './core'
+import { profileInfo } from './utilities'
 
 Object.assign(profileInfo, { computedCache })
 
