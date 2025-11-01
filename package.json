@@ -79,8 +79,16 @@
     "build:watch": "rollup -c --watch",
     "prepublishOnly": "npm run build",
     "test": "node --expose-gc node_modules/.bin/jest",
+    "test:coverage": "node --expose-gc node_modules/.bin/jest --coverage",
+    "test:coverage:watch": "node --expose-gc node_modules/.bin/jest --coverage --watch",
     "test:legacy": "TSCONFIG=tsconfig.legacy.json node node_modules/.bin/jest --detectOpenHandles --testPathPatterns=decorator",
     "test:modern": "TSCONFIG=tsconfig.modern.json node node_modules/.bin/jest --detectOpenHandles --testPathPatterns=decorator",
+    "test:profile": "RUN_PROFILING=1 node --expose-gc node_modules/.bin/jest --testPathPatterns=profiling",
+    "test:profile:benchmark": "RUN_PROFILING=1 node --expose-gc node_modules/.bin/jest --testPathPatterns=profiling --testNamePattern=benchmark",
+    "test:profile:detailed": "RUN_PROFILING=1 node --prof node_modules/.bin/jest --testPathPatterns=profiling --no-coverage",
+    "benchmark:save": "tsx tests/profiling/benchmark.ts save",
+    "benchmark:compare": "tsx tests/profiling/benchmark.ts compare",
+    "benchmark:list": "tsx tests/profiling/benchmark.ts list",
     "biome": "biome check --write src"
   },
   "keywords": [

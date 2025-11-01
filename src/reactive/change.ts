@@ -40,7 +40,7 @@ export function collectEffects(
 		for (const key of keys) {
 			const deps = objectWatchers.get(key)
 			if (deps)
-				for (const effect of Array.from(deps)) {
+				for (const effect of deps) {
 					effects.add(effect)
 					const trackers = effectTrackers.get(effect)
 					if (trackers) {
@@ -75,11 +75,10 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 		// Note: we have to collect effects to remove duplicates in the specific case when no batch is running
 		const effects = new Set<ScopedCallback>()
 		if (props) {
-			props = Array.from(props) // For debug purposes only
 			collectEffects(obj, evolution, effects, objectWatchers, [allProps], props)
 		} else collectEffects(obj, evolution, effects, objectWatchers, objectWatchers.keys())
 		options.touched(obj, evolution, props as any[] | undefined, effects)
-		batch(Array.from(effects))
+		batch([...effects])
 	}
 
 	// Bubble up changes if this object has deep watchers

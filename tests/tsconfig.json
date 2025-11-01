@@ -7,8 +7,6 @@
 		"declaration": false,
 		"declarationMap": false,
 		"sourceMap": true,
-		"outDir": "./dist",
-		"rootDir": "./src",
 		"experimentalDecorators": false,
 		"emitDecoratorMetadata": false,
 		"strict": false,
@@ -21,10 +19,13 @@
 		"forceConsistentCasingInFileNames": true,
 		"baseUrl": ".",
 		"paths": {
-			"tslib": ["./node_modules/tslib/tslib.d.ts"],
-			"~/*": ["./packages/*"]
+			"mutts/*": ["../src/*"],
+			"mutts": ["../src/index.ts"],
+			"tslib": ["../node_modules/tslib/tslib.d.ts"],
+			"~/*": ["../packages/*"]
 		}
 	},
-	"include": ["src/**/*"],
-	"exclude": ["**/*.test.ts", "**/*.spec.ts", "node_modules", "dist", "tests/**"]
+	"include": ["**/*.ts"],
+	"exclude": ["node_modules"]
 }
+

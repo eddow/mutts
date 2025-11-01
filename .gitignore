@@ -3,3 +3,4 @@ coverage
 .vscode/settings.json
 dist
 sandbox
+benchmarks

@@ -1,12 +1,10 @@
-import { allProps, type Evolution, options, type ScopedCallback } from './types'
+import { addState, collectEffects } from './change'
+import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch'
 import { batch } from './effects'
-import { watchers } from './tracking'
-import { effectParent } from './tracking'
-import { unwrap } from './proxy'
 import { isNonReactive } from './non-reactive'
-import { addState } from './change'
-import { objectsWithDeepWatchers, bubbleUpChange } from './deep-watch'
-import { collectEffects } from './change'
+import { unwrap } from './proxy'
+import { effectParent, watchers } from './tracking'
+import { allProps, type Evolution, options, type ScopedCallback } from './types'
 
 function isObjectLike(value: unknown): value is object {
 	return typeof value === 'object' && value !== null
@@ -50,7 +48,7 @@ function hasVisitedPair(visited: VisitedPairs, oldObj: object, newObj: object): 
 	return false
 }
 
-function collectObjectKeys(obj: any): PropertyKey[] {
+function collectObjectKeys(obj: any): Set<PropertyKey> {
 	const keys = new Set<PropertyKey>(Reflect.ownKeys(obj))
 	let proto = Object.getPrototypeOf(obj)
 	// Continue walking while prototype exists and doesn't have its own constructor
@@ -60,7 +58,7 @@ function collectObjectKeys(obj: any): PropertyKey[] {
 		for (const key of Reflect.ownKeys(proto)) keys.add(key)
 		proto = Object.getPrototypeOf(proto)
 	}
-	return Array.from(keys)
+	return keys
 }
 
 export function recursiveTouch(
@@ -132,8 +130,8 @@ function diffObjectProperties(
 	notifications: PendingNotification[],
 	origin?: { obj: object; prop: PropertyKey }
 ) {
-	const oldKeys = new Set<PropertyKey>(collectObjectKeys(oldObj))
-	const newKeys = new Set<PropertyKey>(collectObjectKeys(newObj))
+	const oldKeys = collectObjectKeys(oldObj)
+	const newKeys = collectObjectKeys(newObj)
 	const local: PendingNotification[] = []
 
 	for (const key of oldKeys)
@@ -229,5 +227,5 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 		options.touched(obj, evolution, propsArray, currentEffects)
 		if (objectsWithDeepWatchers.has(obj)) bubbleUpChange(obj, evolution)
 	}
-	if (combinedEffects.size) batch(Array.from(combinedEffects))
+	if (combinedEffects.size) batch([...combinedEffects])
 }
