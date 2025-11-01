@@ -94,21 +94,6 @@ describe('non-reactive functionality', () => {
 			expect(reactive(obj)).toBe(obj)
 			expect(isReactive(obj)).toBe(false)
 		})
-
-		it('should work with the Reactive mixin', () => {
-			class TestClass {
-				count = 0
-			}
-
-			// Mark the class as non-reactive using the public API
-			unreactive(TestClass)
-
-			const ReactiveTestClass = reactive(TestClass)
-			const instance = new ReactiveTestClass()
-
-			expect(isNonReactive(instance)).toBe(true)
-			expect(isReactive(instance)).toBe(false)
-		})
 	})
 
 	describe('native objects', () => {
@@ -169,7 +154,7 @@ describe('non-reactive functionality', () => {
 			expect(effectCount).toBe(2) // Should not trigger effect
 		})
 
-		it('should work with the Reactive mixin and non-reactive classes', () => {
+		it('should work with non-reactive classes and reactive decorator', () => {
 			class NonReactiveClass {
 				count = 0
 			}

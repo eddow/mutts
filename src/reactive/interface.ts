@@ -1,16 +1,12 @@
 import { decorator, GenericClassDecorator } from '../decorator'
-import { renamed } from '../utils'
-import { touched1 } from './change'
 import { deepWatch } from './deep-watch'
-import { addBatchCleanup, effect, withEffect } from './effects'
+import { effect, withEffect } from './effects'
 import { isNonReactive, nonReactiveClass, nonReactiveObjects } from './non-reactive'
-import { reactive, unwrap } from './proxy'
-import { activeEffect, dependant, getRoot, markWithRoot } from './tracking'
+import { unwrap } from './proxy'
+import { activeEffect, dependant, markWithRoot } from './tracking'
 import {
 	type DependencyAccess,
-	type DependencyFunction,
 	nonReactiveMark,
-	options,
 	type ScopedCallback,
 	unreactiveProperties,
 } from './types'
@@ -20,82 +16,6 @@ import { untracked } from './utilities'
  * Symbol for accessing the cleanup function on cleaned objects
  */
 export const cleanup = Symbol('cleanup')
-
-//#region computed
-let computedInvalidations: (() => void)[] | undefined
-/**
- * Registers a callback to be called when a computed property is invalidated
- * @param cb - The callback to register
- * @param warn - Whether to warn if used outside of a computed property
- */
-export function invalidateComputed(cb: () => void, warn = true) {
-	if (computedInvalidations) computedInvalidations.push(cb)
-	else if (warn) options.warn('Using `invalidateComputed` outside of a computed property')
-}
-type ComputedFunction<T> = (dep: DependencyAccess) => T
-const computedCache = new WeakMap<ComputedFunction<any>, any>()
-function computedFunction<T>(getter: ComputedFunction<T>): T {
-	const key = getRoot(getter)
-	let invalidations: (() => void)[] = []
-	dependant(computedCache, key)
-	if (computedCache.has(key)) return computedCache.get(key)
-	let stopped = false
-	const once = effect(
-		markWithRoot((access) => {
-			if (stopped) return
-			const oldCI = computedInvalidations
-			if (computedCache.has(key)) {
-				// This should *not* be called in the cleanup chain, as its effects would be lost and cleaned-up
-				for (const cb of invalidations) cb()
-				invalidations = []
-				computedCache.delete(key)
-				touched1(computedCache, { type: 'invalidate', prop: key }, key)
-				once()
-				stopped = true
-			} else
-				try {
-					computedInvalidations = invalidations
-					computedCache.set(key, getter(access))
-				} finally {
-					computedInvalidations = oldCI
-				}
-		}, getter)
-	)
-	return computedCache.get(key)
-}
-
-/**
- * Decorator and function for creating computed properties that cache their values
- * Only recomputes when dependencies change
- * @deprecated Use memoize instead
- */
-export const computed = Object.assign(
-	decorator({
-		getter(original, propertyKey) {
-			const computers = new WeakMap<any, () => any>()
-			return function (this: any) {
-				if (!computers.has(this)) {
-					computers.set(
-						this,
-						renamed(
-							() => original.call(this),
-							`${String(this.constructor.name)}.${String(propertyKey)}`
-						)
-					)
-				}
-				return computedFunction(computers.get(this)!)
-			}
-		},
-		default: computedFunction,
-	}),
-	{
-		map: computedMap,
-		memo: computedMapMemo,
-		self: selfReferencing,
-	}
-)
-
-//#endregion
 
 //#region watch
 
@@ -111,7 +31,7 @@ export interface WatchOptions {
 }
 
 /**
- * Watches a computed value and calls a callback when it changes
+ * Watches a reactive value and calls a callback when it changes
  * @param value - Function that returns the value to watch
  * @param changed - Callback to call when the value changes
  * @param options - Watch options
@@ -123,7 +43,7 @@ export function watch<T>(
 	options?: Omit<WatchOptions, 'deep'> & { deep?: false }
 ): ScopedCallback
 /**
- * Watches a computed value with deep watching enabled
+ * Watches a reactive value with deep watching enabled
  * @param value - Function that returns the value to watch
  * @param changed - Callback to call when the value changes
  * @param options - Watch options with deep watching enabled
@@ -269,10 +189,6 @@ export const unreactive = decorator({
 
 //#endregion
 
-import { profileInfo } from './utilities'
-
-Object.assign(profileInfo, { computedCache })
-
 export function cleanedBy<T extends object>(obj: T, cleanupFn: ScopedCallback) {
 	return Object.defineProperty(obj, cleanup, {
 		value: cleanupFn,
@@ -286,7 +202,6 @@ export function cleanedBy<T extends object>(obj: T, cleanupFn: ScopedCallback) {
 
 /**
  * Creates a derived value that automatically recomputes when dependencies change
- * Unlike computed, this always recomputes immediately when dependencies change
  * @param compute - Function that computes the derived value
  * @returns Object with value and cleanup function
  */
@@ -305,132 +220,4 @@ export function derived<T>(compute: (dep: DependencyAccess) => T): {
 			)
 		)
 	)
-}
-
-function computedMap<T, U>(
-	inputs: T[],
-	compute: (input: T, index: number, oldValue?: U) => U,
-	resize?: (newLength: number, oldLength: number) => void
-): U[] {
-	const result = reactive([])
-	const cleanups: ScopedCallback[] = []
-	function input(index: number) {
-		return effect(function computedIndexedMapInputEffect() {
-			result[index] = compute(inputs[index], index, result[index])
-		})
-	}
-	effect(function computedMapLengthEffect({ ascend }) {
-		const length = inputs.length
-		const resultLength = untracked(() => result.length)
-		resize?.(length, resultLength)
-		if (length < resultLength) {
-			const toCleanup = cleanups.splice(length)
-			for (const cleanup of toCleanup) cleanup()
-			result.length = length
-		} else if (length > resultLength)
-			// the input effects will be registered as the call's children, so they will remain not cleaned with this effect on length
-			ascend(function computedMapNewElements() {
-				for (let i = resultLength; i < length; i++) cleanups.push(input(i))
-			})
-	})
-	return cleanedBy(result, () => {
-		for (const cleanup of cleanups) cleanup()
-		cleanups.length = 0
-	})
-}
-
-type MemoEntry<O> = {
-	value: O
-	cleanup: ScopedCallback
-}
-
-@unreactive
-export class Memoized<I, O> {
-	constructor(private compute: (input: I) => O) {
-		this.keepCleanups = effect(({ ascend }) => {
-			this.inEffect = ascend
-			return () => {
-				this.cleanup()
-			}
-		})
-	}
-	private keepCleanups: ScopedCallback
-	cleanup() {
-		for (const { cleanup } of this.cache.values()) cleanup()
-		this.cache.clear()
-	}
-	private inEffect: DependencyFunction
-	private cache = new Map<I, MemoEntry<O>>()
-	get(input: I): O {
-		dependant(this, input)
-		let cached: any
-		if (this.cache.has(input)) {
-			cached = this.cache.get(input)!
-		} else {
-			cached = {}
-			cached.cleanup = this.inEffect(() =>
-				effect(
-					Object.defineProperties(
-						() => {
-							if ('value' in cached) {
-								this.cache.delete(input)
-								touched1(this, { type: 'invalidate', prop: input }, input)
-							} else {
-								cached.value = this.compute(input)
-							}
-						},
-						{ name: { value: 'Memoize' } }
-					)
-				)
-			)
-			this.cache.set(input, cached)
-		}
-		return cached.value
-	}
-
-	reduceInputs(inputs: Set<I> | ((input: I) => boolean)) {
-		for (const input of this.cache.keys()) {
-			if (typeof inputs === 'function' ? !inputs(input) : !inputs.has(input)) {
-				const entry = this.cache.get(input)!
-				entry.cleanup()
-				this.cache.delete(input)
-			}
-		}
-	}
-}
-
-function computedMapMemo<I, O>(inputs: I[] | (() => I[]), compute: (input: I) => O): O[] {
-	const memo = new Memoized(compute)
-	const result = reactive([])
-	return cleanedBy(
-		result,
-		effect(() => {
-			const inputArray = typeof inputs === 'function' ? computed(inputs) : inputs
-			function reduceKeys() {
-				untracked(() => {
-					memo.reduceInputs(new Set(inputArray))
-				})
-			}
-			const map = computedMap(
-				inputArray,
-				(input) => {
-					addBatchCleanup(reduceKeys)
-					return memo.get(input)
-				},
-				() => addBatchCleanup(reduceKeys)
-			)
-			effect(() => {
-				result.length = 0
-				result.push(...map)
-			})
-		})
-	)
-}
-
-function selfReferencing<T extends object>(compute: (dep: DependencyAccess) => T): T {
-	let rv: T | undefined
-	const cleanup = effect((access) => {
-		rv = compute(access)
-	})
-	return cleanedBy(rv, cleanup)
 }

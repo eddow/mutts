@@ -305,8 +305,8 @@ describe('ReactiveBase', () => {
 	})
 })
 
-describe('Legacy Reactive mixin', () => {
-	it('should still work for backward compatibility', () => {
+describe('reactive function', () => {
+	it('should work with classes', () => {
 		class TestClass {
 			count = 0
 			name = 'test'

@@ -13,9 +13,7 @@
 - [ReactiveArray](#reactivearray)
 - [KeyedArray](#keyedarray)
 - [Class Reactivity](#class-reactivity)
-- [Reactive Mixin](#reactive-mixin-for-always-reactive-classes)
 - [Non-Reactive System](#non-reactive-system)
-- [Computed Properties](#computed-properties)
 - [Memoization](#memoization)
 - [Atomic Operations](#atomic-operations)
 - [Advanced Patterns](#advanced-patterns)
@@ -823,7 +821,6 @@ The system tracks different types of changes:
 - **`set`**: Property value was changed
 - **`del`**: Property was deleted
 - **`bunch`**: Collection operation (array methods, map/set operations)
-- **`invalidate`**: Computed property cache was invalidated due to dependency changes
 
 ```typescript
 const obj = reactive({ count: 0 })
@@ -849,55 +846,7 @@ delete obj.count      // { type: 'del', prop: 'count' }
 const array = reactive([1, 2, 3])
 array.push(4)        // { type: 'bunch', method: 'push' }
 array.reverse()      // { type: 'bunch', method: 'reverse' }
-
-// Computed property invalidation
-const state = reactive({ a: 1, b: 2 })
-const getter = () => state.a + state.b
-
-computed(getter)      // Initial computation
-state.a = 5          // This triggers { type: 'invalidate', prop: getter } in computed cache
-computed(getter)      // Recomputes due to dependency change
 ```
-
-### Evolution Type Details
-
-#### `invalidate` Evolution Type
-
-The `invalidate` evolution type occurs when computed properties need to be recalculated due to dependency changes:
-
-```typescript
-import { computed, getState, profileInfo } from 'mutts/reactive'
-
-const state = reactive({ a: 1, b: 2 })
-const getter = () => state.a + state.b
-
-// Access computed cache state for tracking
-let computedState = getState(profileInfo.computedCache)
-
-effect(() => {
-    while ('evolution' in computedState) {
-        console.log('Computed change:', computedState.evolution)
-        computedState = computedState.next
-    }
-    
-    // Reset for next run
-    computedState = getState(profileInfo.computedCache)
-})
-
-// Initial computation - no evolution event yet
-const result1 = computed(getter) // 3
-
-// Change dependency - triggers invalidate evolution
-state.a = 5
-// Output: "Computed change: { type: 'invalidate', prop: [getter function] }"
-
-const result2 = computed(getter) // 7 (recomputed)
-```
-
-**When `invalidate` occurs:**
-- A computed property's dependency changes
-- The computed cache needs to be cleared and recalculated
-- The `prop` field contains the getter function that was invalidated
 
 ### Change History Patterns
 
@@ -1636,79 +1585,6 @@ player.health = 80     // Triggers effect
 - You need to modify or use `this` in the constructor
 - You want to prevent reactivity from being added to prototype chains
 
-### `Reactive` Mixin for Always-Reactive Classes
-
-The `Reactive` mixin provides a class that is always reactive without needing the `@reactive` decorator. This is useful when you want a class that is inherently reactive and can be used as both a base class and a mixin.
-
-```typescript
-import { Reactive, effect } from 'mutts/reactive'
-
-// As a base class - no @reactive decorator needed
-class Counter extends Reactive {
-    count = 0
-    
-    increment() {
-        this.count++
-    }
-}
-
-// As a mixin function
-class BaseModel {
-    id = Math.random().toString(36)
-}
-
-class UserModel extends Reactive(BaseModel) {
-    name = ''
-    email = ''
-    
-    updateName(newName: string) {
-        this.name = newName
-    }
-}
-
-const counter = new Counter()
-const user = new UserModel()
-
-effect(() => {
-    console.log('Count:', counter.count)
-})
-
-effect(() => {
-    console.log('User:', user.name)
-})
-
-counter.increment() // Triggers effect
-user.updateName('John') // Triggers effect
-```
-
-**Key Features of `Reactive` Mixin:**
-
-1. **Always Reactive**: No need for `@reactive` decorator
-2. **Mixin Support**: Can be used as both `extends Reactive` and `extends Reactive(BaseClass)`
-3. **Error Prevention**: Throws an error if used with `@reactive` decorator (since it's redundant)
-4. **Caching**: Mixin results are cached for performance
-
-**When to use `Reactive` mixin:**
-- You want a class that is always reactive by design
-- You need mixin functionality for combining with other base classes
-- You want to avoid the `@reactive` decorator syntax
-- You're building a library where reactivity is a core feature
-
-**Important**: The `@reactive` decorator will throw an error when used with `Reactive` mixin since it's redundant:
-
-```typescript
-// ❌ This will throw an error
-@reactive
-class MyClass extends Reactive {
-    value = 0
-}
-
-// ✅ This is the correct way
-class MyClass extends Reactive {
-    value = 0
-}
-```
-
 ### Making Existing Class Instances Reactive
 
 You can also make existing class instances reactive:
@@ -1965,52 +1841,7 @@ class User {
 }
 ```
 
-## Computed Properties
-
-### `@computed` Decorator
-
-Creates computed properties that cache their values and only recompute when dependencies change.
-
-```typescript
-@reactive
-class Calculator {
-    @computed
-    get area() {
-        return this.width * this.height
-    }
-    
-    width: number = 10
-    height: number = 5
-}
-
-const calc = new Calculator()
-
-effect(() => {
-    console.log('Area:', calc.area)
-})
-
-calc.width = 20  // Triggers effect, recomputes area
-calc.height = 10 // Triggers effect, recomputes area
-```
-
-### Computed Functions
-
-Create computed values outside of classes:
-
-```typescript
-const state = reactive({ a: 1, b: 2 })
-
-const sum = () => state.a + state.b
-const product = () => state.a * state.b
-
-effect(() => {
-    console.log('Sum:', computed(sum), 'Product:', computed(product))
-})
-
-state.a = 5 // Both computed values update
-```
-
-**Note:** The `computed()` function takes a getter function and returns the cached or recalculated value. You call `computed(getter)` each time you need the value, not assign it to a variable.
+## Array Mapping
 
 ### `mapped()`
 
@@ -2082,7 +1913,7 @@ const orderTotals = mapped(orders, (order) => (
 
 ### Identity-preserving mapped arrays
 
-Combine `mapped()` with [`memoize()`](#memoize) when you need to reuse mapped results for the same input identity (the role previously played by `computed.memo`). The memoized mapper runs at most once per input object, even when the source array is reordered, and it can host additional reactive state that should survive reordering.
+Combine `mapped()` with [`memoize()`](#memoize) when you need to reuse mapped results for the same input identity. The memoized mapper runs at most once per input object, even when the source array is reordered, and it can host additional reactive state that should survive reordering.
 
 ```typescript
 import { effect, mapped, memoize, reactive } from 'mutts/reactive'

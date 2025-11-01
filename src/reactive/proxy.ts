@@ -1,4 +1,3 @@
-// TODO: __isReactiveMixin - WTF?
 import { decorator } from '../decorator'
 import { mixin } from '../mixins'
 import { isOwnAccessor, ReflectGet, ReflectSet } from '../utils'
@@ -160,24 +159,6 @@ export const ReactiveBase = mixin((base) => {
 	}
 	return ReactiveMixin
 })
-/**
- * Always-reactive mixin that makes classes inherently reactive
- * Can be used as both a base class and a mixin function
- */
-export const Reactive = mixin((base) => {
-	class ReactiveMixin extends base {
-		constructor(...args: any[]) {
-			super(...args)
-			// Only apply reactive transformation if the class is marked with @reactive
-			// This allows the mixin to work properly with method inheritance
-			// biome-ignore lint/correctness/noConstructorReturn: This is the whole point here
-			return reactive(this)
-		}
-	}
-	// Mark this as the Reactive mixin to distinguish it from ReactiveBase
-	;(ReactiveMixin as any).__isReactiveMixin = true
-	return ReactiveMixin
-}, unwrap)
 function reactiveObject<T>(anyTarget: T): T {
 	if (!anyTarget || typeof anyTarget !== 'object') return anyTarget
 	const target = anyTarget as any
@@ -211,17 +192,6 @@ export const reactive = decorator({
 			return original
 		}
 
-		// Check if the class extends the Reactive mixin (not ReactiveBase) by checking the prototype chain
-		let current = original.prototype
-		while (current && current !== Object.prototype) {
-			// Check if this is the Reactive mixin specifically (not ReactiveBase)
-			if (current.constructor && (current.constructor as any).__isReactiveMixin) {
-				throw new Error(
-					'@reactive decorator cannot be used with Reactive mixin. Reactive mixin already provides reactivity.'
-				)
-			}
-			current = Object.getPrototypeOf(current)
-		}
 		class Reactive extends original {
 			constructor(...args: any[]) {
 				super(...args)

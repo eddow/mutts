@@ -5,14 +5,12 @@ export { addBatchCleanup, atomic, effect, trackEffect, withEffect } from './effe
 export {
 	cleanedBy,
 	cleanup,
-	computed,
-	invalidateComputed,
 	unreactive,
 	watch,
 } from './interface'
 export { type Memoizable, memoize } from './memoize'
 export { immutables, isNonReactive, registerNativeReactivity } from './non-reactive'
-export { isReactive, Reactive, ReactiveBase, reactive, unwrap } from './proxy'
+export { isReactive, ReactiveBase, reactive, unwrap } from './proxy'
 export { activeEffect } from './tracking'
 export {
 	type DependencyAccess,

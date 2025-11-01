@@ -2,12 +2,12 @@
 // Argument of type '() => void' is not assignable to parameter of type '(dep: DependencyFunction) => ScopedCallback | undefined'.
 
 /**
- * Function type for dependency tracking in effects and computed values
+ * Function type for dependency tracking in effects
  * Restores the active effect context for dependency tracking
  */
 export type DependencyFunction = <T>(cb: () => T) => T
 /**
- * Dependency access passed to user callbacks within effects/computed/watch
+ * Dependency access passed to user callbacks within effects/watch
  * Provides functions to track dependencies and information about the effect execution
  */
 export interface DependencyAccess {
@@ -199,4 +199,4 @@ export const options = {
 }
 // biome-ignore-end lint/correctness/noUnusedFunctionParameters: Interface declaration with empty defaults
 
-export { State, nativeReactive, rootFunction }
+export { type State, nativeReactive, rootFunction }
