@@ -18,9 +18,6 @@ describe('reactive', () => {
 			expect(reactive(true)).toBe(true)
 			expect(reactive(null)).toBe(null)
 			expect(reactive(undefined)).toBe(undefined)
-			expect(reactive(true)).toBe(true)
-			expect(reactive(null)).toBe(null)
-			expect(reactive(undefined)).toBe(undefined)
 		})
 
 		it('should return same proxy for same object', () => {

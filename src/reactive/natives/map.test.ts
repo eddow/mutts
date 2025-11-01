@@ -10,14 +10,6 @@ describe('ReactiveWeakMap', () => {
 			expect(reactiveWeakMap).toBeInstanceOf(WeakMap)
 		})
 
-		it('should work with reactive() function', () => {
-			const weakMap = new WeakMap<object, string>()
-			const reactiveWeakMap = reactive(weakMap)
-
-			// The reactive wrapper should behave like a WeakMap
-			expect(reactiveWeakMap).toBeInstanceOf(WeakMap)
-		})
-
 		it('should wrap existing WeakMap with entries', () => {
 			const key1 = { id: 1 }
 			const key2 = { id: 2 }
@@ -267,18 +259,6 @@ describe('ReactiveMap', () => {
 
 		it('should wrap existing Map with entries', () => {
 			const originalMap = new Map<string, number>([
-				['key1', 1],
-				['key2', 2],
-			])
-			const reactiveMap = reactive(originalMap)
-
-			expect(reactiveMap.get('key1')).toBe(1)
-			expect(reactiveMap.get('key2')).toBe(2)
-			expect(reactiveMap.size).toBe(2)
-		})
-
-		it('should accept Map instance', () => {
-			const originalMap = new Map([
 				['key1', 1],
 				['key2', 2],
 			])
@@ -630,17 +610,6 @@ describe('ReactiveMap', () => {
 
 	describe('static methods', () => {
 		it('should create ReactiveMap from existing Map', () => {
-			const originalMap = new Map([
-				['key1', 1],
-				['key2', 2],
-			])
-			const reactiveMap = reactive(originalMap)
-			expect(reactiveMap.size).toBe(2)
-			expect(reactiveMap.get('key1')).toBe(1)
-			expect(reactiveMap.get('key2')).toBe(2)
-		})
-
-		it('should work with reactive() function on existing Map', () => {
 			const originalMap = new Map([
 				['key1', 1],
 				['key2', 2],

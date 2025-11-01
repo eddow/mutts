@@ -138,23 +138,6 @@ describe('effect', () => {
 			expect(effectCount).toBe(2)
 		})
 
-		it('should stop tracking when unwatched', () => {
-			const reactiveObj = reactive({ count: 0 })
-			let effectCount = 0
-
-			const stop = effect(() => {
-				effectCount++
-				reactiveObj.count
-			})
-
-			reactiveObj.count = 5
-			expect(effectCount).toBe(2)
-
-			stop()
-			reactiveObj.count = 10
-			expect(effectCount).toBe(2)
-		})
-
 		it('should clean up dependencies on re-run', () => {
 			const state = reactive({ a: true, b: 0, c: 0 })
 			let effectCount = 0
