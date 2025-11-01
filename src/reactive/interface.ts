@@ -75,6 +75,7 @@ function computedFunction<T>(getter: ComputedFunction<T>): T {
 /**
  * Decorator and function for creating computed properties that cache their values
  * Only recomputes when dependencies change
+ * @deprecated Use memoize instead
  */
 export const computed = Object.assign(
 	decorator({

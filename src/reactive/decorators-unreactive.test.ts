@@ -287,4 +287,3 @@ describe('@unreactive decorator', () => {
 		})
 	})
 })
-

@@ -1,3 +1,4 @@
+export { KeyedArray, keyedArray, mapped } from './array'
 export {
 	activeEffect,
 	addBatchCleanup,
@@ -27,6 +28,7 @@ export {
 	unreactive,
 	watch,
 } from './interface'
+export { type Memoizable, memoize } from './memoize'
 
 import { registerNativeReactivity } from './core'
 import { ReactiveArray } from './natives/array'

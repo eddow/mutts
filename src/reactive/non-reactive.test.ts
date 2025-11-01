@@ -195,4 +195,3 @@ describe('non-reactive functionality', () => {
 		})
 	})
 })
-

@@ -62,4 +62,3 @@ describe('integration tests', () => {
 		expect(appEffectCount).toBe(2)
 	})
 })
-

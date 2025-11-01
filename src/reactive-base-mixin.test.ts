@@ -202,7 +202,7 @@ describe('Reactive Mixin', () => {
 		expect(() => {
 			// This should throw an error
 			@reactive
-			class MyClass extends Reactive {
+			class _MyClass extends Reactive {
 				value = 0
 			}
 		}).toThrow()

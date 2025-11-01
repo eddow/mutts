@@ -12,8 +12,11 @@ import {
 const native = Symbol('native')
 const isArray = Array.isArray
 Array.isArray = ((value: any) =>
+	isArray(value) ||
 	// biome-ignore lint/suspicious/useIsArray: We are defining it
-	isArray(value) || (value instanceof Array && native in value)) as any
+	(value instanceof Array &&
+		prototypeForwarding in value &&
+		Array.isArray(value[prototypeForwarding]))) as any
 class ReactiveBaseArray {
 	declare readonly [native]: any[]
 }

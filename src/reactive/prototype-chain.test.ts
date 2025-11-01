@@ -54,4 +54,3 @@ describe('prototype chain dependency tracking', () => {
 		expect(runs).toBe(4)
 	})
 })
-

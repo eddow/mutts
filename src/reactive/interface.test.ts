@@ -1,4 +1,4 @@
-import { cleanup, computed, effect, reactive, unwrap, watch } from './index'
+import { cleanup, computed, effect, mapped, memoize, reactive, unwrap, watch } from './index'
 
 describe('computed', () => {
 	it('returns computed value and caches it', () => {
@@ -2031,269 +2031,88 @@ describe('deep watch via watch({ deep: true })', () => {
 	})
 })
 
-describe('computed.values', () => {
-	it('should create a reactive mapped array', () => {
+describe('mapped', () => {
+	it('maps values reactively', () => {
 		const input = reactive([1, 2, 3])
-		const mapped = computed.map(input, (value) => value * 2)
+		const result = mapped(input, (value) => value * 2)
 
-		expect(unwrap(mapped)).toEqual([2, 4, 6])
-		expect(Array.isArray(mapped)).toBe(true)
-	})
-
-	it('should update when input array changes', () => {
-		const input = reactive([1, 2, 3])
-		const mapped = computed.map(input, (value) => value * 2)
-
-		expect(unwrap(mapped)).toEqual([2, 4, 6])
+		expect(unwrap(result)).toEqual([2, 4, 6])
 
 		input.push(4)
-		expect(unwrap(mapped)).toEqual([2, 4, 6, 8])
+		expect(unwrap(result)).toEqual([2, 4, 6, 8])
 
-		input[0] = 10
-		expect(unwrap(mapped)).toEqual([20, 4, 6, 8])
+		input[1] = 10
+		expect(unwrap(result)).toEqual([2, 20, 6, 8])
 	})
 
-	it('should provide index in compute function', () => {
-		const input = reactive([10, 20, 30])
-		const mapped = computed.map(input, (value, index) => `[${index}]: ${value}`)
+	it('provides index and oldValue to the mapper', () => {
+		const input = reactive([1, 2])
+		const totals = mapped(input, (value, _index, oldValue?: number) => (oldValue ?? 0) + value)
 
-		expect(unwrap(mapped)).toEqual(['[0]: 10', '[1]: 20', '[2]: 30'])
+		expect(unwrap(totals)).toEqual([1, 2])
 
-		input.push(40)
-		expect(mapped[3]).toBe('[3]: 40')
+		input[0] = 3
+		expect(totals[0]).toBe(4)
+
+		input[1] = 4
+		expect(totals[1]).toBe(6)
 	})
 
-	it('should provide array reference in compute function', () => {
+	it('only recomputes changed indices', () => {
 		const input = reactive([1, 2, 3])
-		const mapped = computed.map(input, (value, _index, _oldValue) => `${value}`)
+		const calls = [0, 0, 0]
+		const result = mapped(input, (value, index) => {
+			calls[index]++
+			return value * 10
+		})
 
-		expect(unwrap(mapped)).toEqual(['1', '2', '3'])
+		expect(calls).toEqual([1, 1, 1])
 
-		input.push(4)
-		expect(unwrap(mapped)).toEqual(['1', '2', '3', '4'])
+		input[0] = 5
+		expect(result[0]).toBe(50)
+		expect(calls).toEqual([2, 1, 1])
+
+		input[2] = 7
+		expect(result[2]).toBe(70)
+		expect(calls).toEqual([2, 1, 2])
 	})
+})
 
-	it('should handle empty arrays', () => {
-		const input = reactive([])
-		const mapped = computed.map(input, (value) => value * 2)
-
-		expect(unwrap(mapped)).toEqual([])
-		expect(mapped.length).toBe(0)
-	})
-
-	it('should track compute function call count', () => {
-		const input = reactive([1, 2, 3])
-		let computeCount = 0
-		const mapped = computed.map(input, (value) => {
-			computeCount++
-			return value * 2
-		})
-
-		expect(unwrap(mapped)).toEqual([2, 4, 6])
-		expect(computeCount).toBe(3) // Initial computation for 3 items
-
-		// Modify one item - should recompute only that item
-		input[0] = 10
-		expect(mapped[0]).toBe(20)
-		expect(computeCount).toBe(4) // One more computation
-
-		// Modify another item
-		input[1] = 20
-		expect(mapped[1]).toBe(40)
-		expect(computeCount).toBe(5) // One more computation
-	})
-
-	it('should track effect count when input array length changes', () => {
-		const input = reactive([1, 2, 3])
-		let computeCount = 0
-		let effectCount = 0
-
-		const mapped = computed.map(input, (value) => {
-			computeCount++
-			return value * 2
-		})
-
-		// Track effects that watch the mapped array
-		effect(() => {
-			effectCount++
-			mapped.length // Access length to track it
-		})
-
-		expect(computeCount).toBe(3) // Initial computation
-		expect(effectCount).toBe(1) // Initial effect
-
-		// Add item should trigger effect
-		input.push(4)
-		expect(computeCount).toBe(4) // One more computation for new item
-		expect(effectCount).toBe(2) // Effect triggered by length change
-
-		// Remove item should trigger effect
-		input.pop()
-		expect(computeCount).toBe(4) // Nothing computed
-		expect(effectCount).toBe(3) // Effect triggered by length change
-	})
-
-	it('should track effect count when watching mapped values', () => {
-		const input = reactive([1, 2, 3])
-		let computeCount = 0
-		let effectCount = 0
-
-		const mapped = computed.map(input, (value) => {
-			computeCount++
-			return value * 2
-		})
-
-		// Track effects that watch the mapped values
-		effect(() => {
-			effectCount++
-			// Access mapped values to track them
-			mapped.forEach((v) => v)
-		})
-
-		expect(computeCount).toBe(3) // Initial computation
-		expect(effectCount).toBe(1) // Initial effect
-
-		// Modify input should trigger effect
-		input[0] = 10
-		expect(computeCount).toBe(4) // One more computation
-		expect(effectCount).toBe(2) // Effect triggered by value change
-
-		// Modify another input should trigger effect
-		input[1] = 20
-		expect(computeCount).toBe(5) // One more computation
-		expect(effectCount).toBe(3) // Effect triggered by value change
-	})
-
-	it('should track effect count for complex transformations', () => {
-		const users = reactive([
-			{ name: 'John', age: 30 },
-			{ name: 'Jane', age: 25 },
-		])
-		let computeCount = 0
-		let effectCount = 0
-
-		const mapped = computed.map(users, (user) => {
-			computeCount++
-			return `${user.name} (${user.age})`
-		})
-
-		effect(() => {
-			effectCount++
-			mapped.forEach((v) => v)
-		})
-
-		expect(unwrap(mapped)).toEqual(['John (30)', 'Jane (25)'])
-		expect(computeCount).toBe(2) // Initial computation for 2 users
-		expect(effectCount).toBe(1) // Initial effect
-
-		// Modify user property
-		users[0].age = 31
-		expect(unwrap(mapped)).toEqual(['John (31)', 'Jane (25)'])
-		expect(computeCount).toBe(3) // One more computation for modified user
-		expect(effectCount).toBe(2) // Effect triggered by value change
-
-		// Add new user
-		users.push({ name: 'Bob', age: 35 })
-		expect(computeCount).toBe(4) // One more computation for new user
-		expect(effectCount).toBe(3) // Effect triggered by length change
-	})
-
-	it('should cache with keys', () => {
+describe('mapped with memoize', () => {
+	it('reuses memoized entries across reorder operations', () => {
 		const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
 		let computeCount = 0
 
-		const mapped = computed.memo(inputs, (item) => {
+		const createCard = memoize((user: { name: string }) => {
 			computeCount++
-			const result = {
-				setName(newName: string) {
-					item.name = newName
+
+			const view: { name?: string; setName(next: string): void } = {
+				setName(next) {
+					user.name = next
 				},
-			} as any
+			}
+
 			effect(() => {
-				result.name = item.name.toUpperCase()
+				view.name = user.name.toUpperCase()
 			})
-			return result
+
+			return view
 		})
 
-		expect(computeCount).toBe(3) // Initial computation
+		const cards = mapped(inputs, (user) => createCard(user))
 
-		// Modify through method that sets item.value
-		mapped[0].setName('Johnny')
-		expect(computeCount).toBe(3) // Initial computation
-		expect(mapped[0].name).toBe('JOHNNY')
-		mapped[0].added = true
-		const buf = inputs.pop()!
-		expect(computeCount).toBe(3) // Initial computation
-		inputs.unshift(buf)
-		expect(computeCount).toBe(4) // One more computation
-		expect(mapped[1].name).toBe('JOHNNY')
-		expect(mapped[1].added).toBe(true)
+		expect(computeCount).toBe(3)
+		cards[0].setName('Johnny')
+		expect(cards[0].name).toBe('JOHNNY')
+
+		const moved = inputs.shift()!
+		inputs.push(moved)
+		expect(computeCount).toBe(3)
+		expect(cards[2].name).toBe('JOHNNY')
 
 		inputs.push({ name: 'Alice' })
-		expect(computeCount).toBe(5) // One more computation
-		expect(mapped[3].name).toBe('ALICE')
-	})
-
-	it('should demonstrate computed.map vs computed.memo with three arrays', () => {
-		// Source array: strings
-		const sourceNames = reactive(['John', 'Jane', 'Bob'])
-
-		// Intermediate array: objects managed by computed.map
-		let mapComputeCount = 0
-		const intermediateObjects = computed.map(sourceNames, (name) => {
-			mapComputeCount++
-			return { name, id: Math.random().toString(36) }
-		})
-
-		// Final array: uppercase names managed by computed.memo
-		let memoComputeCount = 0
-		let effectCount = 0
-		const finalNames = computed.memo(intermediateObjects, (obj) => {
-			memoComputeCount++
-			const result: any = {}
-
-			// Track effects that watch the object
-			effect(() => {
-				effectCount++
-				result.uppercase = obj.name.toUpperCase()
-			})
-
-			return result
-		})
-
-		// Initial state
-		expect(mapComputeCount).toBe(3) // Initial map computation
-		expect(memoComputeCount).toBe(3) // Initial memo computation
-		expect(effectCount).toBe(3) // Initial effects
-		expect(finalNames[0].uppercase).toBe('JOHN')
-		expect(finalNames[1].uppercase).toBe('JANE')
-		expect(finalNames[2].uppercase).toBe('BOB')
-
-		// Test push operation - should trigger both map and memo
-		sourceNames.push('Alice')
-		expect(mapComputeCount).toBe(4) // One more map computation
-		expect(memoComputeCount).toBe(4) // One more memo computation
-		expect(effectCount).toBe(4) // One more effect
-		expect(finalNames[3].uppercase).toBe('ALICE')
-
-		// Test pop and unshift - memo should preserve cached objects
-		const buf = sourceNames.pop()!
-		expect(mapComputeCount).toBe(4) // No new map computation
-		expect(memoComputeCount).toBe(4) // No new memo computation
-		expect(effectCount).toBe(4) // No new effects
-
-		sourceNames.push(buf)
-		expect(mapComputeCount).toBe(5) // One more map computation (new index)
-		expect(memoComputeCount).toBe(5) // No new memo computation (same object)
-		expect(effectCount).toBe(5) // No new effects
-		expect(finalNames[3].uppercase).toBe('ALICE') // Same cached result
-
-		// Test direct modification of intermediate object
-		intermediateObjects[1].name = 'Janet'
-		expect(mapComputeCount).toBe(5) // No new map computation
-		expect(memoComputeCount).toBe(5) // No new memo computation
-		expect(effectCount).toBe(6) // One more effect (reactive to obj.name change)
-		expect(finalNames[1].uppercase).toBe('JANET')
+		expect(computeCount).toBe(4)
+		expect(cards[3].name).toBe('ALICE')
 	})
 })
 
@@ -2320,26 +2139,27 @@ describe('cleanup symbol', () => {
 		expect(cleanupCalled).toBe(true)
 	})
 
-	it('should expose cleanup function on computed.map results', () => {
+	it('should expose cleanup function on mapped results', () => {
 		const input = reactive([1, 2, 3])
-		const mapped = computed.map(input, (value) => value * 2)
+		const view = mapped(input, (value) => value * 2)
 
-		expect(typeof mapped[cleanup]).toBe('function')
-		expect(unwrap(mapped)).toEqual([2, 4, 6])
+		expect(typeof view[cleanup]).toBe('function')
+		expect(unwrap(view)).toEqual([2, 4, 6])
 
 		// Verify cleanup function is callable
-		expect(() => mapped[cleanup]()).not.toThrow()
+		expect(() => view[cleanup]()).not.toThrow()
 	})
 
-	it('should expose cleanup function on computed.memo results', () => {
-		const input = reactive([1, 2, 3])
-		const memoized = computed.memo(input, (value) => value * 2)
+	it('should expose cleanup function on mapped + memoize results', () => {
+		const input = reactive([{ value: 1 }, { value: 2 }, { value: 3 }])
+		const double = memoize((item: { value: number }) => item.value * 2)
+		const view = mapped(input, (item) => double(item))
 
-		expect(typeof memoized[cleanup]).toBe('function')
-		expect(unwrap(memoized)).toEqual([2, 4, 6])
+		expect(typeof view[cleanup]).toBe('function')
+		expect(unwrap(view)).toEqual([2, 4, 6])
 
 		// Verify cleanup function is callable
-		expect(() => memoized[cleanup]()).not.toThrow()
+		expect(() => view[cleanup]()).not.toThrow()
 	})
 
 	it('cleanup symbol should be unique and match exported symbol', () => {
@@ -2350,7 +2170,7 @@ describe('cleanup symbol', () => {
 
 	it('cleanup should not conflict with object properties', () => {
 		const testObj = { cleanup: 'user property' }
-		const cleanupFn = () => console.log('cleaned')
+		const cleanupFn = () => {}
 
 		// Add cleanup via symbol
 		const cleanedObj = Object.defineProperty(testObj, cleanup, {
@@ -2394,19 +2214,19 @@ describe('cleanup symbol', () => {
 
 	it('cleanup should work with multiple cleanedBy calls', () => {
 		const input = reactive([1, 2, 3])
-		const mapped1 = computed.map(input, (value) => value * 2)
-		const mapped2 = computed.map(input, (value) => value * 3)
+		const first = mapped(input, (value) => value * 2)
+		const second = mapped(input, (value) => value * 3)
 
-		expect(typeof mapped1[cleanup]).toBe('function')
-		expect(typeof mapped2[cleanup]).toBe('function')
+		expect(typeof first[cleanup]).toBe('function')
+		expect(typeof second[cleanup]).toBe('function')
 
 		// Both should be independent
 		input.push(4)
-		expect(unwrap(mapped1)).toEqual([2, 4, 6, 8])
-		expect(unwrap(mapped2)).toEqual([3, 6, 9, 12])
+		expect(unwrap(first)).toEqual([2, 4, 6, 8])
+		expect(unwrap(second)).toEqual([3, 6, 9, 12])
 
 		// Both cleanup functions should be callable
-		expect(() => mapped1[cleanup]()).not.toThrow()
-		expect(() => mapped2[cleanup]()).not.toThrow()
+		expect(() => first[cleanup]()).not.toThrow()
+		expect(() => second[cleanup]()).not.toThrow()
 	})
 })

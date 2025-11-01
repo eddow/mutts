@@ -47,13 +47,13 @@ export interface DependencyAccess {
 	 */
 	ascend: DependencyFunction
 	/**
-	 * Indicates whether this is the initial execution of the effect
-	 * - `true`: First execution when the effect is created
-	 * - `false`: Subsequent executions triggered by dependency changes
+	 * Indicates whether the effect is running as a reaction (i.e. not the first call)
+	 * - `false`: First execution when the effect is created
+	 * - `true`: Subsequent executions triggered by dependency changes
 	 * @example
 	 * ```typescript
-	 * effect(({ init }) => {
-	 *   if (init) {
+	 * effect(({ reaction }) => {
+	 *   if (!reaction) {
 	 *     console.log('Effect initialized')
 	 *     // Setup code that should only run once
 	 *   } else {
@@ -63,7 +63,7 @@ export interface DependencyAccess {
 	 * })
 	 * ```
 	 */
-	init: boolean
+	reaction: boolean
 }
 // TODO: proper async management, read when fn returns a promise and let the effect as "running",
 //  either to cancel the running one or to avoid running 2 in "parallel" and debounce the second one
@@ -663,9 +663,6 @@ export function track1(obj: object, prop: any, oldVal: any, newValue: any) {
 }
 
 //#endregion
-/* TODO? Recursive touch.
-In case of same prototype (or both non-object, specific case), touch all the properties instead of the whole object.
-*/
 
 function isObjectLike(value: unknown): value is object {
 	return typeof value === 'object' && value !== null
@@ -1092,7 +1089,7 @@ export function effect<Args extends any[]>(
 		getRoot(parentForAscend)
 	)
 	let effectStopped = false
-	let init = true
+	let hasReacted = false
 
 	function runEffect() {
 		// The effect has been stopped after having been planned
@@ -1103,11 +1100,11 @@ export function effect<Args extends any[]>(
 		options.enter(getRoot(fn))
 		let reactionCleanup: ScopedCallback | undefined
 		try {
-			reactionCleanup = withEffect(runEffect, () => fn({ tracked, ascend, init }, ...args)) as
-				| undefined
-				| ScopedCallback
+			reactionCleanup = withEffect(runEffect, () =>
+				fn({ tracked, ascend, reaction: hasReacted }, ...args)
+			) as undefined | ScopedCallback
 		} finally {
-			init = false
+			hasReacted = true
 			options.leave(fn)
 		}
 
