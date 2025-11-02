@@ -194,6 +194,13 @@ export const options = {
 	 * @default true
 	 */
 	ignoreAccessors: true,
+	/**
+	 * Enable recursive touching when objects with the same prototype are replaced
+	 * When enabled, replacing an object with another of the same prototype triggers
+	 * recursive diffing instead of notifying parent effects
+	 * @default true
+	 */
+	recursiveTouching: true,
 	// biome-ignore lint/suspicious/noConsole: This is the whole point here
 	warn: (...args: any[]) => console.warn(...args),
 }

@@ -1,11 +1,9 @@
 import { isObject } from '../utils'
-import { options, type Evolution, type ScopedCallback } from './types'
-import { effect } from './effects'
-import { markWithRoot } from './tracking'
-import { batch } from './effects'
-import { reactive } from './proxy'
-import { unwrap } from './proxy'
+import { batch, effect } from './effects'
 import { isNonReactive } from './non-reactive'
+import { reactive, unwrap } from './proxy'
+import { markWithRoot } from './tracking'
+import { type Evolution, options, type ScopedCallback } from './types'
 
 // Deep watching data structures
 // Track which objects contain which other objects (back-references)

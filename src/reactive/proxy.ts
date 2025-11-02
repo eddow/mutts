@@ -98,7 +98,7 @@ const reactiveHandlers = {
 		if (oldVal !== newValue) {
 			ReflectSet(obj, prop, newValue, receiver)
 
-			if (oldVal !== absent && shouldRecurseTouch(oldVal, newValue)) {
+			if (options.recursiveTouching && oldVal !== absent && shouldRecurseTouch(oldVal, newValue)) {
 				const origin = { obj: unwrappedObj, prop }
 				// Deep touch: only notify nested property changes with origin filtering
 				// Don't notify direct property change - the whole point is to avoid parent effects re-running

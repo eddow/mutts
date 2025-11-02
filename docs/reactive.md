@@ -531,6 +531,9 @@ reactiveOptions.maxEffectChain = 50
 // Set maximum deep watch traversal depth
 reactiveOptions.maxDeepWatchDepth = 200
 
+// Enable/disable recursive touching (default: true)
+reactiveOptions.recursiveTouching = false
+
 // Enable debug logging
 reactiveOptions.enter = (effect) => console.log('Entering effect:', effect)
 reactiveOptions.leave = (effect) => console.log('Leaving effect:', effect)
@@ -1165,6 +1168,8 @@ C.something = B
 - Only nested effects that accessed properties through the container are notified
 - Independent effects on the replaced object (e.g., direct dependency on `A.x`) are filtered out
 - This minimizes unnecessary re-computations while keeping data consistent
+
+**Note:** This recursive touching behavior can be disabled globally by setting `reactiveOptions.recursiveTouching = false`. When disabled, all object replacements will trigger parent effects regardless of prototype matching.
 
 ## Collections
 
