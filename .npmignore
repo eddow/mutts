@@ -1,8 +1,5 @@
 # Test files (must be first to exclude from "src" in package.json files field)
-**/*.test.ts
-**/*.test.js
-**/*.test.tsx
-**/*.test.jsx
+tests/
 *.test.ts
 *.test.js
 jest.config.js
@@ -27,7 +24,6 @@ rollup.config.js
 
 # Build artifacts (except dist/)
 *.log
-coverage/
 
 # Package manager files
 package-lock.json
@@ -46,3 +42,5 @@ Thumbs.db
 
 # Sandbox/examples
 sandbox/
+benchmarks/
+coverage/

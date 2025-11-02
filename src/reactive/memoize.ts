@@ -1,7 +1,7 @@
 import { decorator } from '../decorator'
 import { renamed } from '../utils'
 import { touched1 } from './change'
-import { effect, withEffect } from './effects'
+import { effect, untracked } from './effects'
 import { dependant, getRoot, markWithRoot } from './tracking'
 
 export type Memoizable = object | any[] | symbol | ((...args: any[]) => any)
@@ -48,7 +48,7 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 		// Create memoize internal effect in untracked context so it's independent
 		// of external effects. This ensures the effect persists to track dependencies
 		// even if external effects reading the memoized value are stopped.
-		node.cleanup = withEffect(undefined, () =>
+		node.cleanup = untracked(() =>
 			effect(() => {
 				node.result = fn(...localArgs)
 				return () => {

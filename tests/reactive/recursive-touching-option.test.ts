@@ -190,4 +190,86 @@ describe('recursive touching option', () => {
 			expect(effectRuns).toBe(3)
 		})
 	})
+
+	describe('Map and WeakMap', () => {
+		it('should use recursive touch when enabled', () => {
+			reactiveOptions.recursiveTouching = true
+
+			const map = reactive(new Map())
+			const A = reactive({ x: 1, y: 2 })
+			const B = reactive({ x: 10, y: 20 })
+
+			// Set initial value before creating effect
+			map.set('key', A)
+
+			let effectRuns = 0
+
+			effect(() => {
+				effectRuns++
+				const val = map.get('key')
+				void val
+			})
+
+			expect(effectRuns).toBe(1)
+
+			// Setting B (same prototype) should NOT trigger parent effect with recursive touch
+			map.set('key', B)
+			expect(effectRuns).toBe(1)
+		})
+
+		it('should NOT use recursive touch when disabled', () => {
+			reactiveOptions.recursiveTouching = false
+
+			const map = reactive(new Map())
+			const A = reactive({ x: 1, y: 2 })
+			const B = reactive({ x: 10, y: 20 })
+
+			// Set initial value before creating effect
+			map.set('key', A)
+
+			let effectRuns = 0
+
+			effect(() => {
+				effectRuns++
+				const val = map.get('key')
+				void val
+			})
+
+			expect(effectRuns).toBe(1)
+
+			// Setting B should trigger effect when recursive touch is disabled
+			map.set('key', B)
+			expect(effectRuns).toBe(2)
+		})
+
+		it('should work with WeakMap too', () => {
+			reactiveOptions.recursiveTouching = true
+
+			const weakMap = reactive(new WeakMap())
+			const key = {}
+			const A = reactive({ x: 1, y: 2 })
+			const B = reactive({ x: 10, y: 20 })
+
+			weakMap.set(key, A)
+
+			let effectRuns = 0
+
+			effect(() => {
+				effectRuns++
+				const val = weakMap.get(key)
+				void val
+			})
+
+			expect(effectRuns).toBe(1)
+
+			// Setting B should NOT trigger with recursive touch
+			weakMap.set(key, B)
+			expect(effectRuns).toBe(1)
+
+			// But disabling it should trigger
+			reactiveOptions.recursiveTouching = false
+			weakMap.set(key, A)
+			expect(effectRuns).toBe(2)
+		})
+	})
 })

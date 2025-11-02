@@ -1,4 +1,4 @@
-import { addState, collectEffects } from './change'
+import { addState, collectEffects, touched1 } from './change'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch'
 import { batch } from './effects'
 import { isNonReactive } from './non-reactive'
@@ -27,6 +27,38 @@ export function shouldRecurseTouch(oldValue: any, newValue: any): boolean {
 	// TODO: check the case of pure objects, who should touche each value separately + their prototype?
 	//if(!(oldValue instanceof Object) || !(newValue instanceof Object)) return true
 	return getPrototypeToken(oldValue) === getPrototypeToken(newValue)
+}
+
+/**
+ * Centralized function to handle property change notifications with optional recursive touch
+ * @param targetObj - The object whose property changed
+ * @param prop - The property that changed
+ * @param oldValue - The old value (before change)
+ * @param newValue - The new value (after change)
+ * @param hadProperty - Whether the property existed before (for add vs set)
+ */
+export function notifyPropertyChange(
+	targetObj: any,
+	prop: any,
+	oldValue: any,
+	newValue: any,
+	hadProperty: boolean
+) {
+	const evolution: Evolution = { type: hadProperty ? 'set' : 'add', prop }
+
+	if (
+		options.recursiveTouching &&
+		oldValue !== undefined &&
+		shouldRecurseTouch(oldValue, newValue)
+	) {
+		const unwrappedObj = unwrap(targetObj)
+		const origin = { obj: unwrappedObj, prop }
+		// Deep touch: only notify nested property changes with origin filtering
+		// Don't notify direct property change - the whole point is to avoid parent effects re-running
+		dispatchNotifications(recursiveTouch(oldValue, newValue, new WeakMap(), [], origin))
+	} else {
+		touched1(targetObj, evolution, prop)
+	}
 }
 
 type VisitedPairs = WeakMap<object, WeakSet<object>>

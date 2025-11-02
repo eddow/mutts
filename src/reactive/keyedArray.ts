@@ -1,9 +1,8 @@
 import { getAt, Indexable, setAt } from '../indexable'
-import { effect } from './effects'
+import { effect, untracked } from './effects'
 import { cleanedBy, unreactive } from './interface'
 import { reactive } from './proxy'
 import { type DependencyFunction, prototypeForwarding, type ScopedCallback } from './types'
-import { untracked } from './utilities'
 
 type KeyFunction<T, K extends PropertyKey> = (item: T) => K
 
@@ -22,6 +21,7 @@ const KeyedArrayBase = Indexable<any>({
 	},
 })
 
+// TODO: use ArrayReadForward
 @unreactive
 class KeyedArrayClass<T, K extends PropertyKey = PropertyKey> extends KeyedArrayBase {
 	readonly #keyFn: KeyFunction<T, K>
@@ -499,7 +499,7 @@ export function keyedArray<T, K extends PropertyKey = PropertyKey>(
 ): KeyedArray<T, K> {
 	return new KeyedArrayClass(keyFn, initial) as KeyedArray<T, K>
 }
-
+// TODO: return a readonly array proxy through ArrayReadForward
 export function mapped<T, U>(
 	inputs: T[],
 	compute: (input: T, index: number, oldValue?: U) => U,

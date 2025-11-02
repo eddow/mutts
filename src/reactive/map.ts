@@ -1,4 +1,5 @@
 import { touched, touched1 } from './change'
+import { notifyPropertyChange } from './deep-touch'
 import { makeReactiveEntriesIterator, makeReactiveIterator } from './non-reactive'
 import { reactive } from './proxy'
 import { dependant } from './tracking'
@@ -43,9 +44,14 @@ export class ReactiveWeakMap<K extends object, V> {
 	}
 
 	set(key: K, value: V): this {
-		// Trigger effects for the specific key
-		touched1(this.content, { type: this[native].has(key) ? 'set' : 'add', prop: key }, key)
-		this[native].set(key, value)
+		const hadKey = this[native].has(key)
+		const oldValue = this[native].get(key)
+		const reactiveValue = reactive(value)
+		this[native].set(key, reactiveValue)
+
+		if (!hadKey || oldValue !== reactiveValue) {
+			notifyPropertyChange(this.content, key, oldValue, reactiveValue, hadKey)
+		}
 
 		return this
 	}
@@ -154,8 +160,9 @@ export class ReactiveMap<K, V> {
 		this[native].set(key, reactiveValue)
 
 		if (!hadKey || oldValue !== reactiveValue) {
+			notifyPropertyChange(this.content, key, oldValue, reactiveValue, hadKey)
+			// Also notify size change for Map (WeakMap doesn't track size)
 			const evolution = { type: hadKey ? 'set' : 'add', prop: key } as const
-			touched1(this.content, evolution, key)
 			touched1(this, evolution, 'size')
 		}
 

@@ -2,7 +2,7 @@ import { decorator } from '../decorator'
 import { mixin } from '../mixins'
 import { isOwnAccessor, ReflectGet, ReflectSet } from '../utils'
 import { touched1 } from './change'
-import { dispatchNotifications, recursiveTouch, shouldRecurseTouch } from './deep-touch'
+import { notifyPropertyChange } from './deep-touch'
 import {
 	addBackReference,
 	bubbleUpChange,
@@ -120,16 +120,7 @@ const reactiveHandlers = {
 			// For getter-only accessors, Reflect.set() may fail, but we still return true
 			// to avoid throwing errors. Only proceed with change notifications if set succeeded.
 			if (ReflectSet(obj, prop, newValue, receiver)) {
-				if (
-					options.recursiveTouching &&
-					oldVal !== absent &&
-					shouldRecurseTouch(oldVal, newValue)
-				) {
-					const origin = { obj: unwrappedObj, prop }
-					// Deep touch: only notify nested property changes with origin filtering
-					// Don't notify direct property change - the whole point is to avoid parent effects re-running
-					dispatchNotifications(recursiveTouch(oldVal, newValue, new WeakMap(), [], origin))
-				} else touched1(obj, { type: oldVal !== absent ? 'set' : 'add', prop }, prop)
+				notifyPropertyChange(obj, prop, oldVal, newValue, oldVal !== absent)
 			}
 		}
 		return true

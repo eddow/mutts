@@ -1,6 +1,6 @@
 import { decorator, GenericClassDecorator } from '../decorator'
 import { deepWatch } from './deep-watch'
-import { effect, withEffect } from './effects'
+import { effect, untracked, withEffect } from './effects'
 import { isNonReactive, nonReactiveClass, nonReactiveObjects } from './non-reactive'
 import { unwrap } from './proxy'
 import { activeEffect, dependant, markWithRoot } from './tracking'
@@ -10,7 +10,6 @@ import {
 	type ScopedCallback,
 	unreactiveProperties,
 } from './types'
-import { untracked } from './utilities'
 
 /**
  * Symbol for accessing the cleanup function on cleaned objects

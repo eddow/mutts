@@ -1,6 +1,6 @@
 export { getState, touched, touched1 } from './change'
 export { deepWatch } from './deep-watch'
-export { addBatchCleanup, atomic, effect, trackEffect, withEffect } from './effects'
+export { addBatchCleanup, atomic, effect, trackEffect, untracked, withEffect } from './effects'
 export {
 	cleanedBy,
 	cleanup,
@@ -20,12 +20,19 @@ export {
 	ReactiveError,
 	type ScopedCallback,
 } from './types'
-export { profileInfo, untracked } from './utilities'
 
 import { ReactiveArray } from './array'
+import {
+	deepWatchers,
+	effectToDeepWatchedObjects,
+	objectParents,
+	objectsWithDeepWatchers,
+} from './deep-watch'
 import { ReactiveMap, ReactiveWeakMap } from './map'
-import { registerNativeReactivity } from './non-reactive'
+import { nonReactiveObjects, registerNativeReactivity } from './non-reactive'
+import { objectToProxy, proxyToObject } from './proxy'
 import { ReactiveSet, ReactiveWeakSet } from './set'
+import { effectToReactiveObjects, watchers } from './tracking'
 
 // Register native collection types to use specialized reactive wrappers
 registerNativeReactivity(WeakMap, ReactiveWeakMap)
@@ -33,3 +40,18 @@ registerNativeReactivity(Map, ReactiveMap)
 registerNativeReactivity(WeakSet, ReactiveWeakSet)
 registerNativeReactivity(Set, ReactiveSet)
 registerNativeReactivity(Array, ReactiveArray)
+
+/**
+ * Object containing internal reactive system state for debugging and profiling
+ */
+export const profileInfo: any = {
+	objectToProxy,
+	proxyToObject,
+	effectToReactiveObjects,
+	watchers,
+	objectParents,
+	objectsWithDeepWatchers,
+	deepWatchers,
+	effectToDeepWatchedObjects,
+	nonReactiveObjects,
+}

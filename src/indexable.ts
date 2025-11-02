@@ -148,3 +148,343 @@ export function Indexable<Items, Base extends abstract new (...args: any[]) => a
 }
 
 type AtReturnType<T> = T extends { [getAt](index: number): infer R } ? R : never
+
+/**
+ * Symbol for accessing the forwarded array in ArrayReadForward
+ */
+export const forwardArray = Symbol('forwardArray')
+
+/**
+ * A read-only array forwarder that implements all reading/iterating methods of Array
+ * but does not implement modification methods.
+ *
+ * The constructor takes a callback that returns an array, and all methods forward
+ * their behavior to the result of that callback.
+ */
+export abstract class ArrayReadForward<T> {
+	protected abstract readonly [forwardArray]: readonly T[]
+
+	/**
+	 * Get the length of the array
+	 */
+	get length(): number {
+		return this[forwardArray].length
+	}
+
+	/**
+	 * Get an element at a specific index
+	 */
+	[index: number]: T | undefined
+
+	/**
+	 * Iterator protocol support
+	 */
+	[Symbol.iterator](): Iterator<T> {
+		return this[forwardArray][Symbol.iterator]()
+	}
+
+	// Reading/Iterating methods
+
+	/**
+	 * Creates a new array with the results of calling a provided function on every element
+	 */
+	map<U>(callbackfn: (value: T, index: number, array: readonly T[]) => U, thisArg?: any): U[] {
+		return this[forwardArray].map(callbackfn, thisArg)
+	}
+
+	/**
+	 * Creates a new array with all elements that pass the test implemented by the provided function
+	 */
+	filter<S extends T>(
+		predicate: (value: T, index: number, array: readonly T[]) => value is S,
+		thisArg?: any
+	): S[]
+	filter(predicate: (value: T, index: number, array: readonly T[]) => unknown, thisArg?: any): T[]
+	filter(predicate: (value: T, index: number, array: readonly T[]) => unknown, thisArg?: any): T[] {
+		return this[forwardArray].filter(predicate, thisArg)
+	}
+
+	/**
+	 * Executes a reducer function on each element of the array, resulting in a single output value
+	 */
+	reduce(
+		callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: readonly T[]) => T
+	): T
+	reduce(
+		callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: readonly T[]) => T,
+		initialValue: T
+	): T
+	reduce<U>(
+		callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: readonly T[]) => U,
+		initialValue: U
+	): U
+	reduce(
+		callbackfn: (
+			previousValue: any,
+			currentValue: T,
+			currentIndex: number,
+			array: readonly T[]
+		) => any,
+		initialValue?: any
+	): any {
+		return initialValue !== undefined
+			? this[forwardArray].reduce(callbackfn, initialValue)
+			: this[forwardArray].reduce(callbackfn)
+	}
+
+	/**
+	 * Executes a reducer function on each element of the array (right-to-left), resulting in a single output value
+	 */
+	reduceRight(
+		callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: readonly T[]) => T
+	): T
+	reduceRight(
+		callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: readonly T[]) => T,
+		initialValue: T
+	): T
+	reduceRight<U>(
+		callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: readonly T[]) => U,
+		initialValue: U
+	): U
+	reduceRight(
+		callbackfn: (
+			previousValue: any,
+			currentValue: T,
+			currentIndex: number,
+			array: readonly T[]
+		) => any,
+		initialValue?: any
+	): any {
+		return initialValue !== undefined
+			? this[forwardArray].reduceRight(callbackfn, initialValue)
+			: this[forwardArray].reduceRight(callbackfn)
+	}
+
+	/**
+	 * Executes a provided function once for each array element
+	 */
+	forEach(callbackfn: (value: T, index: number, array: readonly T[]) => void, thisArg?: any): void {
+		this[forwardArray].forEach(callbackfn, thisArg)
+	}
+
+	/**
+	 * Returns the value of the first element in the array that satisfies the provided testing function
+	 */
+	find<S extends T>(
+		predicate: (value: T, index: number, array: readonly T[]) => value is S,
+		thisArg?: any
+	): S | undefined
+	find(
+		predicate: (value: T, index: number, array: readonly T[]) => unknown,
+		thisArg?: any
+	): T | undefined
+	find(
+		predicate: (value: T, index: number, array: readonly T[]) => unknown,
+		thisArg?: any
+	): T | undefined {
+		return this[forwardArray].find(predicate, thisArg)
+	}
+
+	/**
+	 * Returns the index of the first element in the array that satisfies the provided testing function
+	 */
+	findIndex(
+		predicate: (value: T, index: number, array: readonly T[]) => unknown,
+		thisArg?: any
+	): number {
+		return this[forwardArray].findIndex(predicate, thisArg)
+	}
+
+	/**
+	 * Returns the value of the last element in the array that satisfies the provided testing function
+	 */
+	findLast<S extends T>(
+		predicate: (value: T, index: number, array: readonly T[]) => value is S,
+		thisArg?: any
+	): S | undefined
+	findLast(
+		predicate: (value: T, index: number, array: readonly T[]) => unknown,
+		thisArg?: any
+	): T | undefined
+	findLast(
+		predicate: (value: T, index: number, array: readonly T[]) => unknown,
+		thisArg?: any
+	): T | undefined {
+		return this[forwardArray].findLast(predicate, thisArg)
+	}
+
+	/**
+	 * Returns the index of the last element in the array that satisfies the provided testing function
+	 */
+	findLastIndex(
+		predicate: (value: T, index: number, array: readonly T[]) => unknown,
+		thisArg?: any
+	): number {
+		return this[forwardArray].findLastIndex(predicate, thisArg)
+	}
+
+	/**
+	 * Determines whether an array includes a certain value among its entries
+	 */
+	includes(searchElement: T, fromIndex?: number): boolean {
+		return this[forwardArray].includes(searchElement, fromIndex)
+	}
+
+	/**
+	 * Returns the first index at which a given element can be found in the array
+	 */
+	indexOf(searchElement: T, fromIndex?: number): number {
+		return this[forwardArray].indexOf(searchElement, fromIndex)
+	}
+
+	/**
+	 * Returns the last index at which a given element can be found in the array
+	 */
+	lastIndexOf(searchElement: T, fromIndex?: number): number {
+		return this[forwardArray].lastIndexOf(searchElement, fromIndex)
+	}
+
+	/**
+	 * Returns a shallow copy of a portion of an array into a new array object
+	 */
+	slice(start?: number, end?: number): T[] {
+		return this[forwardArray].slice(start, end)
+	}
+
+	/**
+	 * Returns a new array comprised of this array joined with other array(s) and/or value(s)
+	 */
+	concat(...items: ConcatArray<T>[]): T[]
+	concat(...items: (T | ConcatArray<T>)[]): T[]
+	concat(...items: (T | ConcatArray<T>)[]): T[] {
+		return this[forwardArray].concat(...items)
+	}
+
+	/**
+	 * Tests whether all elements in the array pass the test implemented by the provided function
+	 */
+	every(
+		predicate: (value: T, index: number, array: readonly T[]) => unknown,
+		thisArg?: any
+	): boolean {
+		return this[forwardArray].every(predicate, thisArg)
+	}
+
+	/**
+	 * Tests whether at least one element in the array passes the test implemented by the provided function
+	 */
+	some(
+		predicate: (value: T, index: number, array: readonly T[]) => unknown,
+		thisArg?: any
+	): boolean {
+		return this[forwardArray].some(predicate, thisArg)
+	}
+
+	/**
+	 * Joins all elements of an array into a string
+	 */
+	join(separator?: string): string {
+		return this[forwardArray].join(separator)
+	}
+
+	/**
+	 * Returns a new array iterator that contains the keys for each index in the array
+	 */
+	keys(): IterableIterator<number> {
+		return this[forwardArray].keys()
+	}
+
+	/**
+	 * Returns a new array iterator that contains the values for each index in the array
+	 */
+	values(): IterableIterator<T> {
+		return this[forwardArray].values()
+	}
+
+	/**
+	 * Returns a new array iterator that contains the key/value pairs for each index in the array
+	 */
+	entries(): IterableIterator<[number, T]> {
+		return this[forwardArray].entries()
+	}
+
+	/**
+	 * Returns a string representation of the array
+	 */
+	toString(): string {
+		return this[forwardArray].toString()
+	}
+
+	/**
+	 * Returns a localized string representing the array
+	 */
+	toLocaleString(
+		locales?: string | string[],
+		options?: Intl.NumberFormatOptions | Intl.DateTimeFormatOptions
+	): string {
+		return this[forwardArray].toLocaleString(locales, options)
+	}
+
+	/**
+	 * Returns the element at the specified index, or undefined if the index is out of bounds
+	 */
+	at(index: number): T | undefined {
+		return this[forwardArray].at(index)
+	}
+
+	/**
+	 * Returns a new array with all sub-array elements concatenated into it recursively up to the specified depth
+	 */
+	flat(depth?: number): T[] {
+		return this[forwardArray].flat(depth) as T[]
+	}
+
+	/**
+	 * Returns a new array formed by applying a given callback function to each element of the array,
+	 * and then flattening the result by one level
+	 */
+	flatMap<U, This = undefined>(
+		callback: (this: This, value: T, index: number, array: readonly T[]) => U | ReadonlyArray<U>,
+		thisArg?: This
+	): U[] {
+		return this[forwardArray].flatMap(callback as any, thisArg)
+	}
+
+	/**
+	 * Returns a new array with elements in reversed order (ES2023)
+	 */
+	toReversed(): T[] {
+		return this[forwardArray].toReversed?.() ?? [...this[forwardArray]].reverse()
+	}
+
+	/**
+	 * Returns a new array with elements sorted (ES2023)
+	 */
+	toSorted(compareFn?: ((a: T, b: T) => number) | undefined): T[] {
+		return this[forwardArray].toSorted?.(compareFn) ?? [...this[forwardArray]].sort(compareFn)
+	}
+
+	/**
+	 * Returns a new array with some elements removed and/or replaced at a given index (ES2023)
+	 */
+	toSpliced(start: number, deleteCount?: number, ...items: T[]): T[] {
+		if (this[forwardArray].toSpliced) {
+			return this[forwardArray].toSpliced(start, deleteCount, ...items)
+		}
+		const arr = [...this[forwardArray]]
+		arr.splice(start, deleteCount ?? arr.length - start, ...items)
+		return arr
+	}
+
+	/**
+	 * Returns a new array with the element at the given index replaced with the given value (ES2023)
+	 */
+	with(index: number, value: T): T[] {
+		if (this[forwardArray].with) {
+			return this[forwardArray].with(index, value)
+		}
+		const arr = [...this[forwardArray]]
+		arr[index] = value
+		return arr
+	}
+}

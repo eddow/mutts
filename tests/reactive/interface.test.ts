@@ -1334,6 +1334,115 @@ describe('mapped', () => {
 		expect(result[2]).toBe(70)
 		expect(calls).toEqual([2, 1, 2])
 	})
+
+	it('should empty mapped array when source array is emptied via pop', () => {
+		const input = reactive([1, 2, 3])
+		const result = mapped(input, (value) => value * 2)
+
+		expect(unwrap(result)).toEqual([2, 4, 6])
+		expect(result.length).toBe(3)
+
+		input.pop()
+		expect(unwrap(result)).toEqual([2, 4])
+		expect(result.length).toBe(2)
+
+		input.pop()
+		expect(unwrap(result)).toEqual([2])
+		expect(result.length).toBe(1)
+
+		input.pop()
+		expect(unwrap(result)).toEqual([])
+		expect(result.length).toBe(0)
+	})
+
+	it('should empty mapped array when source array length is set to 0', () => {
+		const input = reactive([1, 2, 3])
+		const result = mapped(input, (value) => value * 2)
+
+		expect(unwrap(result)).toEqual([2, 4, 6])
+		expect(result.length).toBe(3)
+
+		input.length = 0
+		expect(unwrap(result)).toEqual([])
+		expect(result.length).toBe(0)
+	})
+
+	it('should empty mapped array when source array length is set to 0 after multiple operations', () => {
+		const input = reactive([1, 2, 3, 4, 5])
+		const result = mapped(input, (value) => value * 2)
+
+		expect(unwrap(result)).toEqual([2, 4, 6, 8, 10])
+		expect(result.length).toBe(5)
+
+		// Do some operations first
+		input.pop()
+		expect(unwrap(result)).toEqual([2, 4, 6, 8])
+		expect(result.length).toBe(4)
+
+		input.push(6)
+		expect(unwrap(result)).toEqual([2, 4, 6, 8, 12])
+		expect(result.length).toBe(5)
+
+		// Now set length to 0
+		input.length = 0
+		expect(unwrap(result)).toEqual([])
+		expect(result.length).toBe(0)
+
+		// Verify we can add items back
+		input.push(10, 20)
+		expect(unwrap(result)).toEqual([20, 40])
+		expect(result.length).toBe(2)
+	})
+
+	it('should handle pop on array with single element', () => {
+		const input = reactive([42])
+		const result = mapped(input, (value) => value * 2)
+
+		expect(unwrap(result)).toEqual([84])
+		expect(result.length).toBe(1)
+
+		input.pop()
+		expect(unwrap(result)).toEqual([])
+		expect(result.length).toBe(0)
+		expect(result[0]).toBeUndefined()
+	})
+
+	it('should handle setting length to 0 and then accessing mapped array', () => {
+		const input = reactive([1, 2, 3])
+		const result = mapped(input, (value) => value * 2)
+
+		input.length = 0
+		
+		// Verify all indices are undefined/cleared
+		expect(result[0]).toBeUndefined()
+		expect(result[1]).toBeUndefined()
+		expect(result[2]).toBeUndefined()
+		expect(result.length).toBe(0)
+		expect(unwrap(result)).toEqual([])
+		
+		// Verify iteration works correctly
+		const collected: number[] = []
+		for (const item of result) {
+			collected.push(item)
+		}
+		expect(collected).toEqual([])
+	})
+
+	it('should handle shift operations that empty the array', () => {
+		const input = reactive([1, 2])
+		const result = mapped(input, (value) => value * 2)
+
+		expect(unwrap(result)).toEqual([2, 4])
+		expect(result.length).toBe(2)
+
+		input.shift()
+		expect(unwrap(result)).toEqual([4])
+		expect(result.length).toBe(1)
+
+		input.shift()
+		expect(unwrap(result)).toEqual([])
+		expect(result.length).toBe(0)
+	})
 })
 
 describe('mapped with memoize', () => {

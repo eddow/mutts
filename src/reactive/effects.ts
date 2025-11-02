@@ -298,4 +298,20 @@ export function effect<Args extends any[]>(
 	return subEffectCleanup
 }
 
+/**
+ * Executes a function without tracking dependencies
+ * @param fn - The function to execute
+ */
+export function untracked<T>(fn: () => T): T {
+	let rv: T
+	withEffect(
+		undefined,
+		() => {
+			rv = fn()
+		} /*,
+		true*/
+	)
+	return rv
+}
+
 export { effectTrackers }
