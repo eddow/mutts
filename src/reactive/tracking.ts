@@ -1,5 +1,5 @@
-import { allProps, rootFunction, type ScopedCallback } from './types'
 import { unwrap } from './proxy'
+import { allProps, rootFunction, type ScopedCallback } from './types'
 
 // Track which effects are watching which reactive objects for cleanup
 export const effectToReactiveObjects = new WeakMap<ScopedCallback, Set<object>>()
@@ -64,25 +64,26 @@ export function getRoot<T extends Function | undefined>(fn: T): T {
 export function dependant(obj: any, prop: any = allProps) {
 	obj = unwrap(obj)
 	const currentActiveEffect = activeEffect
-	if (currentActiveEffect && (typeof prop !== 'symbol' || prop === allProps)) {
-		let objectWatchers = watchers.get(obj)
-		if (!objectWatchers) {
-			objectWatchers = new Map<PropertyKey, Set<ScopedCallback>>()
-			watchers.set(obj, objectWatchers)
-		}
-		let deps = objectWatchers.get(prop)
-		if (!deps) {
-			deps = new Set<ScopedCallback>()
-			objectWatchers.set(prop, deps)
-		}
-		deps.add(currentActiveEffect)
+	// Early return if no active effect or invalid prop
+	if (!currentActiveEffect || (typeof prop === 'symbol' && prop !== allProps)) return
 
-		// Track which reactive objects this effect is watching
-		let effectObjects = effectToReactiveObjects.get(currentActiveEffect)
-		if (!effectObjects) {
-			effectObjects = new Set<object>()
-			effectToReactiveObjects.set(currentActiveEffect, effectObjects)
-		}
-		effectObjects.add(obj)
+	let objectWatchers = watchers.get(obj)
+	if (!objectWatchers) {
+		objectWatchers = new Map<PropertyKey, Set<ScopedCallback>>()
+		watchers.set(obj, objectWatchers)
 	}
+	let deps = objectWatchers.get(prop)
+	if (!deps) {
+		deps = new Set<ScopedCallback>()
+		objectWatchers.set(prop, deps)
+	}
+	deps.add(currentActiveEffect)
+
+	// Track which reactive objects this effect is watching
+	let effectObjects = effectToReactiveObjects.get(currentActiveEffect)
+	if (!effectObjects) {
+		effectObjects = new Set<object>()
+		effectToReactiveObjects.set(currentActiveEffect, effectObjects)
+	}
+	effectObjects.add(obj)
 }

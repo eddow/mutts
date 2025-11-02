@@ -49,7 +49,10 @@ export function removeBackReference(child: object, parent: object, prop: any) {
  * Check if an object needs back-references (has deep watchers or parents with deep watchers)
  */
 export function needsBackReferences(obj: object): boolean {
-	return objectsWithDeepWatchers.has(obj) || hasParentWithDeepWatchers(obj)
+	// Fast path: check if object itself has deep watchers
+	if (objectsWithDeepWatchers.has(obj)) return true
+	// Slow path: check if any parent has deep watchers (recursive)
+	return hasParentWithDeepWatchers(obj)
 }
 
 /**

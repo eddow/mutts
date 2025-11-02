@@ -103,10 +103,11 @@ npm run benchmark:compare baseline-v1.0
 ```
 
 This shows you:
-- 🟢 **Improvements** (faster operations)
-- 🔴 **Regressions** (slower operations)  
+- 🟢 **Improvements** (faster operations, less memory)
+- 🔴 **Regressions** (slower operations, more memory)  
 - ⚪ **Unchanged** metrics
 - Percentage changes and speedup factors
+- **Memory benchmarks** (heap usage, delta per operation)
 
 **Example output:**
 ```

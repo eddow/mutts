@@ -1,5 +1,5 @@
-import { nativeReactive, nonReactiveMark } from './types'
 import { reactive } from './proxy'
+import { nativeReactive, nonReactiveMark } from './types'
 
 // Track objects that should never be reactive and cannot be modified
 /**
@@ -73,7 +73,7 @@ export function isNonReactive(obj: any): boolean {
 	if (obj[nonReactiveMark]) return true
 
 	// Check if the object is immutable
-	if (Array.from(immutables).some((fn) => fn(obj))) return true
+	for (const fn of immutables) if (fn(obj)) return true
 
 	return false
 }

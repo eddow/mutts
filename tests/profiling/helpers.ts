@@ -299,9 +299,26 @@ export function profileMemory(
 /**
  * Memory usage formatter
  */
-export function formatMemoryProfile(profile: MemoryProfile): string {
+export function formatMemoryProfile(profile: MemoryProfile, name?: string): string {
+	// Output in parseable format for benchmark tool
+	const jsonData = JSON.stringify({
+		type: 'memory',
+		name: name || 'Memory profile',
+		heapUsedBefore: profile.heapUsedBefore,
+		heapUsedAfter: profile.heapUsedAfter,
+		heapTotalBefore: profile.heapTotalBefore,
+		heapTotalAfter: profile.heapTotalAfter,
+		delta: profile.delta,
+		deltaPercent: profile.deltaPercent,
+		deltaKB: profile.delta / 1024,
+		heapUsedBeforeMB: profile.heapUsedBefore / 1024 / 1024,
+		heapUsedAfterMB: profile.heapUsedAfter / 1024 / 1024,
+	})
+	
+	console.log(`BENCHMARK:${jsonData}`)
+	
 	return `
-Memory Profile:
+Memory Profile${name ? `: ${name}` : ''}:
   Before: ${(profile.heapUsedBefore / 1024 / 1024).toFixed(2)} MB
   After: ${(profile.heapUsedAfter / 1024 / 1024).toFixed(2)} MB
   Delta: ${(profile.delta / 1024).toFixed(4)} KB/iteration

@@ -14,19 +14,34 @@ import { join } from 'path'
 
 const BENCHMARKS_DIR = join(process.cwd(), 'benchmarks')
 
+interface PerformanceResult {
+	test: string
+	name: string
+	avgTime: number
+	opsPerSec: number
+	minTime: number
+	maxTime: number
+	iterations: number
+}
+
+interface MemoryResult {
+	test: string
+	name: string
+	heapUsedBefore: number
+	heapUsedAfter: number
+	delta: number
+	deltaPercent: number
+	deltaKB: number
+	heapUsedBeforeMB: number
+	heapUsedAfterMB: number
+}
+
 interface BenchmarkResult {
 	name: string
 	timestamp: string
 	gitHash?: string
-	results: Record<string, {
-		test: string
-		name: string
-		avgTime: number
-		opsPerSec: number
-		minTime: number
-		maxTime: number
-		iterations: number
-	}>
+	results: Record<string, PerformanceResult>
+	memory: Record<string, MemoryResult>
 }
 
 function ensureBenchmarksDir() {
@@ -43,8 +58,12 @@ function getGitHash(): string | undefined {
 	}
 }
 
-function parseJestOutput(output: string): BenchmarkResult['results'] {
+function parseJestOutput(output: string): {
+	results: BenchmarkResult['results']
+	memory: BenchmarkResult['memory']
+} {
 	const results: BenchmarkResult['results'] = {}
+	const memory: BenchmarkResult['memory'] = {}
 	const lines = output.split('\n')
 	
 	let currentTest = ''
@@ -57,38 +76,89 @@ function parseJestOutput(output: string): BenchmarkResult['results'] {
 		}
 		
 		// Extract benchmark results from BENCHMARK: prefix
-		const benchMatch = line.match(/BENCHMARK:(.+)/)
-		if (benchMatch) {
+		// Match the pattern: BENCHMARK: followed by JSON (may span multiple parts in console output)
+		if (line.includes('BENCHMARK:')) {
 			try {
-				const data = JSON.parse(benchMatch[1]!)
-				const key = `${currentTest}:${data.name}`
-				results[key] = {
-					test: currentTest,
-					name: data.name,
-					avgTime: data.avgTime,
-					opsPerSec: data.opsPerSec,
-					minTime: data.minTime,
-					maxTime: data.maxTime,
-					iterations: data.iterations,
+				// Extract JSON part after BENCHMARK:
+				const jsonStart = line.indexOf('BENCHMARK:') + 'BENCHMARK:'.length
+				let jsonStr = line.substring(jsonStart).trim()
+				
+				// Try to parse, might need to reconstruct if split across lines
+				let data
+				try {
+					data = JSON.parse(jsonStr)
+				} catch {
+					// Might be partial, try to find complete JSON by looking for balanced braces
+					let braceCount = 0
+					let endIdx = 0
+					for (let i = 0; i < jsonStr.length; i++) {
+						if (jsonStr[i] === '{') braceCount++
+						if (jsonStr[i] === '}') braceCount--
+						if (braceCount === 0 && i > 0) {
+							endIdx = i + 1
+							break
+						}
+					}
+					if (endIdx > 0) {
+						data = JSON.parse(jsonStr.substring(0, endIdx))
+					} else {
+						continue // Skip if we can't parse
+					}
+				}
+				
+				if (data.type === 'memory') {
+					// Memory benchmark
+					const key = `${currentTest}:${data.name}`
+					memory[key] = {
+						test: currentTest,
+						name: data.name,
+						heapUsedBefore: data.heapUsedBefore,
+						heapUsedAfter: data.heapUsedAfter,
+						delta: data.delta,
+						deltaPercent: data.deltaPercent,
+						deltaKB: data.deltaKB,
+						heapUsedBeforeMB: data.heapUsedBeforeMB,
+						heapUsedAfterMB: data.heapUsedAfterMB,
+					}
+				} else if (data.name && typeof data.avgTime === 'number') {
+					// Performance benchmark
+					const key = `${currentTest}:${data.name}`
+					results[key] = {
+						test: currentTest,
+						name: data.name,
+						avgTime: data.avgTime,
+						opsPerSec: data.opsPerSec,
+						minTime: data.minTime,
+						maxTime: data.maxTime,
+						iterations: data.iterations,
+					}
 				}
 			} catch (e) {
-				// Ignore parse errors
+				// Ignore parse errors - might be partial JSON or malformed
 			}
 		}
 	}
 	
-	return results
+	return { results, memory }
 }
 
 function saveBenchmark(name: string) {
 	ensureBenchmarksDir()
 	
 	console.log('Running profiling tests...')
-	const output = execSync('npm run test:profile 2>&1', { encoding: 'utf-8' })
+	// Capture both stdout and stderr - Jest outputs console.log to stderr
+	// Note: Jest may exit with non-zero if tests fail, but we still want the output
+	let output = ''
+	try {
+		output = execSync('npm run test:profile 2>&1', { encoding: 'utf-8' })
+	} catch (e: any) {
+		// Jest may exit with error code, but output is still captured
+		output = e.stdout?.toString() || e.stderr?.toString() || e.message || ''
+	}
 	
-	const results = parseJestOutput(output)
+	const { results, memory } = parseJestOutput(output)
 	
-	if (Object.keys(results).length === 0) {
+	if (Object.keys(results).length === 0 && Object.keys(memory).length === 0) {
 		console.error('No benchmark results found. Make sure profiling tests output results to console.log')
 		process.exit(1)
 	}
@@ -98,6 +168,7 @@ function saveBenchmark(name: string) {
 		timestamp: new Date().toISOString(),
 		gitHash: getGitHash(),
 		results,
+		memory,
 	}
 	
 	const filePath = join(BENCHMARKS_DIR, `${name}.json`)
@@ -105,7 +176,8 @@ function saveBenchmark(name: string) {
 	
 	console.log(`\n✅ Saved benchmark: ${name}`)
 	console.log(`   File: ${filePath}`)
-	console.log(`   Results: ${Object.keys(results).length} benchmarks`)
+	console.log(`   Performance: ${Object.keys(results).length} benchmarks`)
+	console.log(`   Memory: ${Object.keys(memory).length} benchmarks`)
 	console.log(`   Git hash: ${benchmark.gitHash || 'N/A'}`)
 }
 
@@ -170,7 +242,62 @@ function compareBenchmarks(baseline: BenchmarkResult, current: BenchmarkResult) 
 	}
 	
 	console.log('\n' + '='.repeat(80))
-	console.log(`Summary: 🟢 ${improved} improved | 🔴 ${regressed} regressed | ⚪ ${unchanged} unchanged`)
+	console.log(`Performance Summary: 🟢 ${improved} improved | 🔴 ${regressed} regressed | ⚪ ${unchanged} unchanged`)
+	
+	// Compare memory benchmarks
+	const allMemoryKeys = new Set([...Object.keys(baseline.memory || {}), ...Object.keys(current.memory || {})])
+	if (allMemoryKeys.size > 0) {
+		console.log('\n' + '='.repeat(80))
+		console.log('\n💾 Memory Benchmarks\n')
+		
+		const sortedMemoryKeys = Array.from(allMemoryKeys).sort()
+		let memoryImproved = 0
+		let memoryRegressed = 0
+		let memoryUnchanged = 0
+		
+		for (const key of sortedMemoryKeys) {
+			const base = baseline.memory?.[key]
+			const curr = current.memory?.[key]
+			
+			if (!base) {
+				console.log(`\n🆕 NEW: ${key}`)
+				if (curr) {
+					console.log(`   ${curr.deltaKB.toFixed(4)} KB/iteration (${curr.deltaPercent.toFixed(2)}%)`)
+					console.log(`   ${curr.heapUsedBeforeMB.toFixed(2)} → ${curr.heapUsedAfterMB.toFixed(2)} MB`)
+				}
+				continue
+			}
+			
+			if (!curr) {
+				console.log(`\n❌ REMOVED: ${key}`)
+				console.log(`   Was: ${base.deltaKB.toFixed(4)} KB/iteration`)
+				continue
+			}
+			
+			const deltaDiff = curr.delta - base.delta
+			const deltaPercentDiff = curr.deltaPercent - base.deltaPercent
+			
+			// Lower delta is better (less memory per operation)
+			const status = deltaDiff > 0.1 ? '🔴 REGRESSION' : deltaDiff < -0.1 ? '🟢 IMPROVED' : '⚪ UNCHANGED'
+			
+			if (deltaDiff > 0.1) memoryRegressed++
+			else if (deltaDiff < -0.1) memoryImproved++
+			else memoryUnchanged++
+			
+			console.log(`\n${status} ${key}`)
+			console.log(`   Delta: ${base.deltaKB.toFixed(4)} → ${curr.deltaKB.toFixed(4)} KB/iteration`)
+			console.log(`   Delta %: ${base.deltaPercent.toFixed(2)}% → ${curr.deltaPercent.toFixed(2)}%`)
+			console.log(`   Memory: ${base.heapUsedBeforeMB.toFixed(2)} → ${curr.heapUsedBeforeMB.toFixed(2)} MB (before)`)
+			console.log(`           ${base.heapUsedAfterMB.toFixed(2)} → ${curr.heapUsedAfterMB.toFixed(2)} MB (after)`)
+			if (Math.abs(deltaDiff) > 0.1) {
+				const improvement = ((base.delta - curr.delta) / base.delta * 100).toFixed(2)
+				console.log(`   ${deltaDiff > 0 ? '+' : ''}${improvement}% ${deltaDiff > 0 ? 'more' : 'less'} memory per operation`)
+			}
+		}
+		
+		console.log('\n' + '='.repeat(80))
+		console.log(`Memory Summary: 🟢 ${memoryImproved} improved | 🔴 ${memoryRegressed} regressed | ⚪ ${memoryUnchanged} unchanged`)
+	}
 }
 
 function listBenchmarks() {
@@ -198,7 +325,8 @@ function listBenchmarks() {
 		console.log(`  ${bench.name}`)
 		console.log(`    Date: ${new Date(bench.timestamp).toLocaleString()}`)
 		console.log(`    Git:  ${bench.gitHash || 'N/A'}`)
-		console.log(`    Tests: ${Object.keys(bench.results).length} benchmarks`)
+		console.log(`    Performance: ${Object.keys(bench.results || {}).length} benchmarks`)
+		console.log(`    Memory: ${Object.keys(bench.memory || {}).length} benchmarks`)
 		console.log()
 	}
 }
@@ -222,14 +350,23 @@ if (command === 'save') {
 	const baseline = loadBenchmark(name)
 	
 	console.log('Running current profiling tests...')
-	const output = execSync('npm run test:profile 2>&1', { encoding: 'utf-8' })
-	const currentResults = parseJestOutput(output)
+	// Capture both stdout and stderr - Jest outputs console.log to stderr
+	// Note: Jest may exit with non-zero if tests fail, but we still want the output
+	let output = ''
+	try {
+		output = execSync('npm run test:profile 2>&1', { encoding: 'utf-8' })
+	} catch (e: any) {
+		// Jest may exit with error code, but output is still captured
+		output = e.stdout?.toString() || e.stderr?.toString() || e.message || ''
+	}
+	const { results: currentResults, memory: currentMemory } = parseJestOutput(output)
 	
 	const current: BenchmarkResult = {
 		name: 'current',
 		timestamp: new Date().toISOString(),
 		gitHash: getGitHash(),
 		results: currentResults,
+		memory: currentMemory,
 	}
 	
 	compareBenchmarks(baseline, current)

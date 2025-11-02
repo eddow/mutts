@@ -78,7 +78,7 @@ describe('Deep Watch Performance', () => {
 				{ iterations: 100 }
 			)
 
-			console.log(formatMemoryProfile(memoryProfile))
+			console.log(formatMemoryProfile(memoryProfile, 'Deep watch overhead'))
 			// Deep watching should have reasonable memory overhead
 			expect(memoryProfile.deltaPercent).toBeLessThan(50) // Less than 50% increase
 		})

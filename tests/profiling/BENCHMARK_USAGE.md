@@ -62,7 +62,21 @@ Git:      7a3b2c1 → 8d4e5f2
    2,565,216 → 2,564,102 ops/sec
 
 ================================================================================
-Summary: 🟢 5 improved | 🔴 2 regressed | ⚪ 20 unchanged
+Performance Summary: 🟢 5 improved | 🔴 2 regressed | ⚪ 20 unchanged
+
+================================================================================
+
+💾 Memory Benchmarks
+
+🟢 IMPROVED deep-watch:Deep watch overhead
+   Delta: 142.4397 → 135.2000 KB/iteration
+   Delta %: 5.29% → 4.95%
+   Memory: 262.84 → 260.12 MB (before)
+           276.75 → 272.45 MB (after)
+   -5.08% less memory per operation
+
+================================================================================
+Memory Summary: 🟢 1 improved | 🔴 0 regressed | ⚪ 0 unchanged
 ```
 
 ## Workflow Examples
@@ -191,6 +205,44 @@ Save benchmarks in CI:
 # In CI pipeline
 npm run benchmark:save ci-$(date +%Y%m%d)
 ```
+
+## Memory Benchmarking
+
+The benchmark tool also tracks memory usage metrics:
+
+### Memory Metrics Tracked
+
+- **heapUsedBefore/After**: Heap memory used before and after operations
+- **delta**: Memory delta per iteration (in bytes)
+- **deltaKB**: Memory delta per iteration (in kilobytes)
+- **deltaPercent**: Percentage increase in heap usage
+- **heapUsedBeforeMB/AfterMB**: Memory in megabytes (for readability)
+
+### Example Memory Output
+
+```
+💾 Memory Benchmarks
+
+🟢 IMPROVED deep-watch:Deep watch overhead
+   Delta: 142.4397 → 135.2000 KB/iteration
+   Delta %: 5.29% → 4.95%
+   Memory: 262.84 → 260.12 MB (before)
+           276.75 → 272.45 MB (after)
+   -5.08% less memory per operation
+```
+
+### Interpreting Memory Results
+
+**Lower is better:**
+- 🟢 **IMPROVED**: Less memory used per operation
+- 🔴 **REGRESSION**: More memory used per operation
+- ⚪ **UNCHANGED**: Similar memory usage
+
+**Memory benchmarks included:**
+- `memory.profile.test.ts` - Memory profiling tests
+- Deep watch memory overhead
+- Object creation memory
+- Effect lifecycle memory
 
 ## Troubleshooting
 

@@ -30,18 +30,24 @@ const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
 		if (prop === nonReactiveMark) return false
+		const unwrappedObj = unwrap(obj)
 		// Check if this property is marked as unreactive
-		if (unwrap(obj)[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
+		if (unwrappedObj[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
 			return ReflectGet(obj, prop, receiver)
+
+		// Check if property exists and if it's an own property (cached for later use)
+		const hasProp = Reflect.has(receiver, prop)
+		const isOwnProp = hasProp && Object.hasOwn(receiver, prop)
+		const isInheritedAccess = hasProp && !isOwnProp
+
 		// Depend if...
 		if (
-			!Reflect.has(receiver, prop) ||
-			(!(options.instanceMembers && !Object.hasOwn(receiver, prop) && obj instanceof Object) &&
-				!(options.ignoreAccessors && isOwnAccessor(receiver, prop)))
+			!hasProp ||
+			(!(options.instanceMembers && isInheritedAccess && obj instanceof Object) &&
+				!(options.ignoreAccessors && isOwnProp && isOwnAccessor(receiver, prop)))
 		)
 			dependant(obj, prop)
 
-		const isInheritedAccess = Reflect.has(receiver, prop) && !Object.hasOwn(receiver, prop)
 		// Watch the whole prototype chain when requested or for null-proto objects
 		if (isInheritedAccess && (!options.instanceMembers || !(obj instanceof Object))) {
 			let current = reactiveObject(Object.getPrototypeOf(obj))
@@ -65,8 +71,12 @@ const reactiveHandlers = {
 		return value
 	},
 	set(obj: any, prop: PropertyKey, value: any, receiver: any): boolean {
+		// Read old value directly from unwrapped object to avoid triggering dependency tracking
+		const unwrappedObj = unwrap(obj)
+		const unwrappedReceiver = unwrap(receiver)
+
 		// Check if this property is marked as unreactive
-		if (unwrap(obj)[unreactiveProperties]?.has(prop) || obj !== unwrap(receiver))
+		if (unwrappedObj[unreactiveProperties]?.has(prop) || obj !== unwrappedReceiver)
 			return ReflectSet(obj, prop, value, receiver)
 		// Really specific case for when Array is forwarder, in order to let it manage the reactivity
 		const isArrayCase =
@@ -80,10 +90,6 @@ const reactiveHandlers = {
 			;(obj as any)[prop] = newValue
 			return true
 		}
-
-		// Read old value directly from unwrapped object to avoid triggering dependency tracking
-		const unwrappedObj = unwrap(obj)
-		const unwrappedReceiver = unwrap(receiver)
 		const oldVal = Reflect.has(unwrappedReceiver, prop)
 			? Reflect.get(unwrappedObj, prop, unwrappedReceiver)
 			: absent
@@ -163,10 +169,13 @@ function reactiveObject<T>(anyTarget: T): T {
 	if (!anyTarget || typeof anyTarget !== 'object') return anyTarget
 	const target = anyTarget as any
 	// If target is already a proxy, return it
-	if (proxyToObject.has(target) || isNonReactive(target)) return target as T
+	if (isNonReactive(target)) return target as T
+	const isProxy = proxyToObject.has(target)
+	if (isProxy) return target as T
 
-	// If we already have a proxy for this object, return it
-	if (objectToProxy.has(target)) return objectToProxy.get(target) as T
+	// If we already have a proxy for this object, return it (optimized: get returns undefined if not found)
+	const existing = objectToProxy.get(target)
+	if (existing !== undefined) return existing as T
 
 	const proxied =
 		nativeReactive in target && !(target instanceof target[nativeReactive])
