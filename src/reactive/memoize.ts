@@ -1,13 +1,14 @@
 import { decorator } from '../decorator'
 import { renamed } from '../utils'
 import { touched1 } from './change'
-import { effect } from './effects'
+import { effect, withEffect } from './effects'
 import { dependant, getRoot, markWithRoot } from './tracking'
 
 export type Memoizable = object | any[] | symbol | ((...args: any[]) => any)
 
 type MemoCacheTree<Result> = {
 	result?: Result
+	cleanup?: () => void
 	branches?: WeakMap<Memoizable, MemoCacheTree<Result>>
 }
 
@@ -44,15 +45,20 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 		dependant(node, 'memoize')
 		if ('result' in node) return node.result
 
-		const stop = effect(() => {
-			if ('result' in node) {
-				delete node.result
-				touched1(node, { type: 'invalidate', prop: localArgs }, 'memoize')
-				stop()
-			} else {
+		// Create memoize internal effect in untracked context so it's independent
+		// of external effects. This ensures the effect persists to track dependencies
+		// even if external effects reading the memoized value are stopped.
+		node.cleanup = withEffect(undefined, () =>
+			effect(() => {
 				node.result = fn(...localArgs)
-			}
-		})
+				return () => {
+					delete node.result
+					touched1(node, { type: 'invalidate', prop: localArgs }, 'memoize')
+					node.cleanup?.()
+					node.cleanup = undefined
+				}
+			})
+		)
 		return node.result
 	}, fn)
 

@@ -1,13 +1,5 @@
 import { decorator } from '../decorator'
 import {
-	ReactiveError,
-	type DependencyAccess,
-	type Evolution,
-	options,
-	type ScopedCallback,
-} from './types'
-import {
-	dependant,
 	effectChildren,
 	effectParent,
 	effectToReactiveObjects,
@@ -19,6 +11,13 @@ import {
 	setParentEffect,
 	watchers,
 } from './tracking'
+import {
+	type DependencyAccess,
+	type Evolution,
+	options,
+	ReactiveError,
+	type ScopedCallback,
+} from './types'
 
 type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
 
@@ -93,7 +92,7 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 		if (immediate)
 			for (let i = 0; i < effect.length; i++)
 				try {
-					return effect[i]()
+					effect[i]()
 				} finally {
 					batchedEffects.delete(roots[i])
 				}
@@ -197,6 +196,7 @@ const fr = new FinalizationRegistry<() => void>((f) => f())
  * @returns A cleanup function to stop the effect
  */
 export function effect<Args extends any[]>(
+	//biome-ignore lint/suspicious/noConfusingVoidType: We have to
 	fn: (access: DependencyAccess, ...args: Args) => ScopedCallback | undefined | void,
 	...args: Args
 ): ScopedCallback {
@@ -212,10 +212,10 @@ export function effect<Args extends any[]>(
 	let hasReacted = false
 
 	function runEffect() {
-		// The effect has been stopped after having been planned
-		if (effectStopped) return
 		// Clear previous dependencies
 		cleanup?.()
+		// The effect has been stopped after having been planned
+		if (effectStopped) return
 
 		options.enter(getRoot(fn))
 		let reactionCleanup: ScopedCallback | undefined

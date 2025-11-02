@@ -11,6 +11,7 @@ import {
 	removeBackReference,
 	track1,
 } from './deep-watch'
+import { withEffect } from './effects'
 import { absent, isNonReactive } from './non-reactive'
 import { dependant } from './tracking'
 import {
@@ -40,11 +41,18 @@ const reactiveHandlers = {
 		const isOwnProp = hasProp && Object.hasOwn(receiver, prop)
 		const isInheritedAccess = hasProp && !isOwnProp
 
+		// For accessor properties, check the unwrapped object to see if it's an accessor
+		// This ensures ignoreAccessors works correctly even after operations like Object.setPrototypeOf
+		const shouldIgnoreAccessor =
+			options.ignoreAccessors &&
+			isOwnProp &&
+			(isOwnAccessor(receiver, prop) || isOwnAccessor(unwrappedObj, prop))
+
 		// Depend if...
 		if (
 			!hasProp ||
 			(!(options.instanceMembers && isInheritedAccess && obj instanceof Object) &&
-				!(options.ignoreAccessors && isOwnProp && isOwnAccessor(receiver, prop)))
+				!shouldIgnoreAccessor)
 		)
 			dependant(obj, prop)
 
@@ -90,20 +98,39 @@ const reactiveHandlers = {
 			;(obj as any)[prop] = newValue
 			return true
 		}
-		const oldVal = Reflect.has(unwrappedReceiver, prop)
-			? Reflect.get(unwrappedObj, prop, unwrappedReceiver)
-			: absent
+		// Read old value, using withEffect(undefined, ...) for getter-only accessors to avoid
+		// breaking memoization dependency tracking during SET operations
+		let oldVal = absent
+		if (Reflect.has(unwrappedReceiver, prop)) {
+			// Check descriptor on both receiver and target to handle proxy cases
+			const receiverDesc = Object.getOwnPropertyDescriptor(unwrappedReceiver, prop)
+			const targetDesc = Object.getOwnPropertyDescriptor(unwrappedObj, prop)
+			const desc = receiverDesc || targetDesc
+			// If it's a getter-only accessor (has getter but no setter), read without tracking
+			// to avoid breaking memoization invalidation when the getter calls memoized functions
+			if (desc?.get && !desc?.set) {
+				oldVal = withEffect(undefined, () => Reflect.get(unwrappedObj, prop, unwrappedReceiver))
+			} else {
+				oldVal = Reflect.get(unwrappedObj, prop, unwrappedReceiver)
+			}
+		}
 		track1(obj, prop, oldVal, newValue)
 
 		if (oldVal !== newValue) {
-			ReflectSet(obj, prop, newValue, receiver)
-
-			if (options.recursiveTouching && oldVal !== absent && shouldRecurseTouch(oldVal, newValue)) {
-				const origin = { obj: unwrappedObj, prop }
-				// Deep touch: only notify nested property changes with origin filtering
-				// Don't notify direct property change - the whole point is to avoid parent effects re-running
-				dispatchNotifications(recursiveTouch(oldVal, newValue, new WeakMap(), [], origin))
-			} else touched1(obj, { type: oldVal !== absent ? 'set' : 'add', prop }, prop)
+			// For getter-only accessors, Reflect.set() may fail, but we still return true
+			// to avoid throwing errors. Only proceed with change notifications if set succeeded.
+			if (ReflectSet(obj, prop, newValue, receiver)) {
+				if (
+					options.recursiveTouching &&
+					oldVal !== absent &&
+					shouldRecurseTouch(oldVal, newValue)
+				) {
+					const origin = { obj: unwrappedObj, prop }
+					// Deep touch: only notify nested property changes with origin filtering
+					// Don't notify direct property change - the whole point is to avoid parent effects re-running
+					dispatchNotifications(recursiveTouch(oldVal, newValue, new WeakMap(), [], origin))
+				} else touched1(obj, { type: oldVal !== absent ? 'set' : 'add', prop }, prop)
+			}
 		}
 		return true
 	},

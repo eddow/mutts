@@ -14,7 +14,7 @@ function getPrototypeToken(value: any): object | null | undefined {
 	if (!isObjectLike(value)) return undefined
 	if (Array.isArray(value)) return Array.prototype
 	try {
-		return Object.getPrototypeOf(value)
+		return value.constructor
 	} catch {
 		return undefined
 	}

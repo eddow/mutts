@@ -12,7 +12,6 @@ import { effectToReactiveObjects, watchers } from './tracking'
 /**
  * Executes a function without tracking dependencies
  * @param fn - The function to execute
- * @deprecated Use `ascend` instead
  */
 export function untracked<T>(fn: () => T): T {
 	let rv: T
