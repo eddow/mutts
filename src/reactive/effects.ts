@@ -13,11 +13,13 @@ import {
 } from './tracking'
 import {
 	type DependencyAccess,
+	type EffectOptions,
 	type Evolution,
 	options,
 	ReactiveError,
 	type ScopedCallback,
 } from './types'
+import { ensureZoneHooked } from './zone'
 
 type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
 
@@ -191,15 +193,20 @@ const fr = new FinalizationRegistry<() => void>((f) => f())
  */
 /**
  * Creates a reactive effect that automatically re-runs when dependencies change
- * @param fn - The effect function that provides dependencies and may return a cleanup function
- * @param args - Additional arguments that are forwarded to the effect function
+ * @param fn - The effect function that provides dependencies and may return a cleanup function or Promise
+ * @param options - Options for effect execution
  * @returns A cleanup function to stop the effect
  */
-export function effect<Args extends any[]>(
+export function effect(
 	//biome-ignore lint/suspicious/noConfusingVoidType: We have to
-	fn: (access: DependencyAccess, ...args: Args) => ScopedCallback | undefined | void,
-	...args: Args
+	fn: (access: DependencyAccess) => ScopedCallback | undefined | void | Promise<any>,
+	effectOptions?: EffectOptions
 ): ScopedCallback {
+	// Ensure zone is hooked if asyncZone option is enabled (lazy initialization)
+	ensureZoneHooked()
+
+	// Use per-effect asyncMode or fall back to global option
+	const asyncMode = effectOptions?.asyncMode ?? options.asyncMode ?? 'cancel'
 	let cleanup: (() => void) | null = null
 	// capture the parent effect at creation time for ascend
 	const parentForAscend = getParentEffect()
@@ -210,19 +217,67 @@ export function effect<Args extends any[]>(
 	)
 	let effectStopped = false
 	let hasReacted = false
+	let runningPromise: Promise<any> | null = null
+	let cancelPrevious: (() => void) | null = null
 
 	function runEffect() {
 		// Clear previous dependencies
 		cleanup?.()
+
+		// Handle async modes when effect is retriggered
+		if (runningPromise) {
+			if (asyncMode === 'cancel' && cancelPrevious) {
+				// Cancel previous execution
+				cancelPrevious()
+				cancelPrevious = null
+				runningPromise = null
+			} else if (asyncMode === 'ignore') {
+				// Ignore new execution while async work is running
+				return
+			}
+			// Note: 'queue' mode not yet implemented
+		}
+
 		// The effect has been stopped after having been planned
 		if (effectStopped) return
 
 		options.enter(getRoot(fn))
 		let reactionCleanup: ScopedCallback | undefined
+		let result: any
 		try {
-			reactionCleanup = withEffect(runEffect, () =>
-				fn({ tracked, ascend, reaction: hasReacted }, ...args)
-			) as undefined | ScopedCallback
+			result = withEffect(runEffect, () => fn({ tracked, ascend, reaction: hasReacted }))
+
+			// Check if result is a Promise (async effect)
+			if (result && typeof result === 'object' && typeof result.then === 'function') {
+				const originalPromise = result as Promise<any>
+
+				// Create a cancellation promise that we can reject
+				let cancelReject: ((reason: any) => void) | null = null
+				const cancelPromise = new Promise<never>((_, reject) => {
+					cancelReject = reject
+				})
+
+				const cancelError = new ReactiveError('[reactive] Effect canceled due to dependency change')
+
+				// Race between the actual promise and cancellation
+				// If canceled, the race rejects, which will propagate through any promise chain
+				runningPromise = Promise.race([originalPromise, cancelPromise])
+
+				// Store the cancellation function
+				cancelPrevious = () => {
+					if (cancelReject) {
+						cancelReject(cancelError)
+					}
+				}
+
+				// Wrap the original promise chain so cancellation propagates
+				// This ensures that when we cancel, the original promise's .catch() handlers are triggered
+				// We do this by rejecting the race promise, which makes the original promise chain see the rejection
+				// through the zone-wrapped .then()/.catch() handlers
+			} else {
+				// Synchronous result - treat as cleanup function
+				reactionCleanup = result as undefined | ScopedCallback
+			}
 		} finally {
 			hasReacted = true
 			options.leave(fn)
@@ -264,18 +319,25 @@ export function effect<Args extends any[]>(
 
 	batch(runEffect, 'immediate')
 
-	const stopEffect = (): void => {
-		if (effectStopped) return
-		effectStopped = true
-		cleanup?.()
-		fr.unregister(stopEffect)
-	}
-
 	const parent = getParentEffect()
 	// Store parent relationship for hierarchy traversal
 	effectParent.set(runEffect, parent)
-	// Only ROOT effects are registered for GC cleanup
-	if (!parent) {
+	// Only ROOT effects are registered for GC cleanup and zone tracking
+	const isRootEffect = !parent
+
+	const stopEffect = (): void => {
+		if (effectStopped) return
+		effectStopped = true
+		// Cancel any running async work
+		if (cancelPrevious) {
+			cancelPrevious()
+			cancelPrevious = null
+			runningPromise = null
+		}
+		cleanup?.()
+		fr.unregister(stopEffect)
+	}
+	if (isRootEffect) {
 		const callIfCollected = () => stopEffect()
 		fr.register(callIfCollected, stopEffect, stopEffect)
 		return callIfCollected

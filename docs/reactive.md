@@ -4,14 +4,16 @@
 
 - [Introduction](#introduction)
 - [Getting Started](#getting-started)
+  - [5-Minute Quick Start](#5-minute-quick-start)
 - [Core API](#core-api)
 - [Effect System](#effect-system)
 - [Evolution Tracking](#evolution-tracking)
 - [Prototype Chains and Pure Objects](#prototype-chains-and-pure-objects)
 - [Recursive Touching](#recursive-touching)
+  - [Why Not Deep Watching?](#why-not-deep-watching)
 - [Collections](#collections)
 - [ReactiveArray](#reactivearray)
-- [KeyedArray](#keyedarray)
+- [Register](#register)
 - [Class Reactivity](#class-reactivity)
 - [Non-Reactive System](#non-reactive-system)
 - [Memoization](#memoization)
@@ -54,6 +56,62 @@ user.age = 25       // Triggers effect
 ```
 
 ## Getting Started
+
+### 5-Minute Quick Start
+
+Learn the essentials in 5 minutes:
+
+**1. Make state reactive:**
+```typescript
+import { reactive, effect } from 'mutts/reactive'
+
+const state = reactive({ count: 0, name: "John" })
+```
+
+**2. React to changes:**
+```typescript
+// Effects automatically re-run when dependencies change
+effect(() => {
+  console.log(`Hello ${state.name}, count is ${state.count}`)
+})
+
+state.count++       // Triggers effect
+state.name = "Jane"  // Triggers effect
+```
+
+**3. Work with arrays:**
+```typescript
+const items = reactive([1, 2, 3])
+
+effect(() => {
+  console.log(`Array length: ${items.length}`)
+})
+
+items.push(4)  // Triggers effect
+```
+
+**4. Use memoization:**
+```typescript
+const memoized = memoize((user: User) => {
+  return expensiveComputation(user)
+})
+
+// Only recomputes when user changes
+const result = memoized(user)
+```
+
+**5. Map over arrays:**
+```typescript
+const source = reactive([1, 2, 3])
+const doubled = mapped(source, x => x * 2)
+// [2, 4, 6]
+
+source.push(4)  // doubled automatically becomes [2, 4, 6, 8]
+```
+
+**Ready to go!** Continue reading for advanced features.
+
+---
 
 ### Installation
 
@@ -364,7 +422,7 @@ activeEffects.forEach(stop => stop())
 - **You may want to call cleanup** - especially for effects with side effects
 - **Store cleanup references to keep effects alive** - holding a reference prevents GC cleanup and gives you explicit stop control
 - **Parent cleanup cleans child effects** - stopping a parent also stops its child effects
-- **All effects use garbage collection** - as the primary cleanup mechanism
+- **Child effects are referenced by parent effects** - and therefore are not subject to GC cleanups
 
 ### Effect Dependencies
 
@@ -1171,6 +1229,112 @@ C.something = B
 
 **Note:** This recursive touching behavior can be disabled globally by setting `reactiveOptions.recursiveTouching = false`. When disabled, all object replacements will trigger parent effects regardless of prototype matching.
 
+### Why Not Deep Watching?
+
+You might wonder why deep watching is implemented but not recommended for most use cases. The answer lies in understanding the tradeoffs:
+
+#### The Deep Watching Approach
+
+Traditional deep watching automatically tracks all nested properties:
+
+```typescript
+const state = reactive({ user: { profile: { name: 'John' } } })
+
+watch(state, () => {
+  console.log('Something changed')
+}, { deep: true })
+
+state.user.profile.name = 'Jane'  // Triggers watch
+```
+
+**Problems with deep watching:**
+- **Performance overhead**: Every nested property access creates a dependency
+- **Hidden dependencies**: Unclear which deep properties triggered the effect
+- **Circular reference hazards**: Requires depth limits and visited tracking
+- **Memory overhead**: Back-references for all nested objects
+- **Over-notification**: Triggers when you might not care about a change
+
+#### The Recursive Touch Approach
+
+With recursive touching, you get fine-grained change detection without the overhead:
+
+```typescript
+const state = reactive({ user: { profile: { name: 'John' } } })
+
+// Replace the entire user object with fresh data
+state.user = fetchUser()  // Only notifies if actual values changed
+
+// Or explicitly track what you need
+effect(() => {
+  console.log(state.user.profile.name)  // Only tracks this specific path
+})
+```
+
+**Benefits:**
+- **Explicit dependencies**: You see exactly what properties you depend on
+- **Better performance**: Only tracks properties you actually read
+- **Automatic deduplication**: Reading `obj.toJSON()` marks all properties as used
+- **No circular reference issues**: Only touches what you explicitly access
+- **Clearer intent**: Your code shows what data matters
+
+#### When to Use Each
+
+**Use recursive touching (default) when:**
+- Building UI frameworks (most changes come from fresh data)
+- Working with fetched/stale data patterns
+- You want explicit dependency tracking
+- Performance matters
+
+**Use deep watching when:**
+- You truly need to know about ANY change anywhere
+- Debugging complex state changes
+- Legacy integration where you can't change access patterns
+- You explicitly don't care about which property changed
+
+#### Practical Example: Saving Objects
+
+Deep watching makes everything reactive:
+
+```typescript
+// ❌ Deep watching - tracks too much
+const form = reactive({ 
+  fields: { name: '', email: '' },
+  meta: { lastSaved: Date.now() }
+})
+watch(form, saveToServer, { deep: true })
+form.meta.lastSaved = Date.now()  // Unnecessary save triggered
+```
+
+Recursive touching with explicit tracking:
+
+```typescript
+// ✅ Explicit - only saves when form fields change  
+const form = reactive({ 
+  fields: { name: '', email: '' },
+  meta: { lastSaved: Date.now() }
+})
+effect(() => {
+  // Read the nested properties to track them
+  const name = form.fields.name
+  const email = form.fields.email
+  saveToServer({ name, email })
+})
+form.meta.lastSaved = Date.now()  // No save triggered
+form.fields.name = 'John'          // Triggers save
+```
+
+Or if you need to serialize the whole form:
+
+```typescript
+// ✅ If you serialize, all properties are tracked automatically
+effect(() => {
+  const data = JSON.stringify(form.fields)  // Marks all fields as used
+  saveToServer(data)
+})
+```
+
+**Bottom line:** Recursive touching gives you the granular control you need without deep watching's overhead, making it ideal for modern reactive applications.
+
 ## Collections
 
 ### `ReactiveMap`
@@ -1434,15 +1598,15 @@ effect(() => {
 })
 ```
 
-### `KeyedArray`
+### `Register`
 
-`KeyedArray` is an ordered, array-like collection that keeps a stable mapping between keys and values. It is useful when you need array semantics (indexable access, ordering, iteration) but also require identity preservation by key—ideal for UI lists keyed by IDs or when you want to memoise entries across reorders.
+`Register` is an ordered, array-like collection that keeps a stable mapping between keys and values. It is useful when you need array semantics (indexable access, ordering, iteration) but also require identity preservation by key—ideal for UI lists keyed by IDs or when you want to memoise entries across reorders.
 
 ```typescript
-import { KeyedArray } from 'mutts/reactive'
+import { Register } from 'mutts/reactive'
 
-// Create a keyed list where the key comes from the `id` field
-const list = new KeyedArray(({id}: { id: number }) => id, [
+// Create a register where the key comes from the `id` field
+const list = new Register(({id}: { id: number }) => id, [
     { id: 1, label: 'Alpha' },
     { id: 2, label: 'Bravo' },
 ])
@@ -1459,7 +1623,7 @@ list.push({ id: 3, label: 'Charlie' })
 list[0] = { id: 1, label: 'Alpha (updated)' }
 
 // Access by key
-const second = list.getByKey(2) // { id: 2, label: 'Bravo' }
+const second = list.get(2) // { id: 2, label: 'Bravo' }
 
 // Duplicate keys share value identity
 list.push({ id: 2, label: 'Bravo (new data)' })
@@ -1470,7 +1634,7 @@ console.log(list[1] === list[2]) // true
 
 - Fully indexable (`list[0]`, `list.at(-1)`, `list.length`, iteration, etc.) thanks to the shared `Indexable` infrastructure.
 - Complete array surface forwarding (`map`, `filter`, `reduce`, `concat`, `reverse`, `sort`, `fill`, `copyWithin`, and more) with reactivity preserved.
-- Stable key/value map under the hood allows quick lookups via `getByKey`, `hasKey`, and `indexOfKey`.
+- Stable key/value map under the hood allows quick lookups via `get()`, `hasKey()`, and `indexOfKey()`.
 - When the same key appears multiple times, all slots reference the same underlying value instance, making deduplication and memoisation straightforward.
 - Reordering operations emit index-level touches so list reactivity remains predictable in rendered UIs.
 

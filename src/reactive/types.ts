@@ -61,13 +61,32 @@ export interface DependencyAccess {
 	 */
 	reaction: boolean
 }
-// TODO: proper async management, read when fn returns a promise and let the effect as "running",
-//  either to cancel the running one or to avoid running 2 in "parallel" and debounce the second one
+// Zone-based async context preservation is implemented in zone.ts
+// It automatically preserves effect context across Promise boundaries (.then, .catch, .finally)
 
 /**
  * Type for effect cleanup functions
  */
 export type ScopedCallback = () => void
+
+/**
+ * Async execution mode for effects
+ * - `cancel`: Cancel previous async execution when dependencies change (default)
+ * - `queue`: Queue next execution to run after current completes
+ * - `ignore`: Ignore new executions while async work is running
+ */
+export type AsyncExecutionMode = 'cancel' | 'queue' | 'ignore'
+
+/**
+ * Options for effect creation
+ */
+export interface EffectOptions {
+	/**
+	 * How to handle async effect executions when dependencies change
+	 * @default 'cancel'
+	 */
+	asyncMode?: AsyncExecutionMode
+}
 
 /**
  * Type for property evolution events
@@ -201,6 +220,23 @@ export const options = {
 	 * @default true
 	 */
 	recursiveTouching: true,
+	/**
+	 * Default async execution mode for effects that return Promises
+	 * - 'cancel': Cancel previous async execution when dependencies change (default, enables async zone)
+	 * - 'queue': Queue next execution to run after current completes (enables async zone)
+	 * - 'ignore': Ignore new executions while async work is running (enables async zone)
+	 * - false: Disable async zone and async mode handling (effects run concurrently)
+	 *
+	 * **When truthy:** Enables async zone (Promise.prototype wrapping) for automatic context
+	 * preservation in Promise callbacks. Warning: This modifies Promise.prototype globally.
+	 * Only enable if no other library modifies Promise.prototype.
+	 *
+	 * **When false:** Async zone is disabled. Use `tracked()` manually in Promise callbacks.
+	 *
+	 * Can be overridden per-effect via EffectOptions
+	 * @default 'cancel'
+	 */
+	asyncMode: 'cancel' as AsyncExecutionMode | false,
 	// biome-ignore lint/suspicious/noConsole: This is the whole point here
 	warn: (...args: any[]) => console.warn(...args),
 }

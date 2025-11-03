@@ -1,8 +1,8 @@
-import { effect, keyedArray, reactive } from 'mutts/reactive'
+import { effect, register, reactive } from 'mutts/reactive'
 
-describe('KeyedArray', () => {
+describe('Register', () => {
 	it('behaves like an array with indexable access and core mutations', () => {
-		const list = keyedArray<{ id: number; value: string }, number>(
+		const list = register<{ id: number; value: string }, number>(
 			(item) => item.id,
 			[
 				{ id: 1, value: 'a' },
@@ -52,7 +52,7 @@ describe('KeyedArray', () => {
 	})
 
 	it('shares values across identical keys', () => {
-		const list = keyedArray<{ id: number; label: string }, number>((item) => item.id)
+		const list = register<{ id: number; label: string }, number>((item) => item.id)
 		list.push({ id: 1, label: 'first' })
 		let effectCount = 0
 		effect(() => {
@@ -69,7 +69,7 @@ describe('KeyedArray', () => {
 	})
 
 	it('notifies reactive consumers on length and value changes', () => {
-		const list = keyedArray<{ id: number; value: string }, number>((item) => item.id)
+		const list = register<{ id: number; value: string }, number>((item) => item.id)
 		const observedLengths: number[] = []
 		const observedValues: string[] = []
 
@@ -107,7 +107,7 @@ describe('KeyedArray', () => {
 	it('rekeys items when key function output changes', () => {
 		type Item = { id: number; value: string }
 		const item = reactive<Item>({ id: 1, value: 'tracked' })
-		const list = keyedArray<Item, number>((entry) => entry.id, [item])
+		const list = register<Item, number>((entry) => entry.id, [item])
 
 		expect(list.hasKey(1)).toBe(true)
 		expect(list.get(1)).toBe(item)
