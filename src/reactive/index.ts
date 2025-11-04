@@ -1,7 +1,15 @@
 export { mapped, Register, register } from './array'
 export { getState, touched, touched1 } from './change'
 export { deepWatch } from './deep-watch'
-export { addBatchCleanup, atomic, effect, trackEffect, untracked, withEffect } from './effects'
+export {
+	addBatchCleanup,
+	atomic,
+	biDi,
+	effect,
+	trackEffect,
+	untracked,
+	withEffect,
+} from './effects'
 export {
 	cleanedBy,
 	cleanup,

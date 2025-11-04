@@ -24,8 +24,6 @@ export function shouldRecurseTouch(oldValue: any, newValue: any): boolean {
 	if (oldValue === newValue) return false
 	if (!isObjectLike(oldValue) || !isObjectLike(newValue)) return false
 	if (isNonReactive(oldValue) || isNonReactive(newValue)) return false
-	// TODO: check the case of pure objects, who should touche each value separately + their prototype?
-	//if(!(oldValue instanceof Object) || !(newValue instanceof Object)) return true
 	return getPrototypeToken(oldValue) === getPrototypeToken(newValue)
 }
 

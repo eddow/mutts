@@ -11,6 +11,8 @@ export type DependencyFunction = <T>(cb: () => T) => T
  * Provides functions to track dependencies and information about the effect execution
  */
 export interface DependencyAccess {
+	// TODO: remove tracked (async is managed)
+	// TODO: remove ascend (make a global like `untracked` who  withEffect(parentEffect, () => {}))
 	/**
 	 * Tracks dependencies in the current effect context
 	 * Use this for normal dependency tracking within the effect

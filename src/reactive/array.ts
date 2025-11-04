@@ -1,4 +1,4 @@
-import { getAt, Indexable, setAt } from '../indexable'
+import { ArrayReadForward, forwardArray, getAt, Indexable, setAt } from '../indexable'
 import { effect, untracked } from './effects'
 import { cleanedBy, unreactive } from './interface'
 import { reactive } from './proxy'
@@ -6,24 +6,43 @@ import { type DependencyFunction, prototypeForwarding, type ScopedCallback } fro
 
 type KeyFunction<T, K extends PropertyKey> = (item: T) => K
 
-const RegisterBase = Indexable<any>({
-	get(this: any, index: number) {
-		return this[getAt](index)
-	},
-	set(this: any, index: number, value: any) {
-		this[setAt](index, value)
-	},
-	getLength(this: any) {
-		return this.length
-	},
-	setLength(this: any, value: number) {
-		this.length = value
-	},
-})
+// Helper to work around TypeScript limitation: base class expressions cannot reference class type parameters
+function getRegisterBase<T>() {
+	class RegisterBase extends Indexable(ArrayReadForward, {
+		get(this: any, index: number) {
+			return this[getAt](index)
+		},
+		set(this: any, index: number, value: T) {
+			this[setAt](index, value)
+		},
+		getLength(this: any) {
+			return this.length
+		},
+		setLength(this: any, value: number) {
+			this.length = value
+		},
+	}) {
+		toArray(): T[] {
+			return Array.from(this)
+		}
+	}
+	return RegisterBase as new () => ArrayReadForward<T> & {
+		[x: number]: T
+		toArray(): T[]
+	}
+}
+interface RegisterInstance<T> extends ArrayReadForward<T> {
+	[index: number]: T
+}
 
-// TODO: use ArrayReadForward
 @unreactive
-class RegisterClass<T, K extends PropertyKey = PropertyKey> extends RegisterBase {
+class RegisterClass<T, K extends PropertyKey = PropertyKey>
+	extends getRegisterBase<any>()
+	implements RegisterInstance<T>
+{
+	protected get [forwardArray](): readonly T[] {
+		return this.toArray()
+	}
 	readonly #keyFn: KeyFunction<T, K>
 	readonly #keys: K[]
 	readonly #values: Map<K, T>
@@ -182,23 +201,6 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey> extends RegisterBase
 		return this.#keys.length
 	}
 
-	set length(value: number) {
-		if (value < 0) throw new RangeError('Invalid length')
-		if (value >= this.length) {
-			if (value === this.length) return
-			throw new RangeError('Increasing length directly is not supported')
-		}
-		for (let i = this.length - 1; i >= value; i--) this.removeAt(i)
-	}
-
-	get keys(): ArrayIterator<number> {
-		return this.#keys.keys()
-	}
-
-	get values(): IterableIterator<T> {
-		return this[Symbol.iterator]()
-	}
-
 	[getAt](index: number): T | undefined {
 		const key = this.#keys[index]
 		return key === undefined ? undefined : this.#values.get(key)
@@ -320,11 +322,10 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey> extends RegisterBase
 		}
 	}
 
-	entries(): IterableIterator<[K, T | undefined]> {
+	entries(): IterableIterator<[number, T | undefined]> {
 		const self = this
-		function* iterator(): IterableIterator<[K, T | undefined]> {
-			for (let i = 0; i < self.#keys.length; i++)
-				yield [self.#keys[i], self.#values.get(self.#keys[i])]
+		function* iterator(): IterableIterator<[number, T | undefined]> {
+			for (let i = 0; i < self.#keys.length; i++) yield [i, self.#values.get(self.#keys[i])]
 		}
 		return iterator()
 	}
@@ -340,10 +341,6 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey> extends RegisterBase
 		return iterator()
 	}
 
-	toArray(): T[] {
-		return Array.from(this, (value) => value)
-	}
-
 	toString(): string {
 		return `[Register length=${this.length}]`
 	}
@@ -353,20 +350,17 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey> extends RegisterBase
 		if (resolved < 0 || resolved >= this.length) return undefined
 		return this[getAt](resolved)
 	}
-
-	//#region mirror
 	reverse(): this {
-		const values = this.toArray().reverse()
-		this.rebuildFrom(values)
+		this.#keys.reverse()
 		return this
 	}
-
-	sort(compareFn?: (a: T, b: T) => number): this {
-		const values = this.toArray().sort(compareFn)
-		this.rebuildFrom(values)
+	sort(compareFn?: ((a: T, b: T) => number) | undefined): this {
+		const fwdCompareFn = compareFn
+			? (a: K, b: K) => compareFn(this.#values.get(a) as T, this.#values.get(b) as T)
+			: undefined
+		this.#keys.sort(fwdCompareFn)
 		return this
 	}
-
 	fill(value: T, start = 0, end = this.length): this {
 		const values = this.toArray()
 		values.fill(value, start, end)
@@ -380,110 +374,6 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey> extends RegisterBase
 		this.rebuildFrom(values)
 		return this
 	}
-
-	map<U>(callback: (value: T, index: number, array: T[]) => U, thisArg?: unknown): U[] {
-		return this.toArray().map(callback, thisArg)
-	}
-
-	filter(callback: (value: T, index: number, array: T[]) => boolean, thisArg?: unknown): T[] {
-		return this.toArray().filter(callback, thisArg)
-	}
-
-	reduce(...args: Parameters<Array<T>['reduce']>): ReturnType<Array<T>['reduce']> {
-		return (this.toArray() as any).reduce(...args)
-	}
-
-	reduceRight(...args: Parameters<Array<T>['reduceRight']>): ReturnType<Array<T>['reduceRight']> {
-		return (this.toArray() as any).reduceRight(...args)
-	}
-
-	forEach(callback: (value: T, index: number, array: T[]) => void, thisArg?: unknown): void {
-		this.toArray().forEach(callback, thisArg)
-	}
-
-	some(callback: (value: T, index: number, array: T[]) => unknown, thisArg?: unknown): boolean {
-		return this.toArray().some(callback, thisArg)
-	}
-
-	every(callback: (value: T, index: number, array: T[]) => unknown, thisArg?: unknown): boolean {
-		return this.toArray().every(callback, thisArg)
-	}
-
-	find(
-		callback: (value: T, index: number, array: T[]) => unknown,
-		thisArg?: unknown
-	): T | undefined {
-		return this.toArray().find(callback, thisArg)
-	}
-
-	findIndex(callback: (value: T, index: number, array: T[]) => unknown, thisArg?: unknown): number {
-		return this.toArray().findIndex(callback, thisArg)
-	}
-
-	includes(value: T, fromIndex?: number): boolean {
-		return this.toArray().includes(value, fromIndex)
-	}
-
-	indexOf(value: T, fromIndex?: number): number {
-		return this.toArray().indexOf(value, fromIndex)
-	}
-
-	lastIndexOf(value: T, fromIndex?: number): number {
-		return this.toArray().lastIndexOf(value, fromIndex)
-	}
-
-	concat(...items: (T | ConcatArray<T>)[]): T[] {
-		const values = this.toArray()
-		return values.concat(
-			...items.map((item) => (item instanceof RegisterClass ? item.toArray() : item))
-		)
-	}
-
-	slice(start?: number, end?: number): T[] {
-		return this.toArray().slice(start, end)
-	}
-
-	join(separator?: string): string {
-		return this.toArray().join(separator)
-	}
-
-	flat(depth?: number): any[] {
-		return (this.toArray() as any).flat(depth)
-	}
-
-	flatMap<U>(
-		callback: (value: T, index: number, array: T[]) => U | readonly U[],
-		thisArg?: unknown
-	): U[] {
-		return (this.toArray() as any).flatMap(callback, thisArg)
-	}
-
-	toLocaleString(locales?: string | string[], options?: Intl.NumberFormatOptions): string {
-		return this.toArray().toLocaleString(locales as any, options)
-	}
-
-	toReversed(): T[] {
-		const values = this.toArray()
-		return values.toReversed ? (values as any).toReversed() : [...values].reverse()
-	}
-
-	toSorted(compareFn?: (a: T, b: T) => number): T[] {
-		const values = this.toArray()
-		return values.toSorted ? (values as any).toSorted(compareFn) : [...values].sort(compareFn)
-	}
-
-	with(index: number, value: T): T[] {
-		const values = this.toArray()
-		if ((values as any).with) return (values as any).with(index, value)
-		const copy = [...values]
-		let resolved = index
-		if (resolved < 0) resolved = copy.length + resolved
-		if (resolved < 0 || resolved >= copy.length)
-			throw new RangeError('Index out of bounds in with() method')
-		copy[resolved] = value
-		return copy
-	}
-	//#endregion
 }
 
 export type Register<T, K extends PropertyKey = PropertyKey> = RegisterClass<T, K> & T[]
@@ -498,17 +388,49 @@ export function register<T, K extends PropertyKey = PropertyKey>(
 ): Register<T, K> {
 	return new RegisterClass(keyFn, initial) as Register<T, K>
 }
-// TODO: return a readonly array proxy through ArrayReadForward
+
+@unreactive
+class ReadOnlyArrayClass<T> extends getRegisterBase<any>() implements RegisterInstance<T> {
+	declare [prototypeForwarding]: readonly T[]
+	get [forwardArray](): readonly T[] {
+		return this[prototypeForwarding]
+	}
+	constructor(array: T[]) {
+		super()
+		Object.defineProperty(this, prototypeForwarding, {
+			value: array,
+			writable: false,
+			enumerable: false,
+			configurable: false,
+		})
+	}
+	get length(): number {
+		return this[prototypeForwarding].length
+	}
+	set length(_value: number) {
+		throw new Error('ReadOnlyArray is read-only')
+	}
+	[getAt](index: number): T | undefined {
+		return this[prototypeForwarding][index]
+	}
+	[setAt](_index: number, _value: T): void {
+		throw new Error('ReadOnlyArray is read-only')
+	}
+}
+export type ReadOnlyArray<T> = ReadOnlyArrayClass<T> & readonly T[]
+export const ReadOnlyArray = ReadOnlyArrayClass as new <T>(array: T[]) => ReadOnlyArray<T>
+export type ReadableArray<T> = ReadOnlyArray<T> | Array<T>
+
 export function mapped<T, U>(
-	inputs: T[],
-	compute: (input: T, index: number, oldValue?: U) => U,
+	inputs: readonly T[],
+	compute: (input: T, index: number, output: U[]) => U,
 	resize?: (newLength: number, oldLength: number) => void
-): U[] {
+): ReadOnlyArray<U> {
 	const result = reactive([])
 	const cleanups: ScopedCallback[] = []
 	function input(index: number) {
 		return effect(function computedIndexedMapInputEffect() {
-			result[index] = compute(inputs[index], index, result[index])
+			result[index] = compute(inputs[index], index, result)
 		})
 	}
 	effect(function computedMapLengthEffect({ ascend }) {
@@ -525,7 +447,7 @@ export function mapped<T, U>(
 				for (let i = resultLength; i < length; i++) cleanups.push(input(i))
 			})
 	})
-	return cleanedBy(result, () => {
+	return cleanedBy(new ReadOnlyArray(result), () => {
 		for (const cleanup of cleanups) cleanup()
 		cleanups.length = 0
 	})

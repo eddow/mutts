@@ -12,7 +12,6 @@
 - [Recursive Touching](#recursive-touching)
   - [Why Not Deep Watching?](#why-not-deep-watching)
 - [Collections](#collections)
-- [ReactiveArray](#reactivearray)
 - [Register](#register)
 - [Class Reactivity](#class-reactivity)
 - [Non-Reactive System](#non-reactive-system)
@@ -596,6 +595,100 @@ reactiveOptions.recursiveTouching = false
 reactiveOptions.enter = (effect) => console.log('Entering effect:', effect)
 reactiveOptions.leave = (effect) => console.log('Leaving effect:', effect)
 reactiveOptions.chain = (caller, target) => console.log('Chaining:', caller, '->', target)
+```
+
+## Atomic Operations
+
+### `atomic()` - Function Wrapper and Decorator
+
+The `atomic` function wraps a function to batch all reactive effects triggered within it, ensuring effects run only once after the function completes. It can be used both as a function wrapper and as a decorator.
+
+```typescript
+import { atomic, reactive, effect } from 'mutts/reactive'
+
+const state = reactive({ a: 0, b: 0 })
+
+effect(() => {
+  console.log('Values:', state.a, state.b)
+})
+
+// Wrap a function for atomic execution
+const updateBoth = atomic((a, b) => {
+  state.a = a
+  state.b = b
+  // All effects triggered by these changes are batched
+})
+
+// Effect runs only once with final values
+updateBoth(10, 20)
+
+// atomic also works as a decorator
+class CounterService {
+  @atomic
+  updateMultiple(newValue: number) {
+    state.a = newValue
+    this.performOtherUpdates()
+  }
+  
+  performOtherUpdates() {
+    // Changes here are also batched
+    state.b = state.a + 1
+  }
+}
+
+const service = new CounterService()
+service.updateMultiple(5)  // Effect runs only once with final values
+```
+
+The wrapped function preserves its signature (parameters and return value), and all effects triggered by reactive changes inside it are automatically batched.
+
+### `biDi()` - Bidirectional Binding
+
+Creates a bidirectional binding between a reactive value and a non-reactive external value (like DOM elements), automatically preventing infinite loops.
+
+```typescript
+import { biDi, reactive } from 'mutts/reactive'
+
+const model = reactive({ value: '' })
+
+// Bind to a DOM element value property
+const provide = biDi(
+  (v) => {
+    // External setter: called when reactive value changes
+    inputElement.value = v
+  },
+  () => model.value,  // Reactive getter
+  (v) => model.value = v  // Reactive setter
+)
+
+// Handle user input (external changes)
+inputElement.addEventListener('input', () => {
+  provide(inputElement.value)  // Updates model.value without causing loop
+})
+
+// Changes to model.value also update the input element
+model.value = 'new value'  // inputElement.value is updated via biDi
+```
+
+**When to use `biDi()`:**
+
+- **Two-way data binding**: Connect reactive state to HTML form inputs, third-party libraries, or non-reactive APIs
+- **Prevent circular updates**: Avoid infinite loops when external and reactive changes can trigger each other
+- **Integrate external systems**: Bridge between reactive code and legacy/external code that can't be made reactive
+
+**How it works:**
+
+The `biDi()` function creates an effect that syncs reactive → external changes, and returns a function that handles external → reactive changes. The returned function uses atomic operations to suppress the circular effect, preventing infinite update loops.
+
+**Alternative syntax:**
+
+You can pass the reactive getter/setter as a single object instead of two separate parameters:
+
+```typescript
+const provide = biDi(
+  (v) => inputElement.value = v,
+  { get: () => model.value, set: (v) => model.value = v }
+)
 ```
 
 ## Advanced Effects
@@ -1447,8 +1540,6 @@ map.set('key2', 'value2') // Triggers size and allProps effects
 map.delete('key1')         // Triggers size, key1, and allProps effects
 ```
 
-## ReactiveArray
-
 ### `ReactiveArray`
 
 A reactive wrapper around JavaScript's `Array` class with full array method support.
@@ -1637,6 +1728,55 @@ console.log(list[1] === list[2]) // true
 - Stable key/value map under the hood allows quick lookups via `get()`, `hasKey()`, and `indexOfKey()`.
 - When the same key appears multiple times, all slots reference the same underlying value instance, making deduplication and memoisation straightforward.
 - Reordering operations emit index-level touches so list reactivity remains predictable in rendered UIs.
+
+### Register-specific API (beyond Array)
+
+The `Register` exposes additional methods and behaviors that standard arrays do not have:
+
+- `get(key)` / `set(key, value)`
+  - `get(key: K): T | undefined` returns the latest value for a key.
+  - `set(key: K, value: T): void` updates the value for an existing key (no-op if key absent).
+  - Example:
+  ```typescript
+  list.set(2, { id: 2, label: 'Bravo (updated)' })
+  const v = list.get(2)
+  ```
+
+- `hasKey(key)` / `indexOfKey(key)`
+  - `hasKey(key: K): boolean` whether the key is present in any slot.
+  - `indexOfKey(key: K): number` first index at which the key appears, or `-1`.
+
+- `remove(key)` / `removeAt(index)`
+  - `remove(key: K): void` removes all occurrences of `key` from the register.
+  - `removeAt(index: number): T | undefined` removes a single slot by index and returns its value.
+
+- `update(...values)`
+  - `update(...values: T[]): void` updates existing entries by their key; ignores values whose key is not yet present.
+
+- `upsert(insert, ...values)`
+  - `upsert(insert: (value: T) => void, ...values: T[]): void` updates by key when present, otherwise calls `insert(value)` so you can decide how to insert (e.g. `push`, `unshift`, or `splice`).
+  - Example:
+  ```typescript
+  list.upsert(v => list.push(v), { id: 4, label: 'Delta' }, { id: 2, label: 'Bravo (again)' })
+  ```
+
+- `entries()`
+  - Iterates `[number, value]` pairs in index order: `IterableIterator<[number, T | undefined]>`.
+
+- `keys` / `values`
+  - `keys: ArrayIterator<number>` provides the index iterator (mirrors `Array#keys()`).
+  - `values: IterableIterator<T>` provides an iterator of values (same as default iteration).
+
+- `clear()`
+  - Removes all entries and disposes internal key-tracking effects.
+
+- `toArray()` / `toString()`
+  - `toArray(): T[]` materializes the current values into a plain array.
+  - `toString(): string` returns a concise description like `[Register length=3]`.
+
+Notes:
+- Direct length modification via `list.length = n` is not supported; use `splice` instead.
+- Assigning to an index (`list[i] = value`) uses the key function to bind that slot to `value`’s key.
 
 ## Class Reactivity
 

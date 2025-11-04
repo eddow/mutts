@@ -377,3 +377,63 @@ export function untracked<T>(fn: () => T): T {
 }
 
 export { effectTrackers }
+
+/**
+ * Creates a bidirectional binding between a reactive value and a non-reactive external value
+ * Prevents infinite loops by automatically suppressing circular notifications
+ *
+ * @param received - Function called when the reactive value changes (external setter)
+ * @param get - Getter for the reactive value OR an object with `{ get, set }` properties
+ * @param set - Setter for the reactive value (required if `get` is a function)
+ * @returns A function to manually provide updates from the external side
+ *
+ * @example
+ * ```typescript
+ * const model = reactive({ value: '' })
+ * const input = { value: '' }
+ *
+ * // Bidirectional binding
+ * const provide = biDi(
+ *   (v) => input.value = v,  // external setter
+ *   () => model.value,        // reactive getter
+ *   (v) => model.value = v    // reactive setter
+ * )
+ *
+ * // External notification (e.g., from input event)
+ * provide('new value')  // Updates model.value, doesn't trigger circular loop
+ * ```
+ *
+ * @example Using object syntax
+ * ```typescript
+ * const provide = biDi(
+ *   (v) => setHTMLValue(v),
+ *   { get: () => reactiveObj.value, set: (v) => reactiveObj.value = v }
+ * )
+ * ```
+ */
+export function biDi<T>(
+	received: (value: T) => void,
+	value: { get: () => T; set: (value: T) => void }
+)
+export function biDi<T>(received: (value: T) => void, get: () => T, set: (value: T) => void)
+export function biDi<T>(
+	received: (value: T) => void,
+	get: (() => T) | { get: () => T; set: (value: T) => void },
+	set?: (value: T) => void
+) {
+	if (typeof get !== 'function') {
+		set = get.set
+		get = get.get
+	}
+	const root = getRoot(received)
+	effect(
+		markWithRoot(() => {
+			received(get())
+		}, root)
+	)
+	return atomic((value: T) => {
+		set(value)
+		if (!batchedEffects.has(root)) options.warn('Value change has not triggered an effect')
+		batchedEffects.delete(root)
+	})
+}

@@ -83,16 +83,16 @@ export function ReflectSet(obj: any, prop: any, value: any, receiver: any) {
 		obj[prop] = value
 		return value
 	}
-	const result = Reflect.set(obj, prop, value, receiver)
-	// Legacy fallback kept for reference if reflective propagation regresses:
-	// Object.defineProperty(obj, prop, {
-	// 	value,
-	// 	configurable: true,
-	// 	writable: true,
-	// 	enumerable: true,
-	// })
-	// return true
-	return result
+	if (!(obj instanceof Object)) {
+		Object.defineProperty(obj, prop, {
+			value,
+			configurable: true,
+			writable: true,
+			enumerable: true,
+		})
+		return true
+	}
+	return Reflect.set(obj, prop, value, receiver)
 }
 
 export function isOwnAccessor(obj: any, prop: any) {

@@ -161,8 +161,10 @@ export const forwardArray = Symbol('forwardArray')
  * The constructor takes a callback that returns an array, and all methods forward
  * their behavior to the result of that callback.
  */
-export abstract class ArrayReadForward<T> {
-	protected abstract readonly [forwardArray]: readonly T[]
+export class ArrayReadForward<T> {
+	protected get [forwardArray](): readonly T[] {
+		throw new Error('ArrayReadForward is not implemented')
+	}
 
 	/**
 	 * Get the length of the array
@@ -486,5 +488,8 @@ export abstract class ArrayReadForward<T> {
 		const arr = [...this[forwardArray]]
 		arr[index] = value
 		return arr
+	}
+	get [Symbol.unscopables]() {
+		return this[forwardArray][Symbol.unscopables]
 	}
 }
