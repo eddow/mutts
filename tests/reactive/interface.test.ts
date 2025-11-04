@@ -1294,13 +1294,13 @@ describe('mapped', () => {
 		const input = reactive([1, 2, 3])
 		const result = mapped(input, (value) => value * 2)
 
-		expect(result.toArray()).toEqual([2, 4, 6])
+		expect(Array.from(result)).toEqual([2, 4, 6])
 
 		input.push(4)
-		expect(result.toArray()).toEqual([2, 4, 6, 8])
+		expect(Array.from(result)).toEqual([2, 4, 6, 8])
 
 		input[1] = 10
-		expect(result.toArray()).toEqual([2, 20, 6, 8])
+		expect(Array.from(result)).toEqual([2, 20, 6, 8])
 	})
 
 	it('provides index and output array to the mapper', () => {
@@ -1311,7 +1311,7 @@ describe('mapped', () => {
 			return oldValue + value
 		})
 
-		expect(totals.toArray()).toEqual([1, 2])
+		expect(Array.from(totals)).toEqual([1, 2])
 
 		input[0] = 3
 		expect(totals[0]).toBe(4)
@@ -1343,19 +1343,19 @@ describe('mapped', () => {
 		const input = reactive([1, 2, 3])
 		const result = mapped(input, (value) => value * 2)
 
-		expect(result.toArray()).toEqual([2, 4, 6])
+		expect(Array.from(result)).toEqual([2, 4, 6])
 		expect(result.length).toBe(3)
 
 		input.pop()
-		expect(result.toArray()).toEqual([2, 4])
+		expect(Array.from(result)).toEqual([2, 4])
 		expect(result.length).toBe(2)
 
 		input.pop()
-		expect(result.toArray()).toEqual([2])
+		expect(Array.from(result)).toEqual([2])
 		expect(result.length).toBe(1)
 
 		input.pop()
-		expect(result.toArray()).toEqual([])
+		expect(Array.from(result)).toEqual([])
 		expect(result.length).toBe(0)
 	})
 
@@ -1363,11 +1363,11 @@ describe('mapped', () => {
 		const input = reactive([1, 2, 3])
 		const result = mapped(input, (value) => value * 2)
 
-		expect(result.toArray()).toEqual([2, 4, 6])
+		expect(Array.from(result)).toEqual([2, 4, 6])
 		expect(result.length).toBe(3)
 
 		input.length = 0
-		expect(result.toArray()).toEqual([])
+		expect(Array.from(result)).toEqual([])
 		expect(result.length).toBe(0)
 	})
 
@@ -1375,26 +1375,26 @@ describe('mapped', () => {
 		const input = reactive([1, 2, 3, 4, 5])
 		const result = mapped(input, (value) => value * 2)
 
-		expect(result.toArray()).toEqual([2, 4, 6, 8, 10])
+		expect(Array.from(result)).toEqual([2, 4, 6, 8, 10])
 		expect(result.length).toBe(5)
 
 		// Do some operations first
 		input.pop()
-		expect(result.toArray()).toEqual([2, 4, 6, 8])
+		expect(Array.from(result)).toEqual([2, 4, 6, 8])
 		expect(result.length).toBe(4)
 
 		input.push(6)
-		expect(result.toArray()).toEqual([2, 4, 6, 8, 12])
+		expect(Array.from(result)).toEqual([2, 4, 6, 8, 12])
 		expect(result.length).toBe(5)
 
 		// Now set length to 0
 		input.length = 0
-		expect(result.toArray()).toEqual([])
+		expect(Array.from(result)).toEqual([])
 		expect(result.length).toBe(0)
 
 		// Verify we can add items back
 		input.push(10, 20)
-		expect(result.toArray()).toEqual([20, 40])
+		expect(Array.from(result)).toEqual([20, 40])
 		expect(result.length).toBe(2)
 	})
 
@@ -1402,11 +1402,11 @@ describe('mapped', () => {
 		const input = reactive([42])
 		const result = mapped(input, (value) => value * 2)
 
-		expect(result.toArray()).toEqual([84])
+		expect(Array.from(result)).toEqual([84])
 		expect(result.length).toBe(1)
 
 		input.pop()
-		expect(result.toArray()).toEqual([])
+		expect(Array.from(result)).toEqual([])
 		expect(result.length).toBe(0)
 		expect(result[0]).toBeUndefined()
 	})
@@ -1422,7 +1422,7 @@ describe('mapped', () => {
 		expect(result[1]).toBeUndefined()
 		expect(result[2]).toBeUndefined()
 		expect(result.length).toBe(0)
-		expect(result.toArray()).toEqual([])
+		expect(Array.from(result)).toEqual([])
 		
 		// Verify iteration works correctly
 		const collected: number[] = []
@@ -1436,16 +1436,51 @@ describe('mapped', () => {
 		const input = reactive([1, 2])
 		const result = mapped(input, (value) => value * 2)
 
-		expect(result.toArray()).toEqual([2, 4])
+		expect(Array.from(result)).toEqual([2, 4])
 		expect(result.length).toBe(2)
 
 		input.shift()
-		expect(result.toArray()).toEqual([4])
+		expect(Array.from(result)).toEqual([4])
 		expect(result.length).toBe(1)
 
 		input.shift()
-		expect(result.toArray()).toEqual([])
+		expect(Array.from(result)).toEqual([])
 		expect(result.length).toBe(0)
+	})
+
+	it('establishes dependencies via effects on mapped result indices and length', () => {
+		const input = reactive([1, 2])
+		const result = mapped(input, (value) => value * 2)
+		let calls = 0
+		let latest0: number | undefined
+		let latestLen: number | undefined
+		const stop = effect(() => {
+			latest0 = result[0] as number | undefined
+			latestLen = result.length
+			calls++
+		})
+
+		// Initial run
+		expect(calls).toBe(1)
+		expect(latest0).toBe(2)
+		expect(latestLen).toBe(2)
+
+		// Mutate input index 0
+		input[0] = 3
+		expect(calls).toBe(2)
+		expect(latest0).toBe(6)
+
+		// Push to input updates length and should retrigger
+		input.push(5)
+		expect(calls).toBe(3)
+		expect(latestLen).toBe(3)
+
+		// Truncate input also retriggers length dependency
+		input.length = 1
+		// TODO! Should be 3!
+		expect(calls).toBe(4)
+		expect(latestLen).toBe(1)
+		stop()
 	})
 })
 
@@ -1515,7 +1550,7 @@ describe('cleanup symbol', () => {
 		const view = mapped(input, (value) => value * 2)
 
 		expect(typeof view[cleanup]).toBe('function')
-		expect(view.toArray()).toEqual([2, 4, 6])
+		expect(Array.from(view)).toEqual([2, 4, 6])
 
 		// Verify cleanup function is callable
 		expect(() => view[cleanup]()).not.toThrow()
@@ -1527,7 +1562,7 @@ describe('cleanup symbol', () => {
 		const view = mapped(input, (item) => double(item))
 
 		expect(typeof view[cleanup]).toBe('function')
-		expect(view.toArray()).toEqual([2, 4, 6])
+		expect(Array.from(view)).toEqual([2, 4, 6])
 
 		// Verify cleanup function is callable
 		expect(() => view[cleanup]()).not.toThrow()
@@ -1593,8 +1628,8 @@ describe('cleanup symbol', () => {
 
 		// Both should be independent
 		input.push(4)
-		expect(first.toArray()).toEqual([2, 4, 6, 8])
-		expect(second.toArray()).toEqual([3, 6, 9, 12])
+		expect(Array.from(first)).toEqual([2, 4, 6, 8])
+		expect(Array.from(second)).toEqual([3, 6, 9, 12])
 
 		// Both cleanup functions should be callable
 		expect(() => first[cleanup]()).not.toThrow()

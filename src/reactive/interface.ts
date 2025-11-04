@@ -3,7 +3,7 @@ import { deepWatch } from './deep-watch'
 import { effect, untracked, withEffect } from './effects'
 import { isNonReactive, nonReactiveClass, nonReactiveObjects } from './non-reactive'
 import { unwrap } from './proxy'
-import { activeEffect, dependant, markWithRoot } from './tracking'
+import { dependant, getActiveEffect, markWithRoot } from './tracking'
 import {
 	type DependencyAccess,
 	nonReactiveMark,
@@ -85,7 +85,7 @@ function watchObject(
 	changed: (value: object) => void,
 	{ immediate = false, deep = false } = {}
 ): ScopedCallback {
-	const myParentEffect = activeEffect
+	const myParentEffect = getActiveEffect()
 	if (deep) return deepWatch(value, changed, { immediate })
 	return effect(
 		markWithRoot(function watchObjectEffect() {
@@ -101,7 +101,7 @@ function watchCallBack<T>(
 	changed: (value: T, oldValue?: T) => void,
 	{ immediate = false, deep = false } = {}
 ): ScopedCallback {
-	const myParentEffect = activeEffect
+	const myParentEffect = getActiveEffect()
 	let oldValue: T | typeof unsetYet = unsetYet
 	let deepCleanup: ScopedCallback | undefined
 	const cbCleanup = effect(

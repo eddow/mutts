@@ -38,9 +38,7 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 			throw new Error('memoize expects non-null object arguments')
 
 		let node: MemoCacheTree<Result> = cacheRoot
-		for (const arg of localArgs) {
-			node = getBranch(node, arg)
-		}
+		for (const arg of localArgs) node = getBranch(node, arg)
 
 		dependant(node, 'memoize')
 		if ('result' in node) return node.result
@@ -49,15 +47,17 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 		// of external effects. This ensures the effect persists to track dependencies
 		// even if external effects reading the memoized value are stopped.
 		node.cleanup = untracked(() =>
-			effect(() => {
-				node.result = fn(...localArgs)
-				return () => {
-					delete node.result
-					touched1(node, { type: 'invalidate', prop: localArgs }, 'memoize')
-					node.cleanup?.()
-					node.cleanup = undefined
-				}
-			})
+			effect(
+				markWithRoot(() => {
+					node.result = fn(...localArgs)
+					return () => {
+						delete node.result
+						touched1(node, { type: 'invalidate', prop: localArgs }, 'memoize')
+						node.cleanup?.()
+						node.cleanup = undefined
+					}
+				}, root)
+			)
 		)
 		return node.result
 	}, fn)

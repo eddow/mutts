@@ -81,7 +81,7 @@ export function ReflectSet(obj: any, prop: any, value: any, receiver: any) {
 	// Check if Node is available and obj is an instance of Node
 	if (typeof Node !== 'undefined' && obj instanceof Node) {
 		obj[prop] = value
-		return value
+		return true
 	}
 	if (!(obj instanceof Object)) {
 		Object.defineProperty(obj, prop, {

@@ -1,4 +1,3 @@
-export { mapped, Register, register } from './array'
 export { getState, touched, touched1 } from './change'
 export { deepWatch } from './deep-watch'
 export {
@@ -17,10 +16,12 @@ export {
 	unreactive,
 	watch,
 } from './interface'
+export { mapped } from './mapped'
 export { type Memoizable, memoize } from './memoize'
 export { immutables, isNonReactive, registerNativeReactivity } from './non-reactive'
 export { isReactive, ReactiveBase, reactive, unwrap } from './proxy'
-export { activeEffect } from './tracking'
+export { Register, register } from './register'
+export { getActiveEffect, getParentEffect } from './tracking'
 export {
 	type DependencyAccess,
 	type DependencyFunction,
@@ -31,18 +32,20 @@ export {
 } from './types'
 export { isZoneEnabled, setZoneEnabled } from './zone'
 
+import { ReactiveArray } from './array'
 import {
 	deepWatchers,
 	effectToDeepWatchedObjects,
 	objectParents,
 	objectsWithDeepWatchers,
 } from './deep-watch'
-import { ReactiveArray } from './native/array'
-import { ReactiveMap, ReactiveWeakMap } from './native/map'
-import { ReactiveSet, ReactiveWeakSet } from './native/set'
+import { ReactiveMap, ReactiveWeakMap } from './map'
 import { nonReactiveObjects, registerNativeReactivity } from './non-reactive'
 import { objectToProxy, proxyToObject } from './proxy'
+import { ReactiveSet, ReactiveWeakSet } from './set'
 import { effectToReactiveObjects, watchers } from './tracking'
+
+export { ReadOnlyError } from './mapped'
 
 // Register native collection types to use specialized reactive wrappers
 registerNativeReactivity(WeakMap, ReactiveWeakMap)

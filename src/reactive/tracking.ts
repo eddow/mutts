@@ -25,9 +25,6 @@ export function setParentEffect(effect: ScopedCallback | undefined) {
 	parentEffect = effect
 }
 
-// Export for read access
-export { activeEffect, parentEffect }
-
 // runEffect -> set<stop>
 export const effectChildren = new WeakMap<ScopedCallback, Set<ScopedCallback>>()
 // Track parent effect relationships for hierarchy traversal (used in deep touch filtering)

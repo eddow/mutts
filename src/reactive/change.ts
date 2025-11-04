@@ -74,9 +74,8 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 	if (objectWatchers) {
 		// Note: we have to collect effects to remove duplicates in the specific case when no batch is running
 		const effects = new Set<ScopedCallback>()
-		if (props) {
-			collectEffects(obj, evolution, effects, objectWatchers, [allProps], props)
-		} else collectEffects(obj, evolution, effects, objectWatchers, objectWatchers.keys())
+		if (props) collectEffects(obj, evolution, effects, objectWatchers, [allProps], props)
+		else collectEffects(obj, evolution, effects, objectWatchers, objectWatchers.keys())
 		options.touched(obj, evolution, props as any[] | undefined, effects)
 		batch([...effects])
 	}
