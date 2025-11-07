@@ -246,7 +246,11 @@ export function effect(
 		let result: any
 		try {
 			result = withEffect(runEffect, () => fn({ tracked, ascend, reaction: hasReacted }))
-			if (result && typeof result !== 'function')
+			if (
+				result &&
+				typeof result !== 'function' &&
+				(typeof result !== 'object' || !('then' in result))
+			)
 				throw new ReactiveError(`[reactive] Effect returned a non-function value: ${result}`)
 			// Check if result is a Promise (async effect)
 			if (result && typeof result === 'object' && typeof result.then === 'function') {

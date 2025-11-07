@@ -12,6 +12,7 @@ import {
 	track1,
 } from './deep-watch'
 import { withEffect } from './effects'
+import { isLazyGet, unwrapLazyGet } from './lazy-get'
 import { absent, isNonReactive } from './non-reactive'
 import { dependant } from './tracking'
 import {
@@ -35,7 +36,6 @@ const reactiveHandlers = {
 		// Check if this property is marked as unreactive
 		if (unwrappedObj[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
 			return ReflectGet(obj, prop, receiver)
-
 		// Check if property exists and if it's an own property (cached for later use)
 		const hasProp = Reflect.has(receiver, prop)
 		const isOwnProp = hasProp && Object.hasOwn(receiver, prop)
@@ -247,9 +247,14 @@ export const reactive = decorator({
  * @param proxy - The reactive proxy
  * @returns The original object
  */
-export function unwrap<T>(proxy: T): T {
-	// Return the original object
-	return (proxyToObject.get(proxy as any) as T) ?? proxy
+export function unwrap<T>(obj: T): T {
+	while (obj) {
+		if (isLazyGet(obj)) obj = unwrapLazyGet(obj) as T
+		else if (typeof obj === 'object' && obj !== null && proxyToObject.has(obj))
+			obj = proxyToObject.get(obj) as T
+		else break
+	}
+	return obj
 }
 
 /**

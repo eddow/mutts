@@ -6,7 +6,11 @@ export const effectToReactiveObjects = new WeakMap<ScopedCallback, Set<object>>(
 
 // Track effects per reactive object and property
 export const watchers = new WeakMap<object, Map<any, Set<ScopedCallback>>>()
-
+/* TODO:
+redo effect tracking to use a stack instead of a single active effect
+so that we can track effects in nested effects
+Make zone zone restores the stack
+*/
 // Active effects to handle nested effects
 let activeEffect: ScopedCallback | undefined
 // Parent effect used for lifecycle/cleanup relationships (can diverge later)

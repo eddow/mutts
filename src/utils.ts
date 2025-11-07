@@ -99,10 +99,3 @@ export function isOwnAccessor(obj: any, prop: any) {
 	const opd = Object.getOwnPropertyDescriptor(obj, prop)
 	return !!(opd?.get || opd?.set)
 }
-
-/**
- * Check if an object is an object (not null, not primitive)
- */
-export function isObject(obj: any): obj is object {
-	return obj !== null && typeof obj === 'object'
-}

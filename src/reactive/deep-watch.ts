@@ -1,5 +1,5 @@
-import { isObject } from '../utils'
 import { batch, effect } from './effects'
+import { isObject } from './lazy-get'
 import { isNonReactive } from './non-reactive'
 import { reactive, unwrap } from './proxy'
 import { markWithRoot } from './tracking'
@@ -150,7 +150,7 @@ export function deepWatch<T extends object>(
 		const visited = new WeakSet()
 		function traverseAndTrack(obj: any, depth = 0) {
 			// Prevent infinite recursion and excessive depth
-			if (visited.has(obj) || !isObject(obj) || depth > options.maxDeepWatchDepth) return
+			if (!obj || visited.has(obj) || !isObject(obj) || depth > options.maxDeepWatchDepth) return
 			// Do not traverse into unreactive objects
 			if (isNonReactive(obj)) return
 			visited.add(obj)
