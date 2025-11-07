@@ -3,12 +3,8 @@ import {
 	effectChildren,
 	effectParent,
 	effectToReactiveObjects,
-	getActiveEffect,
-	getParentEffect,
 	getRoot,
 	markWithRoot,
-	setActiveEffect,
-	setParentEffect,
 	watchers,
 } from './tracking'
 import {
@@ -23,6 +19,28 @@ import { ensureZoneHooked } from './zone'
 
 type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
 
+// Effect context stack for nested effect tracking (front = active, next = parent)
+export let effectStack: ScopedCallback[] = []
+
+export function captureEffectStack() {
+	return effectStack.slice()
+}
+export function withEffectStack<T>(snapshot: ScopedCallback[], fn: () => T): T {
+	const previousStack = effectStack
+	effectStack = snapshot.slice()
+	try {
+		return fn()
+	} finally {
+		effectStack = previousStack
+	}
+}
+
+export function getActiveEffect() {
+	return effectStack[0]
+}
+export function getParentEffect() {
+	return effectStack[1]
+}
 /**
  * Registers a debug callback that is called when the current effect is triggered by a dependency change
  *
@@ -166,22 +184,14 @@ export const atomic = decorator({
  * @param keepParent - Whether to keep the parent effect context
  * @returns The result of the function
  */
-export function withEffect<T>(
-	effect: ScopedCallback | undefined,
-	fn: () => T,
-	keepParent?: true
-): T {
-	const currentActiveEffect = getActiveEffect()
-	if (getRoot(effect) === getRoot(currentActiveEffect)) return fn()
-	const oldActiveEffect = currentActiveEffect
-	const oldParentEffect = getParentEffect()
-	setActiveEffect(effect)
-	if (!keepParent) setParentEffect(effect)
+export function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T): T {
+	if (getRoot(effect) === getRoot(effectStack[0])) return fn()
+	effectStack.unshift(effect)
 	try {
 		return fn()
 	} finally {
-		setActiveEffect(oldActiveEffect)
-		setParentEffect(oldParentEffect)
+		const recoveredEffect = effectStack.shift()
+		if (recoveredEffect !== effect) throw new ReactiveError('[reactive] Effect stack mismatch')
 	}
 }
 
@@ -209,12 +219,9 @@ export function effect(
 	const asyncMode = effectOptions?.asyncMode ?? options.asyncMode ?? 'cancel'
 	let cleanup: (() => void) | null = null
 	// capture the parent effect at creation time for ascend
-	const parentForAscend = getParentEffect()
+	const parentsForAscend = captureEffectStack()
 	const tracked = markWithRoot(<T>(cb: () => T) => withEffect(runEffect, cb), fn)
-	const ascend = markWithRoot(
-		<T>(cb: () => T) => withEffect(parentForAscend, cb),
-		getRoot(parentForAscend)
-	)
+	const ascend = <T>(cb: () => T) => withEffectStack(parentsForAscend, cb)
 	let effectStopped = false
 	let hasReacted = false
 	let runningPromise: Promise<any> | null = null
@@ -324,7 +331,7 @@ export function effect(
 
 	batch(runEffect, 'immediate')
 
-	const parent = getParentEffect()
+	const parent = parentsForAscend[0]
 	// Store parent relationship for hierarchy traversal
 	effectParent.set(runEffect, parent)
 	// Only ROOT effects are registered for GC cleanup and zone tracking

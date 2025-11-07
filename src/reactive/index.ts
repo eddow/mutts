@@ -5,6 +5,7 @@ export {
 	atomic,
 	biDi,
 	effect,
+	getActiveEffect,
 	trackEffect,
 	untracked,
 	withEffect,
@@ -33,7 +34,6 @@ export { type Memoizable, memoize } from './memoize'
 export { immutables, isNonReactive, registerNativeReactivity } from './non-reactive'
 export { isReactive, ReactiveBase, reactive, unwrap } from './proxy'
 export { Register, register } from './register'
-export { getActiveEffect, getParentEffect } from './tracking'
 export {
 	type DependencyAccess,
 	type DependencyFunction,

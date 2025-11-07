@@ -40,6 +40,7 @@
 			},
 			"security": {},
 			"correctness": {
+				"noUnsafeFinally": "off",
 				"noUnusedImports": {
 					"level": "info",
 					"fix": "safe"

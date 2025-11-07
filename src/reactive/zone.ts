@@ -14,9 +14,8 @@
  * When enabled (asyncMode = 'cancel' | 'queue' | 'ignore'), async entry points are wrapped ONCE.
  */
 
-import { withEffect } from './effects'
-import { getActiveEffect, getParentEffect, setParentEffect } from './tracking'
-import { options } from './types'
+import { captureEffectStack, withEffectStack } from './effects'
+import { options, ScopedCallback } from './types'
 
 let zoneHooked = false
 
@@ -63,15 +62,14 @@ function hookZone() {
 		onRejected?: ((reason: any) => R2 | PromiseLike<R2>) | null
 	): Promise<R1 | R2> {
 		// Capture effect context at the time .then() is called
-		const capturedEffect = getActiveEffect()
-		const capturedParent = getParentEffect()
+		const capturedStack = captureEffectStack()
 
 		// Only wrap if we have an active effect (avoid unnecessary wrapping)
-		if (capturedEffect) {
+		if (capturedStack.length) {
 			return originalPromiseThen.call(
 				this,
-				wrapCallback(onFulfilled, capturedEffect, capturedParent),
-				wrapCallback(onRejected, capturedEffect, capturedParent)
+				wrapCallback(onFulfilled, capturedStack),
+				wrapCallback(onRejected, capturedStack)
 			)
 		}
 
@@ -83,14 +81,10 @@ function hookZone() {
 		this: Promise<T>,
 		onRejected?: ((reason: any) => T | PromiseLike<T>) | null
 	): Promise<T> {
-		const capturedEffect = getActiveEffect()
-		const capturedParent = getParentEffect()
+		const capturedStack = captureEffectStack()
 
-		if (capturedEffect) {
-			return originalPromiseCatch.call(
-				this,
-				wrapCallback(onRejected, capturedEffect, capturedParent)
-			)
+		if (capturedStack.length) {
+			return originalPromiseCatch.call(this, wrapCallback(onRejected, capturedStack))
 		}
 
 		return originalPromiseCatch.call(this, onRejected)
@@ -100,17 +94,11 @@ function hookZone() {
 		this: Promise<T>,
 		onFinally?: (() => void) | null
 	): Promise<T> {
-		const capturedEffect = getActiveEffect()
-		const capturedParent = getParentEffect()
+		const capturedStack = captureEffectStack()
 
-		if (capturedEffect && onFinally) {
-			return originalPromiseFinally.call(
-				this,
-				wrapCallback(onFinally, capturedEffect, capturedParent)
-			)
-		}
-
-		return originalPromiseFinally.call(this, onFinally)
+		return capturedStack.length && onFinally
+			? originalPromiseFinally.call(this, wrapCallback(onFinally, capturedStack))
+			: originalPromiseFinally.call(this, onFinally)
 	}
 
 	// Hook setTimeout - preserve original function properties for Node.js compatibility
@@ -119,17 +107,13 @@ function hookZone() {
 		delay?: number,
 		...args: TArgs
 	): ReturnType<typeof originalSetTimeout> => {
-		const capturedEffect = getActiveEffect()
-		const capturedParent = getParentEffect()
+		const capturedStack = captureEffectStack()
 
-		if (capturedEffect) {
+		if (capturedStack.length) {
 			return originalSetTimeout.call(
 				globalThis,
 				(...cbArgs: TArgs) => {
-					withEffect(capturedEffect, () => {
-						setParentEffect(capturedParent)
-						return callback(...cbArgs)
-					})
+					withEffectStack(capturedStack, () => callback(...cbArgs))
 				},
 				delay,
 				...args
@@ -147,17 +131,13 @@ function hookZone() {
 		delay?: number,
 		...args: TArgs
 	): ReturnType<typeof originalSetInterval> => {
-		const capturedEffect = getActiveEffect()
-		const capturedParent = getParentEffect()
+		const capturedStack = captureEffectStack()
 
-		if (capturedEffect) {
+		if (capturedStack.length) {
 			return originalSetInterval.call(
 				globalThis,
 				(...cbArgs: TArgs) => {
-					withEffect(capturedEffect, () => {
-						setParentEffect(capturedParent)
-						return callback(...cbArgs)
-					})
+					withEffectStack(capturedStack, () => callback(...cbArgs))
 				},
 				delay,
 				...args
@@ -174,15 +154,11 @@ function hookZone() {
 		globalThis.requestAnimationFrame = ((
 			callback: FrameRequestCallback
 		): ReturnType<typeof originalRequestAnimationFrame> => {
-			const capturedEffect = getActiveEffect()
-			const capturedParent = getParentEffect()
+			const capturedStack = captureEffectStack()
 
-			if (capturedEffect) {
+			if (capturedStack.length) {
 				return originalRequestAnimationFrame.call(globalThis, (time: DOMHighResTimeStamp) => {
-					withEffect(capturedEffect, () => {
-						setParentEffect(capturedParent)
-						return callback(time)
-					})
+					withEffectStack(capturedStack, () => callback(time))
 				})
 			}
 
@@ -193,15 +169,11 @@ function hookZone() {
 	// Hook queueMicrotask if available
 	if (originalQueueMicrotask) {
 		globalThis.queueMicrotask = ((callback: () => void): void => {
-			const capturedEffect = getActiveEffect()
-			const capturedParent = getParentEffect()
+			const capturedStack = captureEffectStack()
 
-			if (capturedEffect) {
+			if (capturedStack.length) {
 				originalQueueMicrotask.call(globalThis, () => {
-					withEffect(capturedEffect, () => {
-						setParentEffect(capturedParent)
-						callback()
-					})
+					withEffectStack(capturedStack, () => callback())
 				})
 				return
 			}
@@ -216,17 +188,13 @@ function hookZone() {
  */
 function wrapCallback<T extends (...args: any[]) => any>(
 	callback: T | null | undefined,
-	capturedEffect: any,
-	capturedParent: any
+	capturedStack: ScopedCallback[]
 ): T | undefined {
 	if (!callback) return undefined
 
 	return ((...args: any[]) => {
-		if (capturedEffect) {
-			return withEffect(capturedEffect, () => {
-				setParentEffect(capturedParent)
-				return callback(...args)
-			})
+		if (capturedStack.length) {
+			return withEffectStack(capturedStack, () => callback(...args))
 		}
 		return callback(...args)
 	}) as T

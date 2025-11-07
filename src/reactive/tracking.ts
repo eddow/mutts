@@ -1,3 +1,4 @@
+import { getActiveEffect } from './effects'
 import { unwrap } from './proxy'
 import { allProps, rootFunction, type ScopedCallback } from './types'
 
@@ -6,28 +7,6 @@ export const effectToReactiveObjects = new WeakMap<ScopedCallback, Set<object>>(
 
 // Track effects per reactive object and property
 export const watchers = new WeakMap<object, Map<any, Set<ScopedCallback>>>()
-/* TODO:
-redo effect tracking to use a stack instead of a single active effect
-so that we can track effects in nested effects
-Make zone zone restores the stack
-*/
-// Active effects to handle nested effects
-let activeEffect: ScopedCallback | undefined
-// Parent effect used for lifecycle/cleanup relationships (can diverge later)
-let parentEffect: ScopedCallback | undefined
-
-export function getActiveEffect() {
-	return activeEffect
-}
-export function setActiveEffect(effect: ScopedCallback | undefined) {
-	activeEffect = effect
-}
-export function getParentEffect() {
-	return parentEffect
-}
-export function setParentEffect(effect: ScopedCallback | undefined) {
-	parentEffect = effect
-}
 
 // runEffect -> set<stop>
 export const effectChildren = new WeakMap<ScopedCallback, Set<ScopedCallback>>()
@@ -64,7 +43,7 @@ export function getRoot<T extends Function | undefined>(fn: T): T {
  */
 export function dependant(obj: any, prop: any = allProps) {
 	obj = unwrap(obj)
-	const currentActiveEffect = activeEffect
+	const currentActiveEffect = getActiveEffect()
 	// Early return if no active effect or invalid prop
 	if (!currentActiveEffect || (typeof prop === 'symbol' && prop !== allProps)) return
 

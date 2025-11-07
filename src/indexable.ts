@@ -127,9 +127,7 @@ export function Indexable<Items, Base extends abstract new (...args: any[]) => a
 					}
 					const numProp = Number(prop)
 					if (!Number.isNaN(numProp)) {
-						if (!accessor.set) {
-							throw new Error('Indexable class has read-only numeric index access')
-						}
+						if (!accessor.set) throw new Error('Indexable class has read-only numeric index access')
 						accessor.set!.call(receiver, numProp, value)
 						return true
 					}
