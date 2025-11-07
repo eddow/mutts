@@ -301,6 +301,27 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 		return value
 	}
 
+	/**
+	 * Keep only the items for which the predicate returns true.
+	 * Items for which the predicate returns false are removed.
+	 *
+	 * The predicate is evaluated once per distinct key; duplicate keys
+	 * will follow the same keep/remove decision.
+	 */
+	public keep(predicate: (value: T) => boolean): void {
+		const decisions = new Map<K, boolean>()
+		for (const [index, key] of this.#keys.entries()) {
+			if (decisions.has(key)) {
+				if (!decisions.get(key)) this.removeAt(index)
+				continue
+			}
+			const value = this.#values.get(key)
+			const shouldKeep = predicate(value as T)
+			decisions.set(key, shouldKeep)
+			if (!shouldKeep) this.removeAt(index)
+		}
+	}
+
 	hasKey(key: K): boolean {
 		return this.#usage.has(key)
 	}

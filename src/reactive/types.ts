@@ -178,6 +178,7 @@ export const options = {
 	 * Debug purpose: called when an effect chain is ended
 	 */
 	endChain: () => {},
+	garbageCollected: (fn: Function) => {},
 	/**
 	 * Debug purpose: called when an object is touched
 	 * @param obj - The object that is touched

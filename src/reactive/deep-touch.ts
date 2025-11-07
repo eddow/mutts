@@ -112,8 +112,8 @@ export function recursiveTouch(
 }
 
 function diffArrayElements(
-	oldArray: any[],
-	newArray: any[],
+	oldArray: any[] | readonly any[],
+	newArray: any[] | readonly any[],
 	_visited: VisitedPairs,
 	notifications: PendingNotification[],
 	origin?: { obj: object; prop: PropertyKey }

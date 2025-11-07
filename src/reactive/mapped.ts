@@ -1,8 +1,8 @@
 import { Indexable } from '../indexable'
 import { native, ReactiveBaseArray } from './array'
-import { touched1 } from './change'
+import { touched, touched1 } from './change'
 import { effect, untracked } from './effects'
-import { cleanedBy, cleanup } from './interface'
+import { cleanedBy } from './interface'
 import { reactive } from './proxy'
 import { dependant } from './tracking'
 import { prototypeForwarding, ScopedCallback } from './types'
@@ -13,7 +13,7 @@ export class ReadOnlyError extends Error {}
  * Reactive wrapper around JavaScript's Array class with full array method support
  * Tracks length changes, individual index operations, and collection-wide operations
  */
-export class ReactiveReadOnlyArray extends Indexable(ReactiveBaseArray, {
+class ReactiveReadOnlyArrayClass extends Indexable(ReactiveBaseArray, {
 	get(i: number): any {
 		dependant(this, i)
 		return reactive(this[native][i])
@@ -76,23 +76,23 @@ export class ReactiveReadOnlyArray extends Indexable(ReactiveBaseArray, {
 	}
 }
 
+export const ReactiveReadOnlyArray = reactive(ReactiveReadOnlyArrayClass)
+export type ReactiveReadOnlyArray<T> = readonly T[]
 export function mapped<T, U>(
 	inputs: readonly T[],
 	compute: (input: T, index: number, output: U[]) => U,
 	resize?: (newLength: number, oldLength: number) => void
 ): readonly U[] {
-	//if (!isReactive(inputs)) return inputs.map((input, index) => compute(input, index, []))
-	inputs = reactive(inputs)
 	const result = []
 	const resultReactive = new ReactiveReadOnlyArray(result)
 	const cleanups: ScopedCallback[] = []
 	function input(index: number) {
 		return effect(function computedIndexedMapInputEffect() {
-			result[index] = compute(inputs[index], index, result)
+			result[index] = compute(inputs[index], index, resultReactive)
 			touched1(resultReactive, { type: 'set', prop: index }, index)
 		})
 	}
-	effect(function computedMapLengthEffect({ ascend }) {
+	const cleanupLength = effect(function computedMapLengthEffect({ ascend }) {
 		const length = inputs.length
 		const resultLength = untracked(() => result.length)
 		resize?.(length, resultLength)
@@ -110,5 +110,21 @@ export function mapped<T, U>(
 	return cleanedBy(resultReactive, () => {
 		for (const cleanup of cleanups) cleanup()
 		cleanups.length = 0
-	}) as unknown as readonly U[] & { [cleanup]: ScopedCallback }
+		cleanupLength()
+	})
+}
+
+export function reduced<T, U, R extends object = any>(
+	inputs: readonly T[],
+	compute: (input: T, factor: R) => readonly U[]
+): readonly U[] {
+	const result = []
+	const resultReactive = new ReactiveReadOnlyArray(result)
+	const cleanupFactor = effect(function computedReducedFactorEffect() {
+		const factor: R = {} as R
+		result.length = 0
+		for (const input of inputs) result.push(...compute(input, factor))
+		touched(resultReactive, { type: 'invalidate', prop: 'reduced' })
+	})
+	return cleanedBy(resultReactive, cleanupFactor)
 }

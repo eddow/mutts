@@ -1750,6 +1750,9 @@ The `Register` exposes additional methods and behaviors that standard arrays do 
   - `remove(key: K): void` removes all occurrences of `key` from the register.
   - `removeAt(index: number): T | undefined` removes a single slot by index and returns its value.
 
+- `keep(predicate)`
+  - `keep(predicate: (value: T) => boolean): void` keeps only items for which the predicate returns `true`; items for which it returns `false` are removed. The predicate is evaluated once per distinct key; duplicate keys follow the same decision.
+
 - `update(...values)`
   - `update(...values: T[]): void` updates existing entries by their key; ignores values whose key is not yet present.
 

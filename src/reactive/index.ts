@@ -16,7 +16,7 @@ export {
 	unreactive,
 	watch,
 } from './interface'
-export { mapped } from './mapped'
+export { mapped, ReadOnlyError, reduced } from './mapped'
 export { type Memoizable, memoize } from './memoize'
 export { immutables, isNonReactive, registerNativeReactivity } from './non-reactive'
 export { isReactive, ReactiveBase, reactive, unwrap } from './proxy'
@@ -44,8 +44,6 @@ import { nonReactiveObjects, registerNativeReactivity } from './non-reactive'
 import { objectToProxy, proxyToObject } from './proxy'
 import { ReactiveSet, ReactiveWeakSet } from './set'
 import { effectToReactiveObjects, watchers } from './tracking'
-
-export { ReadOnlyError } from './mapped'
 
 // Register native collection types to use specialized reactive wrappers
 registerNativeReactivity(WeakMap, ReactiveWeakMap)

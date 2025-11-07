@@ -246,7 +246,8 @@ export function effect(
 		let result: any
 		try {
 			result = withEffect(runEffect, () => fn({ tracked, ascend, reaction: hasReacted }))
-
+			if (result && typeof result !== 'function')
+				throw new ReactiveError(`[reactive] Effect returned a non-function value: ${result}`)
 			// Check if result is a Promise (async effect)
 			if (result && typeof result === 'object' && typeof result.then === 'function') {
 				const originalPromise = result as Promise<any>
@@ -339,7 +340,14 @@ export function effect(
 	}
 	if (isRootEffect) {
 		const callIfCollected = () => stopEffect()
-		fr.register(callIfCollected, stopEffect, stopEffect)
+		fr.register(
+			callIfCollected,
+			() => {
+				stopEffect()
+				options.garbageCollected(fn)
+			},
+			stopEffect
+		)
 		return callIfCollected
 	}
 	// Register this effect to be stopped when the parent effect is cleaned up
