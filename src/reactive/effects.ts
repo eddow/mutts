@@ -1,5 +1,13 @@
 import { decorator } from '../decorator'
 import {
+	captureEffectStack,
+	effectStack,
+	getActiveEffect,
+	getParentEffect,
+	withEffectContext,
+	withEffectStack,
+} from './effect-context'
+import {
 	effectChildren,
 	effectParent,
 	effectToReactiveObjects,
@@ -19,28 +27,7 @@ import { ensureZoneHooked } from './zone'
 
 type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
 
-// Effect context stack for nested effect tracking (front = active, next = parent)
-export let effectStack: ScopedCallback[] = []
-
-export function captureEffectStack() {
-	return effectStack.slice()
-}
-export function withEffectStack<T>(snapshot: ScopedCallback[], fn: () => T): T {
-	const previousStack = effectStack
-	effectStack = snapshot.slice()
-	try {
-		return fn()
-	} finally {
-		effectStack = previousStack
-	}
-}
-
-export function getActiveEffect() {
-	return effectStack[0]
-}
-export function getParentEffect() {
-	return effectStack[1]
-}
+export { captureEffectStack, withEffectStack, getActiveEffect, getParentEffect, effectStack }
 /**
  * Registers a debug callback that is called when the current effect is triggered by a dependency change
  *
@@ -185,14 +172,8 @@ export const atomic = decorator({
  * @returns The result of the function
  */
 export function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T): T {
-	if (getRoot(effect) === getRoot(effectStack[0])) return fn()
-	effectStack.unshift(effect)
-	try {
-		return fn()
-	} finally {
-		const recoveredEffect = effectStack.shift()
-		if (recoveredEffect !== effect) throw new ReactiveError('[reactive] Effect stack mismatch')
-	}
+	if (getRoot(effect) === getRoot(getActiveEffect())) return fn()
+	return withEffectContext(effect, fn)
 }
 
 const fr = new FinalizationRegistry<() => void>((f) => f())

@@ -14,7 +14,7 @@
  * When enabled (asyncMode = 'cancel' | 'queue' | 'ignore'), async entry points are wrapped ONCE.
  */
 
-import { captureEffectStack, withEffectStack } from './effects'
+import { captureEffectStack, withEffectStack } from './effect-context'
 import { options, ScopedCallback } from './types'
 
 let zoneHooked = false
@@ -44,11 +44,9 @@ const originalQueueMicrotask =
  * asyncMode being truthy enables async zone, false disables it
  */
 export function ensureZoneHooked() {
-	if (zoneHooked) return
+	if (zoneHooked || !options.asyncMode) return
+	hookZone()
 	zoneHooked = true
-
-	// Check option once and hook if enabled (asyncMode is truthy)
-	if (options.asyncMode) hookZone()
 }
 
 /**

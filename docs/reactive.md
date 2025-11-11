@@ -16,6 +16,7 @@
 - [Class Reactivity](#class-reactivity)
 - [Non-Reactive System](#non-reactive-system)
 - [Memoization](#memoization)
+- [Record Organization](#record-organization)
 - [Atomic Operations](#atomic-operations)
 - [Advanced Patterns](#advanced-patterns)
 - [Debugging and Development](#debugging-and-development)
@@ -2262,6 +2263,140 @@ Use this pattern when:
 - You are mapping an array of reactive objects and want to keep derived objects stable across reorders.
 - The mapper returns objects with internal state or nested effects that should survive reordering.
 - You prefer to share memoized helpers across multiple mapped arrays.
+
+## Record Organization
+
+### `organized()`
+
+`organized()` is the record companion to [`mapped()`](#mapped). Instead of iterating over numeric indices, it reacts to property additions, updates, and deletions on any `Record<PropertyKey, T>` (plain objects, dictionaries, even reactive proxies) and lets you build **whatever target structure you need**—a new record, nested buckets, a `Map`, or a more elaborate object with metadata.
+
+```typescript
+import { cleanup, organized, reactive } from 'mutts/reactive'
+
+const source = reactive<Record<string, number>>({ apples: 1, oranges: 2 })
+
+const doubled = organized(source, (key, value, target) => {
+  target[key] = value * 2
+  return () => delete target[key] // optional cleanup per key
+})
+
+console.log(doubled.apples) // 2
+
+source.oranges = 5
+console.log(doubled.oranges) // 10
+
+delete source.apples
+doubled[cleanup]() // run all remaining key cleanups (here deletes oranges)
+```
+
+#### Signature
+
+```typescript
+function organized<
+  Source extends Record<PropertyKey, any>,
+  Target extends object = Record<PropertyKey, any>
+>(
+  source: Source,
+  apply: (key: keyof Source, value: Source[keyof Source], target: Target)
+    => ScopedCallback | void,
+  baseTarget?: Target
+): Target & { [cleanup]: ScopedCallback }
+```
+
+- **source**: Any object with consistent value type. If it is not already reactive, `organized()` wraps it transparently.
+- **apply**: Called once per own property. It receives the *stable* `target` object and may mutate it freely. Return a cleanup to dispose per-key resources (event handlers, nested effects, bucket entries, …).
+- **baseTarget** *(optional)*: Provide an initial object (e.g. `{ buckets: {}, cleanups: new Map() }`). It becomes reactive and is returned.
+- **return value**: The same `target`, augmented with the `[cleanup]` symbol. Call `target[cleanup]()` to stop all per-key effects and run the stored cleanups.
+
+Under the hood there is:
+
+- One effect watching `Reflect.ownKeys(source)` (similar to how `mapped()` tracks `length`)
+- A child effect per key that re-runs whenever that key’s value changes, automatically reusing and replacing the cleanup you returned.
+- Automatic disposal when keys disappear or when `target[cleanup]()` is invoked.
+
+#### Re-creating `mapped`-style records
+
+```typescript
+const metrics = reactive({ success: 3, errors: 1 })
+
+const readable = organized(metrics, (key, value, target) => {
+  target[key] = `${String(key)}: ${value}`
+  return () => delete target[key]
+})
+
+console.log(readable.success) // "success: 3"
+metrics.errors = 4
+console.log(readable.errors)  // "errors: 4"
+```
+
+#### Partitioning into buckets
+
+`organized()` also covers the “partition” helper use case: classify properties into groups while keeping leftovers around.
+
+```typescript
+const props = reactive({
+  'if:visible': true,
+  'onClick': () => console.log('click'),
+  'class:warning': true,
+})
+
+type Buckets = {
+  events: Record<string, Function>
+  classes: Record<string, boolean>
+  plain: Record<string, unknown>
+}
+
+const buckets = organized(
+  props,
+  (key, value, target) => {
+    const match = String(key).match(/^([^:]+):(.+)$/)
+    if (!match) {
+      target.plain[String(key)] = value
+      return () => delete target.plain[String(key)]
+    }
+
+    const [, group, name] = match
+    if (group === 'if') {
+      target.plain[name] = value
+      return () => delete target.plain[name]
+    }
+    if (group === 'class') {
+      target.classes[name] = Boolean(value)
+      return () => delete target.classes[name]
+    }
+    if (group === 'on') {
+      target.events[name] = value as Function
+      return () => delete target.events[name]
+    }
+  },
+  { events: {}, classes: {}, plain: {} } satisfies Buckets
+)
+```
+
+Every cleanup removes the entry it created, keeping each bucket in sync with the current source props. This is the same pattern you can use to build a `partitioned()` helper or to manage “mounted” cleanup callbacks keyed by property.
+
+#### Feeding other data structures
+
+Because the target can be anything, you can build `Map`s, arrays of keys, or richer objects:
+
+```typescript
+const registry = organized(
+  reactive({ foo: 1 }),
+  (key, value, target) => {
+    target.entries.set(key, value)
+    target.allKeys.add(key)
+    return () => {
+      target.entries.delete(key)
+      target.allKeys.delete(key)
+    }
+  },
+  { entries: new Map<PropertyKey, number>(), allKeys: new Set<PropertyKey>() }
+)
+```
+
+This flexibility makes `organized()` a good base for higher-level utilities such as `mappedKeys`, `partitioned`, or “group by” helpers: implement the logic once inside `apply`, export the tailored function, and reuse the same underlying reactive infrastructure.
+
+> **Tip:** If you only need a simple per-key transform with the same shape, return a new record and skip custom `baseTarget`. When you need buckets, metadata, or parallel cleanup tracking, seed `baseTarget` with the structures you plan to mutate.
 
 ## Memoization
 

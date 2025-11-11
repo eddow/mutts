@@ -9,11 +9,17 @@ import {
 	needsBackReferences,
 	objectsWithDeepWatchers,
 	removeBackReference,
-	track1,
-} from './deep-watch'
+} from './deep-watch-state'
 import { withEffect } from './effects'
-import { isLazyGet, unwrapLazyGet } from './lazy-get'
-import { absent, isNonReactive } from './non-reactive'
+import { absent, isNonReactive } from './non-reactive-state'
+import {
+	getExistingProxy,
+	objectToProxy,
+	proxyToObject,
+	storeProxyRelationship,
+	trackProxyObject,
+	unwrap,
+} from './proxy-state'
 import { dependant } from './tracking'
 import {
 	allProps,
@@ -23,10 +29,6 @@ import {
 	prototypeForwarding,
 	unreactiveProperties,
 } from './types'
-
-// Track object -> proxy and proxy -> object relationships
-export const objectToProxy = new WeakMap<object, object>()
-export const proxyToObject = new WeakMap<object, object>()
 
 const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
@@ -114,7 +116,15 @@ const reactiveHandlers = {
 				oldVal = Reflect.get(unwrappedObj, prop, unwrappedReceiver)
 			}
 		}
-		track1(obj, prop, oldVal, newValue)
+		if (objectsWithDeepWatchers.has(obj)) {
+			if (typeof oldVal === 'object' && oldVal !== null) {
+				removeBackReference(oldVal, obj, prop)
+			}
+			if (typeof newValue === 'object' && newValue !== null) {
+				const reactiveValue = reactiveObject(newValue)
+				addBackReference(reactiveValue, obj, prop)
+			}
+		}
 
 		if (oldVal !== newValue) {
 			// For getter-only accessors, Reflect.set() may fail, but we still return true
@@ -192,19 +202,18 @@ function reactiveObject<T>(anyTarget: T): T {
 	if (isProxy) return target as T
 
 	// If we already have a proxy for this object, return it (optimized: get returns undefined if not found)
-	const existing = objectToProxy.get(target)
+	const existing = getExistingProxy(target)
 	if (existing !== undefined) return existing as T
 
 	const proxied =
 		nativeReactive in target && !(target instanceof target[nativeReactive])
 			? new target[nativeReactive](target)
 			: target
-	if (proxied !== target) proxyToObject.set(proxied, target)
+	if (proxied !== target) trackProxyObject(proxied, target)
 	const proxy = new Proxy(proxied, reactiveHandlers)
 
 	// Store the relationships
-	objectToProxy.set(target, proxy)
-	proxyToObject.set(proxy, target)
+	storeProxyRelationship(target, proxy)
 	return proxy as T
 }
 
@@ -247,21 +256,4 @@ export const reactive = decorator({
  * @param proxy - The reactive proxy
  * @returns The original object
  */
-export function unwrap<T>(obj: T): T {
-	while (obj) {
-		if (isLazyGet(obj)) obj = unwrapLazyGet(obj) as T
-		else if (typeof obj === 'object' && obj !== null && proxyToObject.has(obj))
-			obj = proxyToObject.get(obj) as T
-		else break
-	}
-	return obj
-}
-
-/**
- * Checks if an object is a reactive proxy
- * @param obj - The object to check
- * @returns True if the object is reactive
- */
-export function isReactive(obj: any): boolean {
-	return proxyToObject.has(obj)
-}
+export { isReactive, objectToProxy, proxyToObject, unwrap } from './proxy-state'

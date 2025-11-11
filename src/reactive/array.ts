@@ -1,7 +1,8 @@
 import { Indexable } from '../indexable'
 import { touched } from './change'
 import { makeReactiveEntriesIterator, makeReactiveIterator } from './non-reactive'
-import { reactive, unwrap } from './proxy'
+import { reactive } from './proxy'
+import { unwrap } from './proxy-state'
 import { dependant } from './tracking'
 import { prototypeForwarding } from './types'
 

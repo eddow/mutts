@@ -1,5 +1,5 @@
-import { getActiveEffect } from './effects'
-import { unwrap } from './proxy'
+import { getActiveEffect } from './effect-context'
+import { unwrap } from './proxy-state'
 import { allProps, rootFunction, type ScopedCallback } from './types'
 
 // Track which effects are watching which reactive objects for cleanup

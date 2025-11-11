@@ -1,6 +1,6 @@
-import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch'
+import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { batch, effectTrackers } from './effects'
-import { unwrap } from './proxy'
+import { unwrap } from './proxy-state'
 import { watchers } from './tracking'
 import { allProps, type Evolution, options, type ScopedCallback, type State } from './types'
 

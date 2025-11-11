@@ -1,13 +1,11 @@
 import { addState, collectEffects, touched1 } from './change'
-import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch'
+import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { batch } from './effects'
 import { isObject } from './lazy-get'
-import { isNonReactive } from './non-reactive'
-import { unwrap } from './proxy'
+import { isNonReactive } from './non-reactive-state'
+import { unwrap } from './proxy-state'
 import { effectParent, watchers } from './tracking'
 import { allProps, type Evolution, options, type ScopedCallback } from './types'
-
-// TODO: check the touched effect is not in the (set) stack
 
 function isObjectLike(value: unknown): value is object {
 	return isObject(value) && value !== null

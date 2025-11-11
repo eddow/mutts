@@ -1,8 +1,8 @@
 import { decorator, GenericClassDecorator } from '../decorator'
 import { deepWatch } from './deep-watch'
 import { effect, getActiveEffect, untracked, withEffect } from './effects'
-import { isNonReactive, nonReactiveClass, nonReactiveObjects } from './non-reactive'
-import { unwrap } from './proxy'
+import { isNonReactive, nonReactiveClass, nonReactiveObjects } from './non-reactive-state'
+import { unwrap } from './proxy-state'
 import { dependant, markWithRoot } from './tracking'
 import {
 	type DependencyAccess,

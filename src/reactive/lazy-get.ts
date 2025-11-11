@@ -1,5 +1,6 @@
 import { ReflectGet } from '../utils'
 
+// Note: This was an idea that got implemented but ended up not used
 const lazyGetSymbol = Symbol('lazyGet')
 type LazyTarget = () => any
 
@@ -132,7 +133,7 @@ export function isPrimitive(obj: any): boolean {
 export function isObject(obj: any): obj is object {
 	return typeOf(obj) === 'object' && obj !== null
 }
-export function isFunction(obj: any): obj is Function {
+export function isFunction(obj: any): obj is (...args: any[]) => any {
 	return typeOf(obj) === 'function'
 }
 export function isNumber(obj: any): obj is number {

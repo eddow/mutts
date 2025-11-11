@@ -83,7 +83,7 @@ export function ReflectSet(obj: any, prop: any, value: any, receiver: any) {
 		obj[prop] = value
 		return true
 	}
-	if (!(obj instanceof Object)) {
+	if (!(obj instanceof Object) && !Object.hasOwn(obj, prop)) {
 		Object.defineProperty(obj, prop, {
 			value,
 			configurable: true,

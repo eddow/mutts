@@ -10,13 +10,7 @@ export {
 	untracked,
 	withEffect,
 } from './effects'
-export {
-	cleanedBy,
-	cleanup,
-	derived,
-	unreactive,
-	watch,
-} from './interface'
+export { cleanedBy, cleanup, derived, unreactive, watch } from './interface'
 export {
 	isBigInt,
 	isBoolean,
@@ -33,6 +27,7 @@ export { mapped, ReadOnlyError, reduced } from './mapped'
 export { type Memoizable, memoize } from './memoize'
 export { immutables, isNonReactive, registerNativeReactivity } from './non-reactive'
 export { isReactive, ReactiveBase, reactive, unwrap } from './proxy'
+export { organized } from './record'
 export { Register, register } from './register'
 export {
 	type DependencyAccess,
@@ -52,7 +47,7 @@ import {
 	objectsWithDeepWatchers,
 } from './deep-watch'
 import { ReactiveMap, ReactiveWeakMap } from './map'
-import { nonReactiveObjects, registerNativeReactivity } from './non-reactive'
+import { nonReactiveObjects, registerNativeReactivity } from './non-reactive-state'
 import { objectToProxy, proxyToObject } from './proxy'
 import { ReactiveSet, ReactiveWeakSet } from './set'
 import { effectToReactiveObjects, watchers } from './tracking'
