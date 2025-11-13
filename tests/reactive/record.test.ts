@@ -5,10 +5,11 @@ describe('organized', () => {
 		const source = reactive<{ a?: number; b?: number }>({ a: 1 })
 		const iterations: Record<string, number> = {}
 		const cleanupCalls: Record<string, number> = {}
-		const target = organized(source, (key, value, target) => {
+		const target = organized(source, (access, target) => {
+			const key = access.key
 			const name = String(key)
 			iterations[name] = (iterations[name] ?? 0) + 1
-			target[key] = (value as number) * 2
+			target[key] = (access.get() as number) * 2
 			return () => {
 				delete target[key]
 				cleanupCalls[name] = (cleanupCalls[name] ?? 0) + 1
@@ -20,9 +21,9 @@ describe('organized', () => {
 		expect(iterations).toEqual({ a: 1 })
 
 		let sourceRuns = 0
-		const stop = effect(({ tracked }) => {
+		const stop = effect(() => {
 			sourceRuns++
-			tracked(() => source.a)
+			source.a
 		})
 		expect(sourceRuns).toBe(1)
 
@@ -52,9 +53,9 @@ describe('organized', () => {
 		const baseTarget = { entries: new Map<string, number>() }
 		const target = organized(
 			source,
-			(key, value, target) => {
-				const prop = String(key)
-				target.entries.set(prop, value as number)
+			(access, target) => {
+				const prop = String(access.key)
+				target.entries.set(prop, access.value as number)
 				return () => {
 					target.entries.delete(prop)
 				}

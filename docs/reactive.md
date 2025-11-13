@@ -15,8 +15,8 @@
 - [Register](#register)
 - [Class Reactivity](#class-reactivity)
 - [Non-Reactive System](#non-reactive-system)
-- [Memoization](#memoization)
 - [Record Organization](#record-organization)
+- [Memoization](#memoization)
 - [Atomic Operations](#atomic-operations)
 - [Advanced Patterns](#advanced-patterns)
 - [Debugging and Development](#debugging-and-development)
@@ -2275,9 +2275,9 @@ import { cleanup, organized, reactive } from 'mutts/reactive'
 
 const source = reactive<Record<string, number>>({ apples: 1, oranges: 2 })
 
-const doubled = organized(source, (key, value, target) => {
-  target[key] = value * 2
-  return () => delete target[key] // optional cleanup per key
+const doubled = organized(source, (access, target) => {
+  target[access.key] = access.get() * 2
+  return () => delete target[access.key] // optional cleanup per key
 })
 
 console.log(doubled.apples) // 2
@@ -2297,14 +2297,17 @@ function organized<
   Target extends object = Record<PropertyKey, any>
 >(
   source: Source,
-  apply: (key: keyof Source, value: Source[keyof Source], target: Target)
-    => ScopedCallback | void,
+  apply: (access: OrganizedAccess<Source, keyof Source>, target: Target) => ScopedCallback | void,
   baseTarget?: Target
 ): Target & { [cleanup]: ScopedCallback }
 ```
 
 - **source**: Any object with consistent value type. If it is not already reactive, `organized()` wraps it transparently.
-- **apply**: Called once per own property. It receives the *stable* `target` object and may mutate it freely. Return a cleanup to dispose per-key resources (event handlers, nested effects, bucket entries, …).
+- **apply**: Called once per own property. It receives the *stable* `target` object plus an accessor describing the property:
+  - `access.key` → the original property key
+  - `access.get()` / `access.set(value)` → always respect source getters/setters
+  - `access.value` → convenience getter/setter backed by the same logic
+  Return a cleanup to dispose per-key resources (event handlers, nested effects, bucket entries, …).
 - **baseTarget** *(optional)*: Provide an initial object (e.g. `{ buckets: {}, cleanups: new Map() }`). It becomes reactive and is returned.
 - **return value**: The same `target`, augmented with the `[cleanup]` symbol. Call `target[cleanup]()` to stop all per-key effects and run the stored cleanups.
 
@@ -2319,9 +2322,9 @@ Under the hood there is:
 ```typescript
 const metrics = reactive({ success: 3, errors: 1 })
 
-const readable = organized(metrics, (key, value, target) => {
-  target[key] = `${String(key)}: ${value}`
-  return () => delete target[key]
+const readable = organized(metrics, (access, target) => {
+  target[access.key] = `${String(access.key)}: ${access.get()}`
+  return () => delete target[access.key]
 })
 
 console.log(readable.success) // "success: 3"
@@ -2348,24 +2351,24 @@ type Buckets = {
 
 const buckets = organized(
   props,
-  (key, value, target) => {
-    const match = String(key).match(/^([^:]+):(.+)$/)
+  (access, target) => {
+    const match = String(access.key).match(/^([^:]+):(.+)$/)
     if (!match) {
-      target.plain[String(key)] = value
-      return () => delete target.plain[String(key)]
+      target.plain[String(access.key)] = access.get()
+      return () => delete target.plain[String(access.key)]
     }
 
     const [, group, name] = match
     if (group === 'if') {
-      target.plain[name] = value
+      target.plain[name] = access.get()
       return () => delete target.plain[name]
     }
     if (group === 'class') {
-      target.classes[name] = Boolean(value)
+      target.classes[name] = Boolean(access.get())
       return () => delete target.classes[name]
     }
     if (group === 'on') {
-      target.events[name] = value as Function
+      target.events[name] = access.get() as Function
       return () => delete target.events[name]
     }
   },
@@ -2382,12 +2385,12 @@ Because the target can be anything, you can build `Map`s, arrays of keys, or ric
 ```typescript
 const registry = organized(
   reactive({ foo: 1 }),
-  (key, value, target) => {
-    target.entries.set(key, value)
-    target.allKeys.add(key)
+  (access, target) => {
+    target.entries.set(access.key, access.get())
+    target.allKeys.add(access.key)
     return () => {
-      target.entries.delete(key)
-      target.allKeys.delete(key)
+      target.entries.delete(access.key)
+      target.allKeys.delete(access.key)
     }
   },
   { entries: new Map<PropertyKey, number>(), allKeys: new Set<PropertyKey>() }

@@ -1,13 +1,21 @@
+import { ReflectGet, ReflectSet } from '../utils'
+import { touched1 } from './change'
 import { effect } from './effects'
 import { cleanedBy, cleanup } from './interface'
 import { reactive } from './proxy'
 import { type ScopedCallback } from './types'
 
+export type OrganizedAccess<Source extends Record<PropertyKey, any>, Key extends keyof Source> = {
+	readonly key: Key
+	get(): Source[Key]
+	set(value: Source[Key]): boolean
+	value: Source[Key]
+}
+
 export type OrganizedCallback<Source extends Record<PropertyKey, any>, Target extends object> = <
 	Key extends keyof Source,
 >(
-	key: Key,
-	value: Source[Key],
+	access: OrganizedAccess<Source, Key>,
 	target: Target
 ) => ScopedCallback | undefined
 
@@ -34,26 +42,61 @@ export function organized<
 	}
 
 	const cleanupKeys = effect(function organizedKeysEffect({ ascend }) {
-		const keys = Reflect.ownKeys(observedSource) as PropertyKey[]
-		const knownKeys = new Set<PropertyKey>(keys)
+		//const keys = Reflect.ownKeys(observedSource) as PropertyKey[]
+		const keys = new Set<PropertyKey>()
+		for (const key in observedSource) keys.add(key)
 
 		for (const key of keys) {
 			if (keyEffects.has(key)) continue
 			ascend(() => {
-				const stop = effect(function organizedKeyEffect({ tracked }) {
+				const stop = effect(function organizedKeyEffect() {
 					const sourceKey = key as keyof Source
-					const value = tracked(() => observedSource[sourceKey])
-					return apply(sourceKey, value, target)
+					const accessBase = {
+						key: sourceKey,
+						get: () => ReflectGet(observedSource, sourceKey, observedSource),
+						set: (value: Source[typeof sourceKey]) =>
+							ReflectSet(observedSource, sourceKey, value, observedSource),
+					}
+					Object.defineProperty(accessBase, 'value', {
+						get: accessBase.get,
+						set: accessBase.set,
+						configurable: true,
+						enumerable: true,
+					})
+					return apply(accessBase as OrganizedAccess<Source, typeof sourceKey>, target)
 				})
 				keyEffects.set(key, stop)
 			})
 		}
 
-		for (const key of Array.from(keyEffects.keys())) if (!knownKeys.has(key)) disposeKey(key)
+		for (const key of Array.from(keyEffects.keys())) if (!keys.has(key)) disposeKey(key)
 	})
 
 	return cleanedBy(target, () => {
 		cleanupKeys()
 		for (const key of Array.from(keyEffects.keys())) disposeKey(key)
 	}) as OrganizedResult<Target>
+}
+
+/**
+ * Organizes a property on a target object
+ * Shortcut for defineProperty/delete with touched signal
+ * @param target - The target object
+ * @param property - The property to organize
+ * @param access - The access object
+ * @returns The property descriptor
+ */
+export function organize<T>(
+	target: object,
+	property: PropertyKey,
+	access: { get?(): T; set?(value: T): boolean }
+) {
+	Object.defineProperty(target, property, {
+		get: access.get,
+		set: access.set,
+		configurable: true,
+		enumerable: true,
+	})
+	touched1(target, { type: 'set', prop: property }, property)
+	return () => delete target[property]
 }
