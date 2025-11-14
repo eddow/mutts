@@ -26,6 +26,7 @@ export {
 export { mapped, ReadOnlyError, reduced } from './mapped'
 export { type Memoizable, memoize } from './memoize'
 export { immutables, isNonReactive, registerNativeReactivity } from './non-reactive'
+export { project } from './project'
 export { isReactive, ReactiveBase, reactive, unwrap } from './proxy'
 export { organize, organized } from './record'
 export { Register, register } from './register'

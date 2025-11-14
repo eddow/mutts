@@ -4,7 +4,7 @@ import { unreactive } from './interface'
 import { reactive } from './proxy'
 import { type DependencyFunction, prototypeForwarding, type ScopedCallback } from './types'
 
-// TODO: use register un a real-world crud situation, have "events" for add, delete, update
+// TODO: use register in a real-world crud situation, have "events" for add, delete, update
 
 type KeyFunction<T, K extends PropertyKey> = (item: T) => K
 
@@ -328,6 +328,10 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 
 	indexOfKey(key: K): number {
 		return this.#keys.indexOf(key)
+	}
+
+	mapKeys(): IterableIterator<K> {
+		return this.#values.keys()
 	}
 
 	update(...values: T[]): void {

@@ -15,6 +15,8 @@
 - [Register](#register)
 - [Class Reactivity](#class-reactivity)
 - [Non-Reactive System](#non-reactive-system)
+- [Array Mapping](#array-mapping)
+- [Projection](#projection)
 - [Record Organization](#record-organization)
 - [Memoization](#memoization)
 - [Atomic Operations](#atomic-operations)
@@ -2263,6 +2265,172 @@ Use this pattern when:
 - You are mapping an array of reactive objects and want to keep derived objects stable across reorders.
 - The mapper returns objects with internal state or nested effects that should survive reordering.
 - You prefer to share memoized helpers across multiple mapped arrays.
+
+## Projection
+
+### `project()`
+
+`project()` provides a unified API for transforming reactive collections (arrays, records, and maps) into new reactive collections. Each source entry gets its own reactive effect that recomputes only when that specific entry changes, enabling granular updates perfect for rendering pipelines.
+
+**Note:** `project()` is the modern replacement for `mapped()`. It offers the same per-entry reactivity benefits but works across all collection types with a consistent API.
+
+#### Basic Usage
+
+```typescript
+import { cleanup, project, reactive } from 'mutts/reactive'
+
+// Arrays
+const users = reactive([{ name: 'John', age: 30 }, { name: 'Jane', age: 25 }])
+const names = project.array(users, ({ get }) => get()?.name.toUpperCase() ?? '')
+
+console.log(names) // ['JOHN', 'JANE']
+
+users[0].name = 'Johnny'
+console.log(names[0]) // 'JOHNNY' - only index 0 recomputed
+
+// Records
+const scores = reactive({ math: 90, science: 85 })
+const grades = project.record(scores, ({ get }) => {
+  const score = get()
+  return score >= 90 ? 'A' : score >= 80 ? 'B' : 'C'
+})
+
+console.log(grades.math) // 'A'
+scores.math = 88
+console.log(grades.math) // 'B' - only math key recomputed
+
+// Maps
+const inventory = reactive(new Map([
+  ['apples', { count: 10 }],
+  ['oranges', { count: 5 }]
+]))
+const totals = project.map(inventory, ({ get }) => get()?.count ?? 0)
+
+console.log(totals.get('apples')) // 10
+inventory.get('apples')!.count = 15
+console.log(totals.get('apples')) // 15 - only 'apples' key recomputed
+```
+
+#### Automatic Type Selection
+
+You can use `project()` directly and it will automatically select the appropriate helper based on the source type:
+
+```typescript
+// Automatically uses project.array
+const doubled = project([1, 2, 3], ({ get }) => get() * 2)
+
+// Automatically uses project.record
+const upper = project({ a: 'hello', b: 'world' }, ({ get }) => get()?.toUpperCase() ?? '')
+
+// Automatically uses project.map
+const counts = project(new Map([['x', 1], ['y', 2]]), ({ get }) => get() * 2)
+```
+
+#### Access Object
+
+The callback receives a `ProjectAccess` object with:
+
+- **`get()`**: Function that returns the current source value for this key/index
+- **`set(value)`**: Function to update the source value (if the source is mutable)
+- **`key`**: The current key or index
+- **`source`**: Reference to the original source collection
+- **`old`**: Previously computed result for this entry (undefined on first run)
+- **`value`**: Computed property that mirrors `get()` (for convenience)
+
+```typescript
+const transformed = project.array(items, (access) => {
+  // Access the source value
+  const item = access.get()
+  
+  // Access the key/index
+  console.log(`Processing index ${access.key}`)
+
+  // Leverage previous result
+  console.log(`Previous result: ${access.old}`)
+  
+  // Transform and return
+  return item.value * 2
+})
+```
+
+#### Per-Entry Reactivity
+
+Each entry in the source collection gets its own reactive effect. When only one entry changes, only that entry's projection recomputes:
+
+```typescript
+const users = reactive([
+  { id: 1, name: 'John', score: 100 },
+  { id: 2, name: 'Jane', score: 200 },
+  { id: 3, name: 'Bob', score: 150 }
+])
+
+let computeCount = 0
+const summaries = project.array(users, ({ get }) => {
+  computeCount++
+  const user = get()
+  return `${user.name}: ${user.score}`
+})
+
+console.log(computeCount) // 3 (initial computation)
+
+// Modify only the first user
+users[0].score = 150
+console.log(summaries[0]) // 'John: 150'
+console.log(computeCount) // 4 (only index 0 recomputed)
+
+// Add a new user
+users.push({ id: 4, name: 'Alice', score: 175 })
+console.log(computeCount) // 5 (only new index 3 computed)
+```
+
+#### Key Addition and Removal
+
+`project()` automatically handles keys being added or removed from the source:
+
+```typescript
+const source = reactive({ a: 1, b: 2 })
+const doubled = project.record(source, ({ get }) => get() * 2)
+
+console.log(doubled.a) // 2
+console.log(doubled.b) // 4
+
+// Add new key
+source.c = 3
+console.log(doubled.c) // 6 (automatically computed)
+
+// Remove key
+delete source.a
+console.log('a' in doubled) // false (automatically removed)
+```
+
+#### Cleanup
+
+The returned object includes a `cleanup` symbol that stops all reactive effects:
+
+```typescript
+const result = project.array(items, ({ get }) => get() * 2)
+
+// Later, when done
+result[cleanup]() // Stops all effects and cleans up
+```
+
+#### Use Cases
+
+- **Rendering Lists**: Transform data models into view models for JSX/HTML rendering, with only changed items recomputing
+- **Derived Collections**: Create computed views of source data that stay in sync
+- **Data Transformation**: Convert between collection types while maintaining reactivity
+- **Performance Optimization**: Avoid full recomputation when only a few entries change
+
+#### Comparison with `mapped()`
+
+`project()` is designed to eventually replace `mapped()`. Key differences:
+
+- **Unified API**: Works with arrays, records, and maps (vs. `mapped()` only for arrays)
+- **Access Pattern**: Uses an access object with `get()`/`set()` instead of direct value/index parameters
+- **Automatic Target Creation**: Creates its own reactive target container (no need to provide a base target)
+- **Consistent Behavior**: Same per-entry reactivity model across all collection types
+
+For new code, prefer `project()` over `mapped()`. Existing `mapped()` code will continue to work, but consider migrating for better consistency and future features.
 
 ## Record Organization
 
