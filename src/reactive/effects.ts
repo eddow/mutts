@@ -1,4 +1,5 @@
 import { decorator } from '../decorator'
+import { IterableWeakSet } from '../iterableWeak'
 import {
 	captureEffectStack,
 	effectStack,
@@ -73,68 +74,609 @@ export function trackEffect(onTouch: EffectTracking) {
 
 const effectTrackers = new WeakMap<ScopedCallback, Set<EffectTracking>>()
 
+// Dependency graph: tracks which effects trigger which other effects
+// Uses roots (Function) as keys for consistency
+const effectTriggers = new WeakMap<Function, IterableWeakSet<Function>>()
+const effectTriggeredBy = new WeakMap<Function, IterableWeakSet<Function>>()
+
+// Transitive closures: track all indirect relationships
+// causesClosure: for each effect, all effects that trigger it (directly or indirectly)
+// consequencesClosure: for each effect, all effects that it triggers (directly or indirectly)
+const causesClosure = new WeakMap<Function, IterableWeakSet<Function>>()
+const consequencesClosure = new WeakMap<Function, IterableWeakSet<Function>>()
+
+/**
+ * Gets or creates an IterableWeakSet for a closure map
+ */
+function getOrCreateClosure(
+	closure: WeakMap<Function, IterableWeakSet<Function>>,
+	root: Function
+): IterableWeakSet<Function> {
+	let set = closure.get(root)
+	if (!set) {
+		set = new IterableWeakSet()
+		closure.set(root, set)
+	}
+	return set
+}
+
+/**
+ * Adds an edge to the dependency graph: callerRoot → targetRoot
+ * Also maintains transitive closures
+ * @param callerRoot - Root function of the effect that triggers
+ * @param targetRoot - Root function of the effect being triggered
+ */
+function addGraphEdge(callerRoot: Function, targetRoot: Function) {
+	// Skip if edge already exists
+	const triggers = effectTriggers.get(callerRoot)
+	if (triggers?.has(targetRoot)) {
+		return // Edge already exists
+	}
+
+	// Add to forward graph: callerRoot → targetRoot
+	if (!triggers) {
+		const newTriggers = new IterableWeakSet<Function>()
+		newTriggers.add(targetRoot)
+		effectTriggers.set(callerRoot, newTriggers)
+	} else {
+		triggers.add(targetRoot)
+	}
+
+	// Add to reverse graph: targetRoot ← callerRoot
+	let triggeredBy = effectTriggeredBy.get(targetRoot)
+	if (!triggeredBy) {
+		triggeredBy = new IterableWeakSet()
+		effectTriggeredBy.set(targetRoot, triggeredBy)
+	}
+	triggeredBy.add(callerRoot)
+
+	// Update transitive closures
+	// When U→V is added, we need to propagate the relationship:
+	// 1. Add U to causesClosure(V) and V to consequencesClosure(U) (direct relationship)
+	// 2. For each X in causesClosure(U): add V to consequencesClosure(X) and X to causesClosure(V)
+	// 3. For each Y in consequencesClosure(V): add U to causesClosure(Y) and Y to consequencesClosure(U)
+	// Note: Self-loops (U→U) are not added to closures - if an effect appears in its own closure,
+	// it means there's an indirect cycle that should be detected
+
+	// Skip self-loops - they don't create closure entries
+	if (callerRoot === targetRoot) {
+		return
+	}
+
+	const uConsequences = getOrCreateClosure(consequencesClosure, callerRoot)
+	const vCauses = getOrCreateClosure(causesClosure, targetRoot)
+
+	// 1. Add direct relationship
+	uConsequences.add(targetRoot)
+	vCauses.add(callerRoot)
+
+	// 2. For each X in causesClosure(U): X→U→V means X→V
+	const uCausesSet = causesClosure.get(callerRoot)
+	if (uCausesSet) {
+		for (const x of uCausesSet) {
+			// Skip if this would create a self-loop
+			if (x === targetRoot) continue
+			const xConsequences = getOrCreateClosure(consequencesClosure, x)
+			xConsequences.add(targetRoot)
+			vCauses.add(x)
+		}
+	}
+
+	// 3. For each Y in consequencesClosure(V): U→V→Y means U→Y
+	const vConsequencesSet = consequencesClosure.get(targetRoot)
+	if (vConsequencesSet) {
+		for (const y of vConsequencesSet) {
+			// Skip if this would create a self-loop
+			if (y === callerRoot) continue
+			const yCauses = getOrCreateClosure(causesClosure, y)
+			yCauses.add(callerRoot)
+			uConsequences.add(y)
+		}
+	}
+
+	// 4. Cross-product: for each X in causesClosure(U) and Y in consequencesClosure(V): X→Y
+	if (uCausesSet && vConsequencesSet) {
+		for (const x of uCausesSet) {
+			const xConsequences = getOrCreateClosure(consequencesClosure, x)
+			for (const y of vConsequencesSet) {
+				// Skip if this would create a self-loop
+				if (x === y) continue
+				xConsequences.add(y)
+				const yCauses = getOrCreateClosure(causesClosure, y)
+				yCauses.add(x)
+			}
+		}
+	}
+}
+
+/**
+ * Removes all edges involving the given effect from the dependency graph
+ * Also cleans up transitive closures
+ * Called when an effect is stopped/cleaned up
+ * @param effect - The effect being cleaned up
+ */
+function cleanupEffectFromGraph(effect: ScopedCallback) {
+	const root = getRoot(effect)
+
+	// Remove from effectTriggers (outgoing edges)
+	const triggers = effectTriggers.get(root)
+	if (triggers) {
+		// Remove this root from all targets' effectTriggeredBy sets
+		for (const targetRoot of triggers) {
+			const triggeredBy = effectTriggeredBy.get(targetRoot)
+			triggeredBy?.delete(root)
+		}
+		effectTriggers.delete(root)
+	}
+
+	// Remove from effectTriggeredBy (incoming edges)
+	const triggeredBy = effectTriggeredBy.get(root)
+	if (triggeredBy) {
+		// Remove this root from all sources' effectTriggers sets
+		for (const sourceRoot of triggeredBy) {
+			const triggers = effectTriggers.get(sourceRoot)
+			triggers?.delete(root)
+		}
+		effectTriggeredBy.delete(root)
+	}
+
+	// Clean up closures
+	// Note: Full cleanup of closures is expensive, but effects are rarely cleaned up
+	// For now, we just delete the closures for this effect
+	causesClosure.delete(root)
+	consequencesClosure.delete(root)
+}
+
+// Batch queue structure - simplified, using closures for ordering
+interface BatchQueue {
+	// All effects in the current batch
+	all: Map<Function, ScopedCallback> // root → effect
+	// Effects that have been executed in this batch
+	executed: Set<Function> // root
+}
+
 // Track currently executing effects to prevent re-execution
 // These are all the effects triggered under `activeEffect`
-let batchedEffects: Map<Function, ScopedCallback> | undefined
+let batchQueue: BatchQueue | undefined
 const batchCleanups = new Set<ScopedCallback>()
+
+/**
+ * Computes the in-degree (number of dependencies) for an effect in the current batch
+ * Uses causesClosure to count all effects (directly or indirectly) that trigger this effect
+ * @param root - Root function of the effect
+ * @param batchEffects - Map of all effects in current batch
+ * @param executed - Set of effects that have been executed
+ * @returns Number of effects in batch that trigger this effect (directly or indirectly)
+ */
+function computeInDegreeInBatch(
+	root: Function,
+	batchEffects: Map<Function, ScopedCallback>,
+	_executed: Set<Function>
+): number {
+	let inDegree = 0
+	const activeEffect = getActiveEffect()
+	const activeRoot = activeEffect ? getRoot(activeEffect) : null
+
+	// Count effects in batch that trigger this effect (directly or indirectly)
+	// Using causesClosure which contains all transitive causes
+	const causes = causesClosure.get(root)
+	if (causes) {
+		for (const causeRoot of causes) {
+			// Only count if it's in the batch
+			// BUT: don't count the currently executing effect (active effect)
+			// This handles the case where an effect is triggered during another effect's execution
+			// Note: We don't check if the cause has been executed - some batches might cause
+			// the same effect through different routes, and we want to allow that
+			// Note: Self-loops should not appear in closures - if they do, it means an indirect cycle
+			// But we still check to be safe
+			if (batchEffects.has(causeRoot) && causeRoot !== activeRoot && causeRoot !== root) {
+				inDegree++
+			}
+		}
+	}
+
+	return inDegree
+}
+
+/**
+ * Checks if adding an edge would create a cycle
+ * Uses causesClosure to check if callerRoot is already a cause of targetRoot
+ * @param callerRoot - Root of the effect that triggers
+ * @param targetRoot - Root of the effect being triggered
+ * @returns true if adding this edge would create a cycle
+ */
+function wouldCreateCycle(callerRoot: Function, targetRoot: Function): boolean {
+	// Check if targetRoot already triggers callerRoot (directly or indirectly)
+	// This would create a cycle: callerRoot -> targetRoot -> ... -> callerRoot
+	// Using consequencesClosure: if targetRoot triggers callerRoot, then callerRoot is in consequencesClosure(targetRoot)
+	const targetConsequences = consequencesClosure.get(targetRoot)
+	if (targetConsequences?.has(callerRoot)) {
+		return true // Cycle detected: targetRoot -> ... -> callerRoot, and we're adding callerRoot -> targetRoot
+	}
+
+	return false
+}
+
+/**
+ * Adds an effect to the batch queue
+ * @param effect - The effect to add
+ * @param caller - The active effect that triggered this one (optional)
+ * @param immediate - If true, don't create edges in the dependency graph
+ */
+function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?: boolean) {
+	if (!batchQueue) return
+
+	const root = getRoot(effect)
+
+	// 1. Add to batch first (needed for cycle detection)
+	batchQueue.all.set(root, effect)
+
+	// 2. Add to global graph (if caller exists and not immediate) - USE ROOTS ONLY
+	// When immediate is true, don't create edges - the effect is not considered as a consequence
+	if (caller && !immediate) {
+		const callerRoot = getRoot(caller)
+
+		// Check for cycle BEFORE adding edge
+		// We check if adding callerRoot -> root would create a cycle
+		// This means checking if root already triggers callerRoot (directly or transitively)
+		if (wouldCreateCycle(callerRoot, root)) {
+			// Cycle detected! Handle according to options
+			const cycleHandling = options.cycleHandling
+			const cycleMessage = `Cycle detected: ${callerRoot.name || '<anonymous>'} → ${root.name || '<anonymous>'} (and back)`
+
+			switch (cycleHandling) {
+				case 'throw':
+					// Remove from batch before throwing
+					batchQueue.all.delete(root)
+					throw new ReactiveError(`[reactive] ${cycleMessage}`)
+				case 'warn':
+					options.warn(`[reactive] ${cycleMessage}`)
+					// Don't add the edge, break the cycle
+					batchQueue.all.delete(root)
+					return
+				case 'break':
+					// Silently break cycle, don't add the edge
+					batchQueue.all.delete(root)
+					return
+			}
+		}
+
+		addGraphEdge(callerRoot, root) // Add to persistent graph using roots
+	}
+}
 
 /**
  * Adds a cleanup function to be called when the current batch of effects completes
  * @param cleanup - The cleanup function to add
  */
 export function addBatchCleanup(cleanup: ScopedCallback) {
-	if (!batchedEffects) cleanup()
+	if (!batchQueue) cleanup()
 	else batchCleanups.add(cleanup)
 }
+
+/**
+ * Gets a cycle path for debugging
+ * Uses DFS to find cycles in the batch
+ * @param batchQueue - The batch queue
+ * @returns Array of effect roots forming a cycle
+ */
+function getCyclePath(batchQueue: BatchQueue): Function[] {
+	// If all effects have in-degree > 0, there must be a cycle
+	// Use DFS to find it
+	const visited = new Set<Function>()
+	const recursionStack = new Set<Function>()
+	const path: Function[] = []
+
+	for (const [root] of batchQueue.all) {
+		if (visited.has(root)) continue
+		const cycle = findCycle(root, visited, recursionStack, path, batchQueue)
+		if (cycle.length > 0) {
+			return cycle
+		}
+	}
+
+	return []
+}
+
+function findCycle(
+	root: Function,
+	visited: Set<Function>,
+	recursionStack: Set<Function>,
+	path: Function[],
+	batchQueue: BatchQueue
+): Function[] {
+	if (recursionStack.has(root)) {
+		// Found a cycle! Return the path from the cycle start to root
+		const cycleStart = path.indexOf(root)
+		return path.slice(cycleStart).concat([root])
+	}
+
+	if (visited.has(root)) {
+		return []
+	}
+
+	visited.add(root)
+	recursionStack.add(root)
+	path.push(root)
+
+	// Follow edges to effects in the batch
+	// Use direct edges (effectTriggers) for cycle detection
+	const triggers = effectTriggers.get(root)
+	if (triggers) {
+		for (const targetRoot of triggers) {
+			if (batchQueue.all.has(targetRoot)) {
+				const cycle = findCycle(targetRoot, visited, recursionStack, path, batchQueue)
+				if (cycle.length > 0) {
+					return cycle
+				}
+			}
+		}
+	}
+
+	path.pop()
+	recursionStack.delete(root)
+	return []
+}
+
+/**
+ * Executes the next effect in dependency order (using closures)
+ * Finds an effect with in-degree 0 and executes it
+ * @returns The return value of the executed effect, or null if batch is complete
+ */
+function executeNext(): any {
+	// Find an effect with in-degree 0 (no dependencies in batch that haven't executed)
+	let nextEffect: ScopedCallback | null = null
+	let nextRoot: Function | null = null
+
+	// First, try to find an effect with in-degree 0
+	// batchQueue.all is the todo list - effects that need to be executed
+	// Effects can be added multiple times through different routes, and can be re-executed
+	// if triggered again after execution
+	for (const [root, effect] of batchQueue.all) {
+		const inDegree = computeInDegreeInBatch(root, batchQueue.all, batchQueue.executed)
+		if (inDegree === 0) {
+			nextEffect = effect
+			nextRoot = root
+			break
+		}
+	}
+
+	// If no effect has in-degree 0, check if all dependencies have already executed
+	// This can happen when effects are created inside other effects
+	// Also exclude the currently executing effect (active effect) from blocking
+	if (!nextEffect) {
+		const activeEffect = getActiveEffect()
+		const activeRoot = activeEffect ? getRoot(activeEffect) : null
+
+		for (const [root, effect] of batchQueue.all) {
+			const causes = causesClosure.get(root)
+			if (causes) {
+				let allCausesExecuted = true
+				for (const causeRoot of causes) {
+					// Don't count the active effect as blocking
+					if (
+						batchQueue.all.has(causeRoot) &&
+						!batchQueue.executed.has(causeRoot) &&
+						causeRoot !== activeRoot
+					) {
+						allCausesExecuted = false
+						break
+					}
+				}
+				if (allCausesExecuted) {
+					// All dependencies have executed (or are the currently executing effect), so this effect is ready
+					nextEffect = effect
+					nextRoot = root
+					break
+				}
+			} else {
+				// No dependencies at all, so it's ready
+				nextEffect = effect
+				nextRoot = root
+				break
+			}
+		}
+	}
+
+	if (!nextEffect) {
+		// No effect with in-degree 0 - there must be a cycle
+		// If all effects have dependencies, it means there's a circular dependency
+		if (batchQueue.all.size > 0) {
+			let cycle = getCyclePath(batchQueue)
+			// If we couldn't find a cycle path using direct edges, try using closures
+			// (transitive relationships) - if all effects have in-degree > 0, there must be a cycle
+			if (cycle.length === 0) {
+				// Try to find a cycle using consequencesClosure (transitive relationships)
+				// Note: Self-loops are ignored - we only look for cycles between different effects
+				for (const [root] of batchQueue.all) {
+					const consequences = consequencesClosure.get(root)
+					if (consequences) {
+						// Check if any consequence in the batch also has root as a consequence
+						for (const consequence of consequences) {
+							// Skip self-loops - they are ignored
+							if (consequence === root) continue
+							if (batchQueue.all.has(consequence)) {
+								const consequenceConsequences = consequencesClosure.get(consequence)
+								if (consequenceConsequences?.has(root)) {
+									// Found cycle: root -> consequence -> root
+									cycle = [root, consequence, root]
+									break
+								}
+							}
+						}
+						if (cycle.length > 0) break
+					}
+				}
+			}
+			const cycleMessage =
+				cycle.length > 0
+					? `Cycle detected: ${cycle.map((r) => r.name || '<anonymous>').join(' → ')}`
+					: 'Cycle detected in effect batch - all effects have dependencies that prevent execution'
+
+			const cycleHandling = options.cycleHandling
+			switch (cycleHandling) {
+				case 'throw':
+					throw new ReactiveError(`[reactive] ${cycleMessage}`)
+				case 'warn': {
+					options.warn(`[reactive] ${cycleMessage}`)
+					// Break the cycle by executing one effect anyway
+					const firstEffect = batchQueue.all.values().next().value
+					if (firstEffect) {
+						const firstRoot = getRoot(firstEffect)
+						batchQueue.all.delete(firstRoot)
+						return firstEffect()
+					}
+					break
+				}
+				case 'break': {
+					// Silently break cycle
+					const firstEffect2 = batchQueue.all.values().next().value
+					if (firstEffect2) {
+						const firstRoot2 = getRoot(firstEffect2)
+						batchQueue.all.delete(firstRoot2)
+						return firstEffect2()
+					}
+					break
+				}
+			}
+		}
+		return null // Batch complete
+	}
+
+	// Execute the effect
+	const result = nextEffect()
+
+	// Mark as executed and remove from batch
+	batchQueue.executed.add(nextRoot)
+	batchQueue.all.delete(nextRoot)
+
+	return result
+}
+
 // Track which sub-effects have been executed to prevent infinite loops
 // These are all the effects triggered under `activeEffect` and all their sub-effects
 export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'immediate') {
 	if (!Array.isArray(effect)) effect = [effect]
 	const roots = effect.map(getRoot)
 
-	if (batchedEffects) {
+	if (batchQueue) {
+		// Nested batch - add to existing
 		options?.chain(roots, getRoot(getActiveEffect()))
-		for (let i = 0; i < effect.length; i++) batchedEffects.set(roots[i], effect[i])
-		if (immediate)
-			for (let i = 0; i < effect.length; i++)
+		const caller = getActiveEffect()
+		for (let i = 0; i < effect.length; i++) {
+			addToBatch(effect[i], caller, immediate === 'immediate')
+		}
+		if (immediate) {
+			// Execute immediately (before batch returns)
+			for (let i = 0; i < effect.length; i++) {
 				try {
 					effect[i]()
 				} finally {
-					batchedEffects.delete(roots[i])
+					const root = getRoot(effect[i])
+					batchQueue.all.delete(root)
+					batchQueue.executed.add(root)
 				}
+			}
+		}
+		// Otherwise, effects will be picked up in next executeNext() call
 	} else {
+		// New batch - initialize
 		options.beginChain(roots)
-		const runEffects: any[] = []
-		batchedEffects = new Map<Function, ScopedCallback>(roots.map((root, i) => [root, effect[i]]))
-		const firstReturn: { value?: any } = {}
-		try {
-			while (batchedEffects.size) {
-				if (runEffects.length > options.maxEffectChain) {
-					switch (options.maxEffectReaction) {
-						case 'throw':
-							throw new ReactiveError('[reactive] Max effect chain reached')
-						case 'debug':
-							// biome-ignore lint/suspicious/noDebugger: This is the whole point here
-							debugger
-							break
-						case 'warn':
-							options.warn('[reactive] Max effect chain reached')
-							break
+		batchQueue = {
+			all: new Map(),
+			executed: new Set(),
+		}
+
+		// Add initial effects
+		const caller = getActiveEffect()
+		for (let i = 0; i < effect.length; i++) {
+			addToBatch(effect[i], caller, immediate === 'immediate')
+		}
+
+		if (immediate) {
+			// Execute immediately (before batch returns)
+			try {
+				for (let i = 0; i < effect.length; i++) {
+					try {
+						effect[i]()
+					} finally {
+						const root = getRoot(effect[i])
+						batchQueue.all.delete(root)
+						batchQueue.executed.add(root)
 					}
 				}
-				const [root, effect] = batchedEffects.entries().next().value!
-				runEffects.push(root)
-				const rv = effect()
-				if (!('value' in firstReturn)) firstReturn.value = rv
-				batchedEffects.delete(root)
+				// After immediate execution, execute any effects that were triggered during execution
+				// This is important for @atomic decorator - effects triggered inside should still run
+				const runEffects: any[] = []
+				const firstReturn: { value?: any } = {}
+				while (batchQueue.all.size > 0) {
+					if (runEffects.length > options.maxEffectChain) {
+						switch (options.maxEffectReaction) {
+							case 'throw':
+								throw new ReactiveError('[reactive] Max effect chain reached')
+							case 'debug':
+								// biome-ignore lint/suspicious/noDebugger: This is the whole point here
+								debugger
+								break
+							case 'warn':
+								options.warn('[reactive] Max effect chain reached')
+								break
+						}
+					}
+					if (!batchQueue || batchQueue.all.size === 0) break
+					const rv = executeNext()
+					// If executeNext() returned null but batch is not empty, it means a cycle was detected
+					// and an error was thrown, so we won't reach here
+					if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
+				}
+				const cleanups = Array.from(batchCleanups)
+				batchCleanups.clear()
+				for (const cleanup of cleanups) cleanup()
+				return firstReturn.value
+			} finally {
+				batchQueue = undefined
+				options.endChain()
 			}
-			const cleanups = Array.from(batchCleanups)
-			batchCleanups.clear()
-			for (const cleanup of cleanups) cleanup()
-			return firstReturn.value
-		} finally {
-			batchedEffects = undefined
-			options.endChain()
+		} else {
+			// Execute in dependency order
+			const runEffects: any[] = []
+			const firstReturn: { value?: any } = {}
+			try {
+				while (batchQueue.all.size > 0) {
+					if (runEffects.length > options.maxEffectChain) {
+						switch (options.maxEffectReaction) {
+							case 'throw':
+								throw new ReactiveError('[reactive] Max effect chain reached')
+							case 'debug':
+								// biome-ignore lint/suspicious/noDebugger: This is the whole point here
+								debugger
+								break
+							case 'warn':
+								options.warn('[reactive] Max effect chain reached')
+								break
+						}
+					}
+					const rv = executeNext()
+					// executeNext() returns null when batch is complete or cycle detected (throws error)
+					// But functions can legitimately return null, so we check batchQueue.all.size instead
+					if (batchQueue.all.size === 0) {
+						// Batch complete
+						break
+					}
+					// If executeNext() returned null but batch is not empty, it means a cycle was detected
+					// and an error was thrown, so we won't reach here
+					if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
+					// Track executed effect root for maxEffectChain check
+					// Note: executeNext() already removed it from batchQueue, so we track by count
+				}
+				const cleanups = Array.from(batchCleanups)
+				batchCleanups.clear()
+				for (const cleanup of cleanups) cleanup()
+				return firstReturn.value
+			} finally {
+				batchQueue = undefined
+				options.endChain()
+			}
 		}
 	}
 }
@@ -327,6 +869,8 @@ export function effect(
 			runningPromise = null
 		}
 		cleanup?.()
+		// Clean up dependency graph edges
+		cleanupEffectFromGraph(runEffect)
 		fr.unregister(stopEffect)
 	}
 	if (isRootEffect) {
@@ -432,7 +976,12 @@ export function biDi<T>(
 	)
 	return atomic((value: T) => {
 		set(value)
-		if (!batchedEffects.has(root)) options.warn('Value change has not triggered an effect')
-		batchedEffects.delete(root)
+		if (!batchQueue?.all.has(root)) {
+			options.warn('Value change has not triggered an effect')
+		} else {
+			// Remove the effect from the batch queue so it doesn't execute
+			// This prevents circular updates in bidirectional bindings
+			batchQueue.all.delete(root)
+		}
 	})
 }

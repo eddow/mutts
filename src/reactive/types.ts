@@ -206,6 +206,14 @@ export const options = {
 	 */
 	maxEffectReaction: 'throw' as 'throw' | 'debug' | 'warn',
 	/**
+	 * How to handle cycles detected in effect batches
+	 * - 'throw': Throw an error with cycle information (default, recommended for development)
+	 * - 'warn': Log a warning and break the cycle by executing one effect
+	 * - 'break': Silently break the cycle by executing one effect (recommended for production)
+	 * @default 'throw'
+	 */
+	cycleHandling: 'throw' as 'throw' | 'warn' | 'break',
+	/**
 	 * Maximum depth for deep watching traversal
 	 * Used to prevent infinite recursion in circular references
 	 * @default 100
