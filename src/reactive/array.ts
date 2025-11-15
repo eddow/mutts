@@ -80,17 +80,32 @@ export class ReactiveBaseArray {
 
 	indexOf(searchElement: any, fromIndex?: number): number {
 		dependant(this)
-		return this[native].indexOf(unwrap(searchElement), fromIndex)
+		const unwrappedSearch = unwrap(searchElement)
+		// Check both wrapped and unwrapped versions since array may contain either
+		const index = this[native].indexOf(unwrappedSearch, fromIndex)
+		if (index !== -1) return index
+		// If not found with unwrapped, try with wrapped (in case array contains wrapped version)
+		return this[native].indexOf(searchElement, fromIndex)
 	}
 
 	lastIndexOf(searchElement: any, fromIndex?: number): number {
 		dependant(this)
-		return this[native].lastIndexOf(unwrap(searchElement), fromIndex)
+		const unwrappedSearch = unwrap(searchElement)
+		// Check both wrapped and unwrapped versions since array may contain either
+		const index = this[native].lastIndexOf(unwrappedSearch, fromIndex)
+		if (index !== -1) return index
+		// If not found with unwrapped, try with wrapped (in case array contains wrapped version)
+		return this[native].lastIndexOf(searchElement, fromIndex)
 	}
 
 	includes(searchElement: any, fromIndex?: number): boolean {
 		dependant(this)
-		return this[native].includes(unwrap(searchElement), fromIndex)
+		const unwrappedSearch = unwrap(searchElement)
+		// Check both wrapped and unwrapped versions since array may contain either
+		return (
+			this[native].includes(unwrappedSearch, fromIndex) ||
+			this[native].includes(searchElement, fromIndex)
+		)
 	}
 
 	find(predicate: (this: any, value: any, index: number, obj: any[]) => boolean, thisArg?: any): any
@@ -112,7 +127,7 @@ export class ReactiveBaseArray {
 			)
 		}
 		const fromIndex = typeof thisArg === 'number' ? thisArg : undefined
-		const index = this[native].indexOf(unwrap(predicateOrElement), fromIndex)
+		const index = this[native].indexOf(predicateOrElement, fromIndex)
 		if (index === -1) return undefined
 		return reactive(this[native][index])
 	}
@@ -137,7 +152,7 @@ export class ReactiveBaseArray {
 			)
 		}
 		const fromIndex = typeof thisArg === 'number' ? thisArg : undefined
-		return this[native].indexOf(unwrap(predicateOrElement), fromIndex)
+		return this[native].indexOf(predicateOrElement, fromIndex)
 	}
 
 	flat(): any[] {
@@ -212,19 +227,27 @@ export class ReactiveBaseArray {
 
 	forEach(callbackfn: (value: any, index: number, array: any[]) => void, thisArg?: any): void {
 		dependant(this)
-		this[native].forEach(callbackfn as any, thisArg)
+		this[native].forEach((value, index, array) => {
+			callbackfn.call(thisArg, reactive(value), index, array)
+		})
 	}
 
 	// TODO: re-implement for fun dependencies? (eg - every only check the first ones until it find some),
 	// no need to make it dependant on indexes after the found one
 	every(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): boolean {
 		dependant(this)
-		return this[native].every(callbackfn as any, thisArg)
+		return this[native].every(
+			(value, index, array) => callbackfn.call(thisArg, reactive(value), index, array),
+			thisArg
+		)
 	}
 
 	some(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): boolean {
 		dependant(this)
-		return this[native].some(callbackfn as any, thisArg)
+		return this[native].some(
+			(value, index, array) => callbackfn.call(thisArg, reactive(value), index, array),
+			thisArg
+		)
 	}
 }
 function* index(i: number, { length = true } = {}): IterableIterator<number | 'length'> {

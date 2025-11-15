@@ -188,6 +188,12 @@ export const options = {
 	 */
 	touched: (obj: any, evolution: Evolution, props?: any[], deps?: Set<ScopedCallback>) => {},
 	/**
+	 * Debug purpose: called when an effect is skipped because it's already running
+	 * @param effect - The effect that is already running
+	 * @param runningChain - The array of effects from the detected one to the currently running one
+	 */
+	skipRunningEffect: (effect: ScopedCallback, runningChain: ScopedCallback[]) => {},
+	/**
 	 * Debug purpose: maximum effect chain (like call stack max depth)
 	 * Used to prevent infinite loops
 	 * @default 100

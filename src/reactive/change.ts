@@ -1,4 +1,5 @@
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
+import { isRunning } from './effect-context'
 import { batch, effectTrackers } from './effects'
 import { unwrap } from './proxy-state'
 import { watchers } from './tracking'
@@ -41,6 +42,11 @@ export function collectEffects(
 			const deps = objectWatchers.get(key)
 			if (deps)
 				for (const effect of deps) {
+					const runningChain = isRunning(effect)
+					if (runningChain) {
+						options.skipRunningEffect(effect, runningChain)
+						continue
+					}
 					effects.add(effect)
 					const trackers = effectTrackers.get(effect)
 					if (trackers) {

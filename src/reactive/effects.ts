@@ -3,7 +3,6 @@ import {
 	captureEffectStack,
 	effectStack,
 	getActiveEffect,
-	getParentEffect,
 	withEffectContext,
 	withEffectStack,
 } from './effect-context'
@@ -27,7 +26,7 @@ import { ensureZoneHooked } from './zone'
 
 type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
 
-export { captureEffectStack, withEffectStack, getActiveEffect, getParentEffect, effectStack }
+export { captureEffectStack, withEffectStack, getActiveEffect, effectStack }
 /**
  * Registers a debug callback that is called when the current effect is triggered by a dependency change
  *
