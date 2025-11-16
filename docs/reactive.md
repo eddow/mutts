@@ -7,22 +7,22 @@
   - [5-Minute Quick Start](#5-minute-quick-start)
 - [Core API](#core-api)
 - [Effect System](#effect-system)
+- [Atomic Operations](#atomic-operations)
+- [Advanced Effects](#advanced-effects)
 - [Evolution Tracking](#evolution-tracking)
 - [Prototype Chains and Pure Objects](#prototype-chains-and-pure-objects)
 - [Recursive Touching](#recursive-touching)
   - [Why Not Deep Watching?](#why-not-deep-watching)
 - [Collections](#collections)
-- [Register](#register)
+  - [Register](#register)
 - [Class Reactivity](#class-reactivity)
 - [Non-Reactive System](#non-reactive-system)
 - [Array Mapping](#array-mapping)
 - [Projection](#projection)
 - [Record Organization](#record-organization)
 - [Memoization](#memoization)
-- [Atomic Operations](#atomic-operations)
-- [Advanced Patterns](#advanced-patterns)
 - [Debugging and Development](#debugging-and-development)
-- [API Reference](#api-reference)
+  - [Cycle Detection](#cycle-detection)
 
 ## Introduction
 
@@ -2669,4 +2669,116 @@ class Example {
 ### Working with `mapped()`
 
 Pair `memoize()` with [`mapped()`](#mapped) to keep derived array elements stable across reorders (see [Identity-preserving mapped arrays](#identity-preserving-mapped-arrays)). Memoizing the mapper ensures each input object is processed at most once and its derived state persists while the input reference lives.
+
+## Debugging and Development
+
+### Cycle Detection
+
+The reactive system automatically detects circular dependencies between effects. When one effect triggers another effect that eventually triggers the first effect again, a cycle is detected.
+
+#### Cycle Detection Behavior
+
+By default, cycles are detected and an error is thrown. You can configure the behavior using `reactiveOptions.cycleHandling`:
+
+```typescript
+import { reactiveOptions } from 'mutts/reactive'
+
+// Options: 'throw' (default), 'warn', or 'break'
+reactiveOptions.cycleHandling = 'warn' // Warn instead of throwing
+reactiveOptions.cycleHandling = 'break' // Silently break the cycle
+```
+
+**Cycle handling modes:**
+
+- **`'throw'`** (default): Throws a `ReactiveError` with a detailed cycle path when a cycle is detected
+- **`'warn'`**: Logs a warning message with the cycle path but continues execution (breaks the cycle)
+- **`'break'`**: Silently breaks the cycle without any message
+
+#### Cycle Error Messages
+
+When a cycle is detected, the error message includes the full cycle path showing which effects form the cycle:
+
+```typescript
+const state = reactive({ a: 0, b: 0, c: 0 })
+
+effect(() => {
+  state.b = state.a + 1 // Effect A
+})
+
+effect(() => {
+  state.c = state.b + 1 // Effect B
+})
+
+// This will throw with a detailed cycle path
+try {
+  effect(() => {
+    state.a = state.c + 1 // Effect C - creates cycle: A → B → C → A
+  })
+} catch (e) {
+  console.error(e.message)
+  // "[reactive] Cycle detected: effectA → effectB → effectC → effectA"
+}
+```
+
+The cycle path shows the sequence of effects that form the circular dependency, making it easier to identify and fix the issue.
+
+#### Common Cycle Patterns
+
+**Direct cycle:**
+```typescript
+const state = reactive({ a: 0, b: 0 })
+
+effect(() => {
+  state.b = state.a + 1 // Effect A
+})
+
+effect(() => {
+  state.a = state.b + 1 // Effect B - creates cycle: A → B → A
+})
+```
+
+**Indirect cycle:**
+```typescript
+const state = reactive({ a: 0, b: 0, c: 0 })
+
+effect(() => {
+  state.b = state.a + 1 // Effect A
+})
+
+effect(() => {
+  state.c = state.b + 1 // Effect B
+})
+
+effect(() => {
+  state.a = state.c + 1 // Effect C - creates cycle: A → B → C → A
+})
+```
+
+#### Preventing Cycles
+
+To avoid cycles, consider:
+
+1. **Separate read and write effects**: Don't have an effect that both reads and writes the same reactive properties
+2. **Use `untracked()`**: For operations that shouldn't create dependencies
+3. **Use `atomic()`**: To batch operations and prevent intermediate triggers
+4. **Restructure logic**: Break circular dependencies by introducing intermediate state or computed values
+
+**Example - Using `untracked()` to break cycles:**
+```typescript
+const state = reactive({ count: 0 })
+
+effect(() => {
+  // Read count
+  const current = state.count
+  
+  // Write to count without creating a dependency cycle
+  untracked(() => {
+    if (current < 10) {
+      state.count = current + 1
+    }
+  })
+})
+```
+
+**Note:** Self-loops (an effect reading and writing the same property, like `obj.prop++`) are automatically ignored and do not create dependency relationships or cycles.
 

@@ -138,7 +138,8 @@ function addGraphEdge(callerRoot: Function, targetRoot: Function) {
 	// Note: Self-loops (U→U) are not added to closures - if an effect appears in its own closure,
 	// it means there's an indirect cycle that should be detected
 
-	// Skip self-loops - they don't create closure entries
+	// Self-loops are explicitly ignored - an effect reading and writing the same property
+	// (e.g., obj.prop++) should not create a dependency relationship or appear in closures
 	if (callerRoot === targetRoot) {
 		return
 	}
@@ -191,12 +192,16 @@ function addGraphEdge(callerRoot: Function, targetRoot: Function) {
 
 /**
  * Removes all edges involving the given effect from the dependency graph
- * Also cleans up transitive closures
+ * Also cleans up transitive closures by propagating cleanup to all affected effects
  * Called when an effect is stopped/cleaned up
  * @param effect - The effect being cleaned up
  */
 function cleanupEffectFromGraph(effect: ScopedCallback) {
 	const root = getRoot(effect)
+
+	// Get closures before removing direct edges (needed for propagation)
+	const rootCauses = causesClosure.get(root)
+	const rootConsequences = consequencesClosure.get(root)
 
 	// Remove from effectTriggers (outgoing edges)
 	const triggers = effectTriggers.get(root)
@@ -220,19 +225,100 @@ function cleanupEffectFromGraph(effect: ScopedCallback) {
 		effectTriggeredBy.delete(root)
 	}
 
-	// Clean up closures
-	// Note: Full cleanup of closures is expensive, but effects are rarely cleaned up
-	// For now, we just delete the closures for this effect
+	// Propagate closure cleanup to all affected effects
+	// When removing B from A → B → C:
+	// - Remove B from causesClosure(C) and consequencesClosure(A)
+	// - For each X in causesClosure(B): remove C from consequencesClosure(X) if B was the only path
+	// - For each Y in consequencesClosure(B): remove A from causesClosure(Y) if B was the only path
+	// - Remove transitive relationships that depended on B
+
+	if (rootCauses) {
+		// For each X that triggers root: remove root and its consequences from X's consequences
+		for (const causeRoot of rootCauses) {
+			const causeConsequences = consequencesClosure.get(causeRoot)
+			if (causeConsequences) {
+				// Remove root itself
+				causeConsequences.delete(root)
+				// Remove all consequences of root (they're no longer reachable through root)
+				if (rootConsequences) {
+					for (const consequence of rootConsequences) {
+						causeConsequences.delete(consequence)
+					}
+				}
+			}
+		}
+	}
+
+	if (rootConsequences) {
+		// For each Y that root triggers: remove root and its causes from Y's causes
+		for (const consequenceRoot of rootConsequences) {
+			const consequenceCauses = causesClosure.get(consequenceRoot)
+			if (consequenceCauses) {
+				// Remove root itself
+				consequenceCauses.delete(root)
+				// Remove all causes of root (they no longer reach consequence through root)
+				if (rootCauses) {
+					for (const cause of rootCauses) {
+						consequenceCauses.delete(cause)
+					}
+				}
+			}
+		}
+	}
+
+	// Cross-product cleanup: for each X in causesClosure(B) and Y in consequencesClosure(B),
+	// remove X→Y if B was the only path connecting them
+	if (rootCauses && rootConsequences) {
+		for (const x of rootCauses) {
+			const xConsequences = consequencesClosure.get(x)
+			if (xConsequences) {
+				for (const y of rootConsequences) {
+					// Check if there's still a path from X to Y without going through root
+					// If root was the only path, we need to remove X→Y
+					// We can check this by seeing if there's a direct edge or another path
+					const xTriggers = effectTriggers.get(x)
+					const hasDirectEdge = xTriggers?.has(y)
+
+					// If no direct edge exists, check if there's another transitive path
+					// by checking if Y is still in xConsequences through other means
+					// This is a simplified check - in a perfect world we'd do full path analysis
+					// but for cleanup purposes, if root was in the closure, we conservatively
+					// remove the transitive relationship
+					if (!hasDirectEdge) {
+						// Check if there's another path: look for intermediate nodes
+						let hasOtherPath = false
+						if (xTriggers) {
+							for (const intermediate of xTriggers) {
+								if (intermediate !== root) {
+									const intermediateConsequences = consequencesClosure.get(intermediate)
+									if (intermediateConsequences?.has(y)) {
+										hasOtherPath = true
+										break
+									}
+								}
+							}
+						}
+						// If no other path exists, remove the transitive relationship
+						if (!hasOtherPath) {
+							xConsequences.delete(y)
+							const yCauses = causesClosure.get(y)
+							yCauses?.delete(x)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Finally, delete the closures for this effect
 	causesClosure.delete(root)
 	consequencesClosure.delete(root)
 }
 
 // Batch queue structure - simplified, using closures for ordering
 interface BatchQueue {
-	// All effects in the current batch
+	// All effects in the current batch that still need to be executed (todos)
 	all: Map<Function, ScopedCallback> // root → effect
-	// Effects that have been executed in this batch
-	executed: Set<Function> // root
 }
 
 // Track currently executing effects to prevent re-execution
@@ -244,14 +330,15 @@ const batchCleanups = new Set<ScopedCallback>()
  * Computes the in-degree (number of dependencies) for an effect in the current batch
  * Uses causesClosure to count all effects (directly or indirectly) that trigger this effect
  * @param root - Root function of the effect
- * @param batchEffects - Map of all effects in current batch
- * @param executed - Set of effects that have been executed
+ * @param batchEffects - Map of all effects in current batch (todos - effects that still need execution)
  * @returns Number of effects in batch that trigger this effect (directly or indirectly)
+ *
+ * TODO: Optimization - For large graphs with small batches, iterating over all causes in the closure
+ * can be expensive. Consider maintaining a separate "batch causes" set or caching in-degrees.
  */
 function computeInDegreeInBatch(
 	root: Function,
-	batchEffects: Map<Function, ScopedCallback>,
-	_executed: Set<Function>
+	batchEffects: Map<Function, ScopedCallback>
 ): number {
 	let inDegree = 0
 	const activeEffect = getActiveEffect()
@@ -259,16 +346,15 @@ function computeInDegreeInBatch(
 
 	// Count effects in batch that trigger this effect (directly or indirectly)
 	// Using causesClosure which contains all transitive causes
+	// Note: batchEffects only contains effects that still need execution (todos),
+	// so we don't need to check if causes have been executed - they're not in the map if executed
 	const causes = causesClosure.get(root)
 	if (causes) {
 		for (const causeRoot of causes) {
-			// Only count if it's in the batch
+			// Only count if it's in the batch (still needs execution)
 			// BUT: don't count the currently executing effect (active effect)
 			// This handles the case where an effect is triggered during another effect's execution
-			// Note: We don't check if the cause has been executed - some batches might cause
-			// the same effect through different routes, and we want to allow that
-			// Note: Self-loops should not appear in closures - if they do, it means an indirect cycle
-			// But we still check to be safe
+			// Note: Self-loops are ignored - they should not appear in closures, but we check to be safe
 			if (batchEffects.has(causeRoot) && causeRoot !== activeRoot && causeRoot !== root) {
 				inDegree++
 			}
@@ -279,13 +365,76 @@ function computeInDegreeInBatch(
 }
 
 /**
+ * Finds a path from startRoot to endRoot in the dependency graph
+ * Uses DFS to find the path through direct edges
+ * @param startRoot - Starting effect root
+ * @param endRoot - Target effect root
+ * @param visited - Set of visited nodes (for recursion)
+ * @param path - Current path being explored
+ * @returns Path from startRoot to endRoot, or empty array if no path exists
+ */
+function findPath(
+	startRoot: Function,
+	endRoot: Function,
+	visited: Set<Function> = new Set(),
+	path: Function[] = []
+): Function[] {
+	if (startRoot === endRoot) {
+		return [...path, endRoot]
+	}
+
+	if (visited.has(startRoot)) {
+		return []
+	}
+
+	visited.add(startRoot)
+	const newPath = [...path, startRoot]
+
+	const triggers = effectTriggers.get(startRoot)
+	if (triggers) {
+		for (const targetRoot of triggers) {
+			const result = findPath(targetRoot, endRoot, visited, newPath)
+			if (result.length > 0) {
+				return result
+			}
+		}
+	}
+
+	return []
+}
+
+/**
+ * Gets the cycle path when adding an edge would create a cycle
+ * @param callerRoot - Root of the effect that triggers
+ * @param targetRoot - Root of the effect being triggered
+ * @returns Array of effect roots forming the cycle, or empty array if no cycle
+ */
+function getCyclePathForEdge(callerRoot: Function, targetRoot: Function): Function[] {
+	// Find path from targetRoot back to callerRoot (this is the existing path)
+	// Then adding callerRoot -> targetRoot completes the cycle
+	const path = findPath(targetRoot, callerRoot)
+	if (path.length > 0) {
+		// The cycle is: callerRoot -> targetRoot -> ... -> callerRoot
+		return [callerRoot, ...path]
+	}
+	return []
+}
+
+/**
  * Checks if adding an edge would create a cycle
  * Uses causesClosure to check if callerRoot is already a cause of targetRoot
+ * Self-loops (callerRoot === targetRoot) are explicitly ignored and return false
  * @param callerRoot - Root of the effect that triggers
  * @param targetRoot - Root of the effect being triggered
  * @returns true if adding this edge would create a cycle
  */
 function wouldCreateCycle(callerRoot: Function, targetRoot: Function): boolean {
+	// Self-loops are explicitly ignored - an effect reading and writing the same property
+	// (e.g., obj.prop++) should not create a dependency relationship
+	if (callerRoot === targetRoot) {
+		return false
+	}
+
 	// Check if targetRoot already triggers callerRoot (directly or indirectly)
 	// This would create a cycle: callerRoot -> targetRoot -> ... -> callerRoot
 	// Using consequencesClosure: if targetRoot triggers callerRoot, then callerRoot is in consequencesClosure(targetRoot)
@@ -320,17 +469,21 @@ function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?:
 		// We check if adding callerRoot -> root would create a cycle
 		// This means checking if root already triggers callerRoot (directly or transitively)
 		if (wouldCreateCycle(callerRoot, root)) {
-			// Cycle detected! Handle according to options
-			const cycleHandling = options.cycleHandling
-			const cycleMessage = `Cycle detected: ${callerRoot.name || '<anonymous>'} → ${root.name || '<anonymous>'} (and back)`
+			// Cycle detected! Get the full cycle path for debugging
+			const cyclePath = getCyclePathForEdge(callerRoot, root)
+			const cycleMessage =
+				cyclePath.length > 0
+					? `Cycle detected: ${cyclePath.map((r) => r.name || '<anonymous>').join(' → ')}`
+					: `Cycle detected: ${callerRoot.name || '<anonymous>'} → ${root.name || '<anonymous>'} (and back)`
 
+			const cycleHandling = options.cycleHandling
 			switch (cycleHandling) {
 				case 'throw':
 					// Remove from batch before throwing
 					batchQueue.all.delete(root)
-					throw new ReactiveError(`[reactive] ${cycleMessage}`)
+					throw new ReactiveError(`[reactive] ${cycleMessage}`, cyclePath)
 				case 'warn':
-					options.warn(`[reactive] ${cycleMessage}`)
+					options.warn(`[reactive] ${cycleMessage}`, cyclePath)
 					// Don't add the edge, break the cycle
 					batchQueue.all.delete(root)
 					return
@@ -428,53 +581,16 @@ function executeNext(): any {
 	let nextEffect: ScopedCallback | null = null
 	let nextRoot: Function | null = null
 
-	// First, try to find an effect with in-degree 0
-	// batchQueue.all is the todo list - effects that need to be executed
-	// Effects can be added multiple times through different routes, and can be re-executed
-	// if triggered again after execution
+	// Find an effect with in-degree 0 (no dependencies in batch that still need execution)
+	// batchQueue.all is the todo list - effects that still need to be executed
+	// Effects are removed from batchQueue.all when they execute, so we only need to check
+	// if causes are in the batch (not if they've been executed)
 	for (const [root, effect] of batchQueue.all) {
-		const inDegree = computeInDegreeInBatch(root, batchQueue.all, batchQueue.executed)
+		const inDegree = computeInDegreeInBatch(root, batchQueue.all)
 		if (inDegree === 0) {
 			nextEffect = effect
 			nextRoot = root
 			break
-		}
-	}
-
-	// If no effect has in-degree 0, check if all dependencies have already executed
-	// This can happen when effects are created inside other effects
-	// Also exclude the currently executing effect (active effect) from blocking
-	if (!nextEffect) {
-		const activeEffect = getActiveEffect()
-		const activeRoot = activeEffect ? getRoot(activeEffect) : null
-
-		for (const [root, effect] of batchQueue.all) {
-			const causes = causesClosure.get(root)
-			if (causes) {
-				let allCausesExecuted = true
-				for (const causeRoot of causes) {
-					// Don't count the active effect as blocking
-					if (
-						batchQueue.all.has(causeRoot) &&
-						!batchQueue.executed.has(causeRoot) &&
-						causeRoot !== activeRoot
-					) {
-						allCausesExecuted = false
-						break
-					}
-				}
-				if (allCausesExecuted) {
-					// All dependencies have executed (or are the currently executing effect), so this effect is ready
-					nextEffect = effect
-					nextRoot = root
-					break
-				}
-			} else {
-				// No dependencies at all, so it's ready
-				nextEffect = effect
-				nextRoot = root
-				break
-			}
 		}
 	}
 
@@ -546,8 +662,7 @@ function executeNext(): any {
 	// Execute the effect
 	const result = nextEffect()
 
-	// Mark as executed and remove from batch
-	batchQueue.executed.add(nextRoot)
+	// Remove from batch (it's been executed, so no longer a todo)
 	batchQueue.all.delete(nextRoot)
 
 	return result
@@ -574,7 +689,6 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 				} finally {
 					const root = getRoot(effect[i])
 					batchQueue.all.delete(root)
-					batchQueue.executed.add(root)
 				}
 			}
 		}
@@ -584,7 +698,6 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 		options.beginChain(roots)
 		batchQueue = {
 			all: new Map(),
-			executed: new Set(),
 		}
 
 		// Add initial effects
@@ -602,7 +715,6 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 					} finally {
 						const root = getRoot(effect[i])
 						batchQueue.all.delete(root)
-						batchQueue.executed.add(root)
 					}
 				}
 				// After immediate execution, execute any effects that were triggered during execution

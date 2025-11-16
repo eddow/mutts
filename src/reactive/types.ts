@@ -142,7 +142,10 @@ const rootFunction = Symbol('root-function')
  * Error class for reactive system errors
  */
 export class ReactiveError extends Error {
-	constructor(message: string) {
+	constructor(
+		message: string,
+		public debugInfo?: any
+	) {
 		super(message)
 		this.name = 'ReactiveError'
 	}

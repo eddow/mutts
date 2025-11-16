@@ -157,7 +157,7 @@ export class IterableWeakSet<K extends WeakKey> implements Set<K> {
 			})()
 		)
 	}
-	intersection<U>(other: ReadonlySetLike<U>): Set<K & U> {
+	intersection<U /**/>(other: ReadonlySetLike<U>): Set<K & U> {
 		const that = this
 		return new Set(
 			(function* () {
