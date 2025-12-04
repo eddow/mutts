@@ -1,5 +1,6 @@
 import { decorator } from '../decorator'
 import { IterableWeakSet } from '../iterableWeak'
+import { isDevtoolsEnabled, registerEffectForDebug } from './debug'
 import {
 	captureEffectStack,
 	effectStack,
@@ -483,7 +484,7 @@ function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?:
 					batchQueue.all.delete(root)
 					throw new ReactiveError(`[reactive] ${cycleMessage}`, cyclePath)
 				case 'warn':
-					options.warn(`[reactive] ${cycleMessage}`, cyclePath)
+					options.warn(`[reactive] ${cycleMessage}`)
 					// Don't add the edge, break the cycle
 					batchQueue.all.delete(root)
 					return
@@ -962,6 +963,10 @@ export function effect(
 	}
 	// Mark the runEffect callback with the original function as its root
 	markWithRoot(runEffect, fn)
+
+	if (isDevtoolsEnabled()) {
+		registerEffectForDebug(runEffect)
+	}
 
 	batch(runEffect, 'immediate')
 

@@ -39,6 +39,16 @@ export {
 	type ScopedCallback,
 } from './types'
 export { isZoneEnabled, setZoneEnabled } from './zone'
+export {
+	buildReactivityGraph,
+	enableDevTools,
+	isDevtoolsEnabled,
+	setEffectName,
+	setObjectName,
+	registerEffectForDebug,
+	registerObjectForDebug,
+} from './debug'
+export type { ReactivityGraph } from './debug'
 
 import { ReactiveArray } from './array'
 import {

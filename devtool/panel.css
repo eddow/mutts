@@ -1,0 +1,72 @@
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f4f4f4;
+  background-color: #0d1117;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: #0d1117;
+  color: #f4f4f4;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid #30363d;
+  background: #161b22;
+  font-size: 0.9rem;
+}
+
+.toolbar label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.75rem;
+  gap: 0.2rem;
+}
+
+.toolbar input,
+.toolbar select,
+.toolbar button {
+  font: inherit;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #30363d;
+  background: #0d1117;
+  color: inherit;
+}
+
+.toolbar button {
+  cursor: pointer;
+  background: #238636;
+  border-color: #2ea043;
+  color: white;
+}
+
+.toolbar #status {
+  margin-left: auto;
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+#graph {
+  flex: 1;
+  position: relative;
+  background: #010409;
+}
+
+.vis-network {
+  width: 100% !important;
+  height: 100% !important;
+  background: transparent;
+}

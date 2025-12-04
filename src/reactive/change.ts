@@ -1,4 +1,6 @@
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
+import { getActiveEffect } from './effect-context'
+import { recordTriggerLink } from './debug'
 import { isRunning } from './effect-context'
 import { batch, effectTrackers } from './effects'
 import { unwrap } from './proxy-state'
@@ -37,6 +39,7 @@ export function collectEffects(
 	objectWatchers: Map<any, Set<ScopedCallback>>,
 	...keyChains: Iterable<any>[]
 ) {
+	const sourceEffect = getActiveEffect()
 	for (const keys of keyChains)
 		for (const key of keys) {
 			const deps = objectWatchers.get(key)
@@ -49,6 +52,7 @@ export function collectEffects(
 					}
 					effects.add(effect)
 					const trackers = effectTrackers.get(effect)
+					recordTriggerLink(sourceEffect, effect, obj, key, evolution)
 					if (trackers) {
 						for (const tracker of trackers) tracker(obj, evolution, key)
 						trackers.delete(effect)

@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "Mutts Reactivity DevTools",
+  "description": "Quick demo panel that draws the Mutts reactivity graph with Cytoscape.",
+  "version": "0.1.0",
+  "devtools_page": "devtools.html",
+  "permissions": []
+}
