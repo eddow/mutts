@@ -75,7 +75,8 @@
   ],
   "scripts": {
     "build:js": "rollup -c",
-    "build": "npm run build:js",
+    "build:devtools": "rollup -c rollup.devtools.config.mjs",
+    "build": "npm run build:js && npm run build:devtools",
     "build:watch": "rollup -c --watch",
     "prepublishOnly": "npm run build",
     "test": "node --expose-gc node_modules/.bin/jest",
@@ -128,12 +129,14 @@
     "@types/jest": "^30.0.0",
     "jest": "^30.0.4",
     "rollup": "^4.52.2",
+    "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-dts": "^6.2.3",
     "rollup-plugin-typescript2": "^0.36.0",
     "ts-jest": "^29.4.0",
     "ts-node": "^10.9.2",
     "tslib": "^2.8.1",
     "tsx": "^4.20.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vis-network": "^9.1.9"
   }
 }

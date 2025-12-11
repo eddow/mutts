@@ -1,7 +1,6 @@
-import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
-import { getActiveEffect } from './effect-context'
 import { recordTriggerLink } from './debug'
-import { isRunning } from './effect-context'
+import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
+import { getActiveEffect, isRunning } from './effect-context'
 import { batch, effectTrackers } from './effects'
 import { unwrap } from './proxy-state'
 import { watchers } from './tracking'
@@ -87,7 +86,7 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 		if (props) collectEffects(obj, evolution, effects, objectWatchers, [allProps], props)
 		else collectEffects(obj, evolution, effects, objectWatchers, objectWatchers.keys())
 		options.touched(obj, evolution, props as any[] | undefined, effects)
-		batch([...effects])
+		batch(Array.from(effects))
 	}
 
 	// Bubble up changes if this object has deep watchers
