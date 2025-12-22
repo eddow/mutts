@@ -36,6 +36,27 @@ export function getRoot<T extends Function | undefined>(fn: T): T {
 	return (fn as any)?.[rootFunction] || fn
 }
 
+// Flag to disable dependency tracking for the current active effect (not globally)
+const trackingDisabledEffects = new WeakSet<ScopedCallback>()
+let globalTrackingDisabled = false
+
+export function getTrackingDisabled(): boolean {
+	const active = getActiveEffect()
+	if (!active) return globalTrackingDisabled
+	return trackingDisabledEffects.has(getRoot(active))
+}
+
+export function setTrackingDisabled(value: boolean): void {
+	const active = getActiveEffect()
+	if (!active) {
+		globalTrackingDisabled = value
+		return
+	}
+	const root = getRoot(active)
+	if (value) trackingDisabledEffects.add(root)
+	else trackingDisabledEffects.delete(root)
+}
+
 /**
  * Marks a property as a dependency of the current effect
  * @param obj - The object containing the property
@@ -44,9 +65,13 @@ export function getRoot<T extends Function | undefined>(fn: T): T {
 export function dependant(obj: any, prop: any = allProps) {
 	obj = unwrap(obj)
 	const currentActiveEffect = getActiveEffect()
-	// Early return if no active effect or invalid prop
-	if (!currentActiveEffect || (typeof prop === 'symbol' && prop !== allProps)) return
+	// Early return if no active effect, tracking disabled, or invalid prop
+	if (!currentActiveEffect || getTrackingDisabled() || (typeof prop === 'symbol' && prop !== allProps)) return
 
+	registerDependency(obj, prop, currentActiveEffect)
+}
+
+function registerDependency(obj: any, prop: any, currentActiveEffect: ScopedCallback) {
 	let objectWatchers = watchers.get(obj)
 	if (!objectWatchers) {
 		objectWatchers = new Map<PropertyKey, Set<ScopedCallback>>()
@@ -58,12 +83,12 @@ export function dependant(obj: any, prop: any = allProps) {
 		objectWatchers.set(prop, deps)
 	}
 	deps.add(currentActiveEffect)
-
+	
 	// Track which reactive objects this effect is watching
-	let effectObjects = effectToReactiveObjects.get(currentActiveEffect)
-	if (!effectObjects) {
-		effectObjects = new Set<object>()
-		effectToReactiveObjects.set(currentActiveEffect, effectObjects)
+	const effectObjects = effectToReactiveObjects.get(currentActiveEffect)
+	if (effectObjects) {
+		effectObjects.add(obj)
+	} else {
+		effectToReactiveObjects.set(currentActiveEffect, new Set([obj]))
 	}
-	effectObjects.add(obj)
 }

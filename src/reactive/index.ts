@@ -6,9 +6,9 @@ export {
 	biDi,
 	effect,
 	getActiveEffect,
+	root,
 	trackEffect,
 	untracked,
-	withEffect,
 } from './effects'
 export { cleanedBy, cleanup, derived, unreactive, watch } from './interface'
 export {

@@ -11,7 +11,8 @@ const isArray = Array.isArray
 Array.isArray = ((value: any) =>
 	isArray(value) ||
 	// biome-ignore lint/suspicious/useIsArray: We are defining it
-	(value instanceof Array &&
+	(value &&
+		typeof value === 'object' &&
 		prototypeForwarding in value &&
 		Array.isArray(value[prototypeForwarding]))) as any
 export class ReactiveBaseArray {

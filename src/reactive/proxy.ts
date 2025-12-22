@@ -10,11 +10,10 @@ import {
 	objectsWithDeepWatchers,
 	removeBackReference,
 } from './deep-watch-state'
-import { withEffect } from './effects'
+import { withEffect } from './effect-context'
 import { absent, isNonReactive } from './non-reactive-state'
 import {
 	getExistingProxy,
-	objectToProxy,
 	proxyToObject,
 	storeProxyRelationship,
 	trackProxyObject,
@@ -30,6 +29,7 @@ import {
 	unreactiveProperties,
 } from './types'
 
+const hasReentry = []
 const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
@@ -38,6 +38,18 @@ const reactiveHandlers = {
 		// Check if this property is marked as unreactive
 		if (unwrappedObj[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
 			return ReflectGet(obj, prop, receiver)
+
+		// Special-case: array wrappers use prototype forwarding + numeric accessors.
+		// With options.instanceMembers=true, inherited reads are normally not tracked, which breaks
+		// reactivity for array indices/length (they appear inherited on the proxy).
+		const isArrayCase =
+			prototypeForwarding in obj &&
+			// biome-ignore lint/suspicious/useIsArray: This is the whole point here
+			obj[prototypeForwarding] instanceof Array &&
+			(typeof prop === 'string' && (prop === 'length' || !Number.isNaN(Number(prop))))
+		if (isArrayCase) {
+			dependant(obj, prop === 'length' ? 'length' : Number(prop))
+		}
 		// Check if property exists and if it's an own property (cached for later use)
 		const hasProp = Reflect.has(receiver, prop)
 		const isOwnProp = hasProp && Object.hasOwn(receiver, prop)
@@ -86,7 +98,7 @@ const reactiveHandlers = {
 		const unwrappedReceiver = unwrap(receiver)
 
 		// Check if this property is marked as unreactive
-		if (unwrappedObj[unreactiveProperties]?.has(prop) || obj !== unwrappedReceiver)
+		if (unwrappedObj[unreactiveProperties]?.has(prop) || unwrappedObj !== unwrappedReceiver)
 			return ReflectSet(obj, prop, value, receiver)
 		// Really specific case for when Array is forwarder, in order to let it manage the reactivity
 		const isArrayCase =
@@ -136,8 +148,12 @@ const reactiveHandlers = {
 		return true
 	},
 	has(obj: any, prop: PropertyKey): boolean {
+		if (hasReentry.includes(obj)) debugger
+		hasReentry.push(obj)
 		dependant(obj, prop)
-		return Reflect.has(obj, prop)
+		const rv = Reflect.has(obj, prop)
+		hasReentry.pop()
+		return rv
 	},
 	deleteProperty(obj: any, prop: PropertyKey): boolean {
 		if (!Object.hasOwn(obj, prop)) return false

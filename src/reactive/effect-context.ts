@@ -69,7 +69,16 @@ export function getActiveEffect() {
 	return stack[0]
 }
 
-export function withEffectContext<T>(effect: ScopedCallback | undefined, fn: () => T): T {
+
+/**
+ * Executes a function with a specific effect context
+ * @param effect - The effect to use as context
+ * @param fn - The function to execute
+ * @param keepParent - Whether to keep the parent effect context
+ * @returns The result of the function
+ */
+export function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T): T {
+	if (getRoot(effect) === getRoot(getActiveEffect())) return fn()
 	stack.unshift(effect)
 	try {
 		return fn()

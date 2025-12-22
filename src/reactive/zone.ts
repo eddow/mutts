@@ -4,7 +4,7 @@
  * Automatically preserves effect context across async boundaries:
  * - Promise methods: .then(), .catch(), .finally()
  * - Timers: setTimeout(), setInterval()
- * - Animation: requestAnimationFrame() (if available)
+ * - Animation: requestAnimationFrame() (if available) - runs in untracked context
  * - Microtasks: queueMicrotask() (if available)
  *
  * **IMPORTANT:** This module is opt-in via `reactiveOptions.asyncMode` (truthy = enabled, false = disabled).
@@ -14,7 +14,7 @@
  * When enabled (asyncMode = 'cancel' | 'queue' | 'ignore'), async entry points are wrapped ONCE.
  */
 
-import { captureEffectStack, withEffectStack } from './effect-context'
+import { captureEffectStack, withEffect, withEffectStack } from './effect-context'
 import { options, ScopedCallback } from './types'
 
 let zoneHooked = false
@@ -148,19 +148,14 @@ function hookZone() {
 	globalThis.setInterval = wrappedSetInterval
 
 	// Hook requestAnimationFrame if available
+	// requestAnimationFrame callbacks run in root context (untracked) - no effect context
 	if (originalRequestAnimationFrame) {
 		globalThis.requestAnimationFrame = ((
 			callback: FrameRequestCallback
 		): ReturnType<typeof originalRequestAnimationFrame> => {
-			const capturedStack = captureEffectStack()
-
-			if (capturedStack.length) {
-				return originalRequestAnimationFrame.call(globalThis, (time: DOMHighResTimeStamp) => {
-					withEffectStack(capturedStack, () => callback(time))
-				})
-			}
-
-			return originalRequestAnimationFrame.call(globalThis, callback)
+			return originalRequestAnimationFrame.call(globalThis, (time: DOMHighResTimeStamp) => {
+				withEffect(undefined, () => callback(time))
+			})
 		}) as typeof originalRequestAnimationFrame
 	}
 

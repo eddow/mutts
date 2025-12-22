@@ -1,5 +1,5 @@
 import { ReflectGet, ReflectSet } from '../utils'
-import { effect } from './effects'
+import { effect, untracked } from './effects'
 import { cleanedBy, cleanup } from './interface'
 import { reactive } from './proxy'
 import { Register } from './register'
@@ -87,9 +87,9 @@ function projectArray<SourceValue, ResultValue>(
 		for (let i = 0; i < length; i++) {
 			if (indexEffects.has(i)) continue
 			ascend(() => {
+				const index = i
 				const stop = effect(function projectArrayIndexEffect() {
-					const index = i
-					const previous = target[index]
+					const previous = untracked(() => target[index])
 					const accessBase = {
 						key: index,
 						source: observedSource,
@@ -143,7 +143,7 @@ function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
 			if (keyEffects.has(key)) continue
 			ascend(() => {
 				const stop = effect(function projectRegisterKeyEffect() {
-					const previous = target.get(key)
+					const previous = untracked(() => target.get(key))
 					const accessBase = {
 						key,
 						source: observedSource,
@@ -202,7 +202,7 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 			ascend(() => {
 				const stop = effect(function projectRecordKeyEffect() {
 					const sourceKey = key as keyof Source
-					const previous = (target as Record<PropertyKey, ResultValue | undefined>)[key]
+					const previous = untracked(() => (target as Record<PropertyKey, ResultValue | undefined>)[key])
 					const accessBase = {
 						key: sourceKey,
 						source: observedSource,
@@ -213,12 +213,13 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 					} as ProjectAccess<
 						Source[typeof sourceKey],
 						keyof Source,
+						Record<keyof Source, ResultValue>,
 						Source,
-						Record<keyof Source, ResultValue>
+						ResultValue
 					>
 					defineAccessValue(accessBase)
 					const produced = apply(accessBase, target)
-					;(target as Record<PropertyKey, unknown>)[key] = produced
+					;(target as any)[sourceKey] = produced
 				})
 				keyEffects.set(key, stop)
 			})
@@ -256,7 +257,7 @@ function projectMap<Key, Value, ResultValue>(
 			if (keyEffects.has(key)) continue
 			ascend(() => {
 				const stop = effect(function projectMapKeyEffect() {
-					const previous = target.get(key)
+					const previous = untracked(() => target.get(key))
 					const accessBase = {
 						key,
 						source: observedSource,

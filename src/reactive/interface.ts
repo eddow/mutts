@@ -1,6 +1,7 @@
 import { decorator, GenericClassDecorator } from '../decorator'
 import { deepWatch } from './deep-watch'
-import { effect, getActiveEffect, untracked, withEffect } from './effects'
+import { effect, getActiveEffect, untracked } from './effects'
+import { withEffect } from './effect-context'
 import { isNonReactive, nonReactiveClass, nonReactiveObjects } from './non-reactive-state'
 import { unwrap } from './proxy-state'
 import { dependant, markWithRoot } from './tracking'
@@ -152,7 +153,7 @@ function deepNonReactive<T>(obj: T): T {
 		})
 	} catch {}
 	if (!(nonReactiveMark in (obj as object))) nonReactiveObjects.add(obj as object)
-	for (const key in obj) deepNonReactive(obj[key])
+	//for (const key in obj) deepNonReactive(obj[key])
 	return obj
 }
 function unreactiveApplication<T extends object>(...args: (keyof T)[]): GenericClassDecorator<T>

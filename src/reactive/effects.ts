@@ -5,7 +5,7 @@ import {
 	captureEffectStack,
 	effectStack,
 	getActiveEffect,
-	withEffectContext,
+	withEffect,
 	withEffectStack,
 } from './effect-context'
 import {
@@ -14,6 +14,8 @@ import {
 	effectToReactiveObjects,
 	getRoot,
 	markWithRoot,
+	getTrackingDisabled,
+	setTrackingDisabled,
 	watchers,
 } from './tracking'
 import {
@@ -474,8 +476,8 @@ function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?:
 			const cyclePath = getCyclePathForEdge(callerRoot, root)
 			const cycleMessage =
 				cyclePath.length > 0
-					? `Cycle detected: ${cyclePath.map((r) => r.name || '<anonymous>').join(' → ')}`
-					: `Cycle detected: ${callerRoot.name || '<anonymous>'} → ${root.name || '<anonymous>'} (and back)`
+					? `Cycle detected: ${cyclePath.map((r) => r.name || r.toString()).join(' → ')}`
+					: `Cycle detected: ${callerRoot.name || callerRoot.toString()} → ${root.name || root.toString()} (and back)`
 
 			const cycleHandling = options.cycleHandling
 			switch (cycleHandling) {
@@ -577,7 +579,7 @@ function findCycle(
  * Finds an effect with in-degree 0 and executes it
  * @returns The return value of the executed effect, or null if batch is complete
  */
-function executeNext(): any {
+function executeNext(effectuatedRoots: Function[]): any {
 	// Find an effect with in-degree 0 (no dependencies in batch that haven't executed)
 	let nextEffect: ScopedCallback | null = null
 	let nextRoot: Function | null = null
@@ -660,6 +662,7 @@ function executeNext(): any {
 		return null // Batch complete
 	}
 
+	effectuatedRoots.push(getRoot(nextEffect))
 	// Execute the effect
 	const result = nextEffect()
 
@@ -707,6 +710,7 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 			addToBatch(effect[i], caller, immediate === 'immediate')
 		}
 
+		let effectuatedRoots: ScopedCallback[] = []
 		if (immediate) {
 			// Execute immediately (before batch returns)
 			try {
@@ -720,24 +724,33 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 				}
 				// After immediate execution, execute any effects that were triggered during execution
 				// This is important for @atomic decorator - effects triggered inside should still run
-				const runEffects: any[] = []
 				const firstReturn: { value?: any } = {}
 				while (batchQueue.all.size > 0) {
-					if (runEffects.length > options.maxEffectChain) {
+					if (effectuatedRoots.length > options.maxEffectChain) {
+						const queuedRoots = batchQueue ? Array.from(batchQueue.all.keys()) : []
+						const queued = queuedRoots.map((r) => r.name || '<anonymous>')
+						const debugInfo = {
+							effectuatedRoots,
+							maxEffectChain: options.maxEffectChain,
+							queued: queued.slice(0, 50),
+							queuedCount: queued.length,
+						}
 						switch (options.maxEffectReaction) {
 							case 'throw':
-								throw new ReactiveError('[reactive] Max effect chain reached')
+								throw new ReactiveError('[reactive] Max effect chain reached', debugInfo)
 							case 'debug':
 								// biome-ignore lint/suspicious/noDebugger: This is the whole point here
 								debugger
-								break
+								throw new ReactiveError('[reactive] Max effect chain reached', debugInfo)
 							case 'warn':
-								options.warn('[reactive] Max effect chain reached')
+								options.warn(
+									`[reactive] Max effect chain reached (queued: ${queued.slice(0, 10).join(', ')}${queued.length > 10 ? ', …' : ''})`
+								)
 								break
 						}
 					}
 					if (!batchQueue || batchQueue.all.size === 0) break
-					const rv = executeNext()
+					const rv = executeNext(effectuatedRoots)
 					// If executeNext() returned null but batch is not empty, it means a cycle was detected
 					// and an error was thrown, so we won't reach here
 					if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
@@ -752,24 +765,33 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 			}
 		} else {
 			// Execute in dependency order
-			const runEffects: any[] = []
 			const firstReturn: { value?: any } = {}
 			try {
 				while (batchQueue.all.size > 0) {
-					if (runEffects.length > options.maxEffectChain) {
+					if (effectuatedRoots.length > options.maxEffectChain) {
+						const queuedRoots = batchQueue ? Array.from(batchQueue.all.keys()) : []
+						const queued = queuedRoots.map((r) => r.name || '<anonymous>')
+						const debugInfo = {
+							effectuatedRoots,
+							maxEffectChain: options.maxEffectChain,
+							queued: queued.slice(0, 50),
+							queuedCount: queued.length,
+						}
 						switch (options.maxEffectReaction) {
 							case 'throw':
-								throw new ReactiveError('[reactive] Max effect chain reached')
+								throw new ReactiveError('[reactive] Max effect chain reached', debugInfo)
 							case 'debug':
 								// biome-ignore lint/suspicious/noDebugger: This is the whole point here
 								debugger
-								break
+								throw new ReactiveError('[reactive] Max effect chain reached', debugInfo)
 							case 'warn':
-								options.warn('[reactive] Max effect chain reached')
+								options.warn(
+									`[reactive] Max effect chain reached (queued: ${queued.slice(0, 10).join(', ')}${queued.length > 10 ? ', …' : ''})`
+								)
 								break
 						}
 					}
-					const rv = executeNext()
+					const rv = executeNext(effectuatedRoots)
 					// executeNext() returns null when batch is complete or cycle detected (throws error)
 					// But functions can legitimately return null, so we check batchQueue.all.size instead
 					if (batchQueue.all.size === 0) {
@@ -779,7 +801,6 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 					// If executeNext() returned null but batch is not empty, it means a cycle was detected
 					// and an error was thrown, so we won't reach here
 					if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
-					// Track executed effect root for maxEffectChain check
 					// Note: executeNext() already removed it from batchQueue, so we track by count
 				}
 				const cleanups = Array.from(batchCleanups)
@@ -818,18 +839,6 @@ export const atomic = decorator({
 	},
 })
 
-/**
- * Executes a function with a specific effect context
- * @param effect - The effect to use as context
- * @param fn - The function to execute
- * @param keepParent - Whether to keep the parent effect context
- * @returns The result of the function
- */
-export function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T): T {
-	if (getRoot(effect) === getRoot(getActiveEffect())) return fn()
-	return withEffectContext(effect, fn)
-}
-
 const fr = new FinalizationRegistry<() => void>((f) => f())
 
 /**
@@ -864,7 +873,11 @@ export function effect(
 
 	function runEffect() {
 		// Clear previous dependencies
-		cleanup?.()
+		if (cleanup) {
+			const prevCleanup = cleanup
+			cleanup = null
+			withEffect(undefined, () => prevCleanup())
+		}
 
 		// Handle async modes when effect is retriggered
 		if (runningPromise) {
@@ -1021,17 +1034,36 @@ export function effect(
 }
 
 /**
- * Executes a function without tracking dependencies
+ * Executes a function without tracking dependencies but maintains parent cleanup relationship
+ * Effects created inside will still be cleaned up when the parent effect is destroyed
  * @param fn - The function to execute
  */
 export function untracked<T>(fn: () => T): T {
+	// Store current tracking state and temporarily disable it
+	// This prevents the parent effect from tracking dependencies during fn execution
+	const wasTrackingDisabled = getTrackingDisabled()
+	setTrackingDisabled(true)
+	
+	try {
+		return fn()
+	} finally {
+		// Restore tracking state
+		setTrackingDisabled(wasTrackingDisabled)
+	}
+}
+
+/**
+ * Executes a function from a virgin/root context - no parent effect, no tracking
+ * Creates completely independent effects that won't be cleaned up by any parent
+ * @param fn - The function to execute
+ */
+export function root<T>(fn: () => T): T {
 	let rv: T
 	withEffect(
 		undefined,
 		() => {
 			rv = fn()
-		} /*,
-		true*/
+		}
 	)
 	return rv
 }

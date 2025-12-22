@@ -38,27 +38,31 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 			throw new Error('memoize expects non-null object arguments')
 
 		let node: MemoCacheTree<Result> = cacheRoot
-		for (const arg of localArgs) node = getBranch(node, arg)
+		for (const arg of localArgs) {
+			node = getBranch(node, arg)
+		}
 
 		dependant(node, 'memoize')
 		if ('result' in node) return node.result
 
-		// Create memoize internal effect in untracked context so it's independent
-		// of external effects. This ensures the effect persists to track dependencies
-		// even if external effects reading the memoized value are stopped.
-		node.cleanup = untracked(() =>
-			effect(
-				markWithRoot(() => {
-					node.result = fn(...localArgs)
-					return () => {
-						delete node.result
-						touched1(node, { type: 'invalidate', prop: localArgs }, 'memoize')
-						node.cleanup?.()
-						node.cleanup = undefined
-					}
-				}, root)
-			)
-		)
+		// Create memoize internal effect to track dependencies and invalidate cache
+		// Use untracked to prevent the effect creation from being affected by parent effects
+		node.cleanup = untracked(() => effect(
+			markWithRoot(() => {
+				// Execute the function and track its dependencies
+				// The function execution will automatically track dependencies on reactive objects
+				node.result = fn(...localArgs)
+				return () => {
+					// When dependencies change, invalidate the cache
+					delete node.result
+					touched1(node, { type: 'invalidate', prop: localArgs }, 'memoize')
+					// Stop the internal memoize effect without recursively re-entering its own cleanup.
+					const stop = node.cleanup
+					node.cleanup = undefined
+					stop?.()
+				}
+			}, root)
+		))
 		return node.result
 	}, fn)
 

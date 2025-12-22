@@ -5,29 +5,123 @@ import { cleanedBy, cleanup } from './interface'
 import { reactive } from './proxy'
 import { type ScopedCallback } from './types'
 
+/**
+ * Provides type-safe access to a source object's property within the organized callback.
+ * @template Source - The type of the source object
+ * @template Key - The type of the property key in the source object
+ */
 export type OrganizedAccess<Source extends Record<PropertyKey, any>, Key extends keyof Source> = {
-	readonly key: Key
-	get(): Source[Key]
-	set(value: Source[Key]): boolean
-	value: Source[Key]
+    /** The property key being accessed */
+    readonly key: Key
+    
+    /** 
+     * Gets the current value of the property from the source object
+     * @returns The current value of the property
+     */
+    get(): Source[Key]
+    
+    /**
+     * Updates the property value in the source object
+     * @param value - The new value to set
+     * @returns {boolean} True if the update was successful
+     */
+    set(value: Source[Key]): boolean
+    
+    /** 
+     * The current value of the property (equivalent to using get()/set() directly)
+     */
+    value: Source[Key]
 }
 
+/**
+ * Callback function type for the organized function that processes each source property.
+ * @template Source - The type of the source object
+ * @template Target - The type of the target object
+ */
 export type OrganizedCallback<Source extends Record<PropertyKey, any>, Target extends object> = <
-	Key extends keyof Source,
+    Key extends keyof Source,
 >(
-	access: OrganizedAccess<Source, Key>,
-	target: Target
+    /**
+     * Accessor object for the current source property
+     */
+    access: OrganizedAccess<Source, Key>,
+    
+    /**
+     * The target object where organized data will be stored
+     */
+    target: Target
 ) => ScopedCallback | undefined
 
-export type OrganizedResult<Target extends object> = Target & { [cleanup]: ScopedCallback }
+/**
+ * The result type of the organized function, combining the target object with cleanup capability.
+ * @template Target - The type of the target object
+ */
+export type OrganizedResult<Target extends object> = Target & { 
+    /** 
+     * Cleanup function to dispose of all reactive bindings created by organized().
+     * This is automatically called when the effect that created the organized binding is disposed.
+     */
+    [cleanup]: ScopedCallback 
+}
 
+/**
+ * Organizes a source object's properties into a target object using a callback function.
+ * This creates a reactive mapping between source properties and a target object,
+ * automatically handling property additions, updates, and removals.
+ * 
+ * @template Source - The type of the source object
+ * @template Target - The type of the target object (defaults to Record<PropertyKey, any>)
+ * 
+ * @param {Source} source - The source object to organize
+ * @param {OrganizedCallback<Source, Target>} apply - Callback function that defines how each source property is mapped to the target
+ * @param {Target} [baseTarget={}] - Optional base target object to use (will be made reactive if not already)
+ * 
+ * @returns {OrganizedResult<Target>} The target object with cleanup capability
+ * 
+ * @example
+ * // Organize user permissions into role-based access
+ * const user = reactive({ isAdmin: true, canEdit: false });
+ * const permissions = organized(
+ *   user,
+ *   (access, target) => {
+ *     if (access.key === 'isAdmin') {
+ *       target.hasFullAccess = access.value;
+ *     }
+ *     target[`can${access.key.charAt(0).toUpperCase() + access.key.slice(1)}`] = access.value;
+ *   }
+ * );
+ * 
+ * @example
+ * // Transform object structure with cleanup
+ * const source = reactive({ firstName: 'John', lastName: 'Doe' });
+ * const formatted = organized(
+ *   source,
+ *   (access, target) => {
+ *     if (access.key === 'firstName' || access.key === 'lastName') {
+ *       target.fullName = `${source.firstName} ${source.lastName}`.trim();
+ *     }
+ *   }
+ * );
+ * 
+ * @example
+ * // Using with cleanup in a component
+ * effect(() => {
+ *   const data = fetchData();
+ *   const organizedData = organized(data, (access, target) => {
+ *     // Transform data
+ *   });
+ *   
+ *   // The cleanup will be called automatically when the effect is disposed
+ *   return () => organizedData[cleanup]();
+ * });
+ */
 export function organized<
-	Source extends Record<PropertyKey, any>,
-	Target extends object = Record<PropertyKey, any>,
+    Source extends Record<PropertyKey, any>,
+    Target extends object = Record<PropertyKey, any>,
 >(
-	source: Source,
-	apply: OrganizedCallback<Source, Target>,
-	baseTarget: Target = {} as Target
+    source: Source,
+    apply: OrganizedCallback<Source, Target>,
+    baseTarget: Target = {} as Target
 ): OrganizedResult<Target> {
 	const observedSource = reactive(source) as Source
 	const target = reactive(baseTarget) as Target
