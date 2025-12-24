@@ -28,10 +28,10 @@ import { Destroyable, allocated } from 'mutts/destroyable'
 
 ```typescript
 // Import directly from source TypeScript files (for development/custom builds)
-import { reactive, effect, Reactive } from 'mutts/src'
-import { mixin } from 'mutts/src/mixin'
-import { cached } from 'mutts/src/std-decorators'
-import { Destroyable, allocated } from 'mutts/src/destroyable'
+import { reactive, effect, Reactive } from 'mutts'
+import { mixin } from 'mutts/mixin'
+import { cached } from 'mutts/std-decorators'
+import { Destroyable, allocated } from 'mutts/destroyable'
 ```
 
 **Note:** When importing from source files, you'll need to configure your build system (TypeScript, Vite, Webpack, etc.) to handle TypeScript compilation and module resolution. The source files are published alongside the built modules, so you can import directly from the `src` directory.

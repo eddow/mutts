@@ -713,10 +713,12 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 		let effectuatedRoots: ScopedCallback[] = []
 		if (immediate) {
 			// Execute immediately (before batch returns)
+			const firstReturn: { value?: any } = {}
 			try {
 				for (let i = 0; i < effect.length; i++) {
 					try {
-						effect[i]()
+						const rv = effect[i]()
+						if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
 					} finally {
 						const root = getRoot(effect[i])
 						batchQueue.all.delete(root)
@@ -724,7 +726,6 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 				}
 				// After immediate execution, execute any effects that were triggered during execution
 				// This is important for @atomic decorator - effects triggered inside should still run
-				const firstReturn: { value?: any } = {}
 				while (batchQueue.all.size > 0) {
 					if (effectuatedRoots.length > options.maxEffectChain) {
 						const queuedRoots = batchQueue ? Array.from(batchQueue.all.keys()) : []

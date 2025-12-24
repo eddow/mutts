@@ -213,9 +213,8 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 					} as ProjectAccess<
 						Source[typeof sourceKey],
 						keyof Source,
-						Record<keyof Source, ResultValue>,
 						Source,
-						ResultValue
+						Record<keyof Source, ResultValue>
 					>
 					defineAccessValue(accessBase)
 					const produced = apply(accessBase, target)

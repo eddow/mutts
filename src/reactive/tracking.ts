@@ -10,6 +10,7 @@ export const watchers = new WeakMap<object, Map<any, Set<ScopedCallback>>>()
 
 // runEffect -> set<stop>
 export const effectChildren = new WeakMap<ScopedCallback, Set<ScopedCallback>>()
+
 // Track parent effect relationships for hierarchy traversal (used in deep touch filtering)
 export const effectParent = new WeakMap<ScopedCallback, ScopedCallback | undefined>()
 
@@ -65,6 +66,7 @@ export function setTrackingDisabled(value: boolean): void {
 export function dependant(obj: any, prop: any = allProps) {
 	obj = unwrap(obj)
 	const currentActiveEffect = getActiveEffect()
+
 	// Early return if no active effect, tracking disabled, or invalid prop
 	if (!currentActiveEffect || getTrackingDisabled() || (typeof prop === 'symbol' && prop !== allProps)) return
 
