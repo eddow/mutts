@@ -6,7 +6,7 @@
  */
 
 import { effectParent, effectToReactiveObjects, getRoot } from './tracking'
-import { allProps, type Evolution, type ScopedCallback } from './types'
+import { allProps, type Evolution, type ScopedCallback, options } from './types'
 
 const EXTERNAL_SOURCE = Symbol('external-source')
 type SourceEffect = ScopedCallback | typeof EXTERNAL_SOURCE
@@ -211,6 +211,9 @@ export function recordTriggerLink(
 	prop: any,
 	evolution: Evolution
 ) {
+	if (options.introspection.enableHistory) {
+		addToMutationHistory(source, target, obj, prop, evolution)
+	}
 	if (!devtoolsEnabled) return
 	addEffectToRegistry(target)
 	if (source) addEffectToRegistry(source)
@@ -226,6 +229,51 @@ export function recordTriggerLink(
 	record.count += 1
 	record.lastTriggered = Date.now()
 	documentObject(obj)
+}
+
+/**
+ * Traces back the chain of triggers that led to a specific effect
+ * @param effect The effect to trace back
+ * @param limit Max depth
+ */
+export function getTriggerChain(effect: ScopedCallback, limit = 5): string[] {
+	const chain: string[] = []
+	let current = effect
+	for (let i = 0; i < limit; i++) {
+		// Find who triggered 'current'
+		// We need to reverse search the triggerGraph (source -> target)
+		// This is expensive O(Edges) but okay for error reporting
+		let foundSource: ScopedCallback | undefined
+		let foundReason = ''
+
+		search: for (const [source, targetMap] of triggerGraph) {
+			for (const [target, labelMap] of targetMap) {
+				if (target === current) {
+					// Found a source! Use the most recent trigger record
+					let lastTime = 0
+					for (const record of labelMap.values()) {
+						if (record.lastTriggered > lastTime) {
+							lastTime = record.lastTriggered
+							foundReason = record.label
+							foundSource = source === EXTERNAL_SOURCE ? undefined : (source as ScopedCallback)
+						}
+					}
+					if (foundSource || foundReason) break search
+				}
+			}
+		}
+
+		if (foundSource) {
+			chain.push(`${ensureEffectName(foundSource)} -> (${foundReason}) -> ${ensureEffectName(current)}`)
+			current = foundSource
+		} else if (foundReason) {
+			chain.push(`External -> (${foundReason}) -> ${ensureEffectName(current)}`)
+			break
+		} else {
+			break
+		}
+	}
+	return chain.reverse()
 }
 
 function buildEffectNodes(allEffects: Set<ScopedCallback>) {
@@ -369,6 +417,100 @@ export function enableDevTools() {
 	}
 }
 
+
+export function forceEnableGraphTracking() {
+	devtoolsEnabled = true
+}
+
 export function isDevtoolsEnabled() {
 	return devtoolsEnabled
+}
+
+// --- Introspection API ---
+
+/**
+ * Returns the raw dependency graph data structure.
+ * This is useful for programmatic analysis of the reactive system.
+ */
+export function getDependencyGraph() {
+	return {
+		nodes: buildReactivityGraph().nodes,
+		edges: buildReactivityGraph().edges,
+	}
+}
+
+/**
+ * Returns a list of effects that depend on the given object.
+ */
+export function getDependents(obj: object): ScopedCallback[] {
+	const dependents: ScopedCallback[] = []
+	// Scan the trigger graph for effects triggered by this object
+	// This is O(E) where E is the number of edges, might need optimization for large graphs
+	// but acceptable for introspection
+	for (const [source, targetMap] of triggerGraph) {
+		for (const [targetEffect, labelMap] of targetMap) {
+			for (const record of labelMap.values()) {
+				if (record.object === obj) {
+					dependents.push(targetEffect)
+				}
+			}
+		}
+	}
+	// Also check direct dependencies (dependency graph)
+	// We don't have a direct obj -> effect map without walking all effects
+	// unless we use `watchers` from tracking.ts but that's internal
+	return [...new Set(dependents)]
+}
+
+/**
+ * Returns a list of objects that the given effect depends on.
+ */
+export function getDependencies(effect: ScopedCallback): object[] {
+	const deps = effectToReactiveObjects.get(effect)
+	return deps ? Array.from(deps) : []
+}
+
+// --- Mutation History ---
+
+export interface MutationRecord {
+	id: number
+	timestamp: number
+	source: string
+	target: string
+	objectName: string
+	prop: string
+	type: string
+}
+
+const mutationHistory: MutationRecord[] = []
+let mutationCounter = 0
+
+function addToMutationHistory(
+	source: ScopedCallback | undefined,
+	target: ScopedCallback,
+	obj: object,
+	prop: any,
+	evolution: Evolution
+) {
+	const record: MutationRecord = {
+		id: ++mutationCounter,
+		timestamp: Date.now(),
+		source: source ? ensureEffectName(source) : 'External',
+		target: ensureEffectName(target),
+		objectName: ensureObjectName(obj),
+		prop: String(prop),
+		type: evolution.type,
+	}
+
+	mutationHistory.push(record)
+	if (mutationHistory.length > options.introspection.historySize) {
+		mutationHistory.shift()
+	}
+}
+
+/**
+ * Get the recent mutation history
+ */
+export function getMutationHistory(): MutationRecord[] {
+	return [...mutationHistory]
 }

@@ -139,12 +139,54 @@ export const allProps = Symbol('all-props')
 const rootFunction = Symbol('root-function')
 
 /**
+ * Structured error codes for machine-readable diagnosis
+ */
+export enum ReactiveErrorCode {
+	CycleDetected = 'CYCLE_DETECTED',
+	MaxDepthExceeded = 'MAX_DEPTH_EXCEEDED',
+	MaxReactionExceeded = 'MAX_REACTION_EXCEEDED',
+	WriteInComputed = 'WRITE_IN_COMPUTED',
+	TrackingError = 'TRACKING_ERROR',
+}
+
+export type CycleDebugInfo = {
+	code: ReactiveErrorCode.CycleDetected
+	cycle: string[]
+	details?: string
+}
+
+export type MaxDepthDebugInfo = {
+	code: ReactiveErrorCode.MaxDepthExceeded
+	depth: number
+	chain: string[]
+}
+
+export type MaxReactionDebugInfo = {
+	code: ReactiveErrorCode.MaxReactionExceeded
+	count: number
+	effect: string
+}
+
+export type GenericDebugInfo = {
+	code: ReactiveErrorCode
+	causalChain?: string[]
+	creationStack?: string
+	[key: string]: any
+}
+
+export type ReactiveDebugInfo =
+	| CycleDebugInfo
+	| MaxDepthDebugInfo
+	| MaxReactionDebugInfo
+	| GenericDebugInfo
+
+/**
  * Error class for reactive system errors
  */
 export class ReactiveError extends Error {
 	constructor(
 		message: string,
-		public debugInfo?: any
+		public debugInfo?: ReactiveDebugInfo
 	) {
 		super(message)
 		this.name = 'ReactiveError'
@@ -213,9 +255,10 @@ export const options = {
 	 * - 'throw': Throw an error with cycle information (default, recommended for development)
 	 * - 'warn': Log a warning and break the cycle by executing one effect
 	 * - 'break': Silently break the cycle by executing one effect (recommended for production)
+	 * - 'strict': Prevent cycle creation by checking graph before execution (throws error)
 	 * @default 'throw'
 	 */
-	cycleHandling: 'throw' as 'throw' | 'warn' | 'break',
+	cycleHandling: 'throw' as 'throw' | 'warn' | 'break' | 'strict',
 	/**
 	 * Maximum depth for deep watching traversal
 	 * Used to prevent infinite recursion in circular references
@@ -259,6 +302,22 @@ export const options = {
 	asyncMode: 'cancel' as AsyncExecutionMode | false,
 	// biome-ignore lint/suspicious/noConsole: This is the whole point here
 	warn: (...args: any[]) => console.warn(...args),
+
+	/**
+	 * Configuration for the introspection system
+	 */
+	introspection: {
+		/**
+		 * Whether to keep a history of mutations for debugging
+		 * @default false
+		 */
+		enableHistory: false,
+		/**
+		 * Number of mutations to keep in history
+		 * @default 50
+		 */
+		historySize: 50,
+	},
 }
 // biome-ignore-end lint/correctness/noUnusedFunctionParameters: Interface declaration with empty defaults
 

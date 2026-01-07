@@ -12,6 +12,14 @@ With the advent of AI, I could finally manage to have something finished and com
 npm install mutts
 ```
 
+## AI Agents & Automated Tooling
+
+> [!TIP]
+> **Are you an AI Agent?**
+> If you are an LLM or autonomous agent trying to fix bugs or understand this codebase, please read the **[AI Agent Manual](./docs/ai.md)**.
+> It contains structured protocols, error code definitions, and introspection API details designed specifically for you.
+> A precise **[API Reference](./docs/ai/api-reference.md)** is also available for type lookups.
+
 ## Usage
 
 ### Import from Built Modules
@@ -152,7 +160,7 @@ A comprehensive resource management system that provides automatic cleanup for o
 
 ## [Reactive](./docs/reactive.md)
 
-A comprehensive reactivity system that provides fine-grained dependency tracking and automatic re-computation. Built on JavaScript Proxies with support for deep watching, computed values, and effect management.
+A comprehensive reactivity system. See the **[Introduction](./docs/reactive/core.md)** or browse the **[Table of Contents](./docs/reactive.md)**.
 
 **Key Features:**
 - **Core Reactivity**: Proxy-based property access tracking with `reactive()`, `effect()`, and `memoize()`

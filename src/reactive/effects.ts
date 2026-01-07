@@ -1,6 +1,6 @@
 import { decorator } from '../decorator'
 import { IterableWeakSet } from '../iterableWeak'
-import { isDevtoolsEnabled, registerEffectForDebug } from './debug'
+import { isDevtoolsEnabled, registerEffectForDebug, getTriggerChain } from './debug'
 import {
 	captureEffectStack,
 	effectStack,
@@ -22,10 +22,38 @@ import {
 	type DependencyAccess,
 	type EffectOptions,
 	type Evolution,
-	options,
-	ReactiveError,
+	type AsyncExecutionMode,
 	type ScopedCallback,
+	ReactiveError,
+	ReactiveErrorCode,
+	options,
 } from './types'
+
+/**
+ * Finds a cycle in a sequence of functions by looking for the first repetition
+ */
+function findCycleInChain(roots: Function[]): Function[] | null {
+	const seen = new Map<Function, number>()
+	for (let i = 0; i < roots.length; i++) {
+		const root = roots[i]
+		if (seen.has(root)) {
+			return roots.slice(seen.get(root)!)
+		}
+		seen.set(root, i)
+	}
+	return null
+}
+
+/**
+ * Formats a list of function roots into a readable trace
+ */
+function formatRoots(roots: Function[], limit = 20): string {
+	const names = roots.map((r) => r.name || '<anonymous>')
+	if (names.length <= limit) return names.join(' → ')
+	const start = names.slice(0, 5)
+	const end = names.slice(-10)
+	return `${start.join(' → ')} ... (${names.length - 15} more) ... ${end.join(' → ')}`
+}
 import { ensureZoneHooked } from './zone'
 
 type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
@@ -87,6 +115,9 @@ const effectTriggeredBy = new WeakMap<Function, IterableWeakSet<Function>>()
 // consequencesClosure: for each effect, all effects that it triggers (directly or indirectly)
 const causesClosure = new WeakMap<Function, IterableWeakSet<Function>>()
 const consequencesClosure = new WeakMap<Function, IterableWeakSet<Function>>()
+
+// Debug: Capture where an effect was created
+export const effectCreationStacks = new WeakMap<Function, string>()
 
 /**
  * Gets or creates an IterableWeakSet for a closure map
@@ -194,6 +225,40 @@ function addGraphEdge(callerRoot: Function, targetRoot: Function) {
 }
 
 /**
+ * Checks if there's a path from start to end in the dependency graph, excluding a specific node
+ * Uses BFS to find any path that doesn't go through the excluded node
+ * @param start - Starting node
+ * @param end - Target node
+ * @param exclude - Node to exclude from the path
+ * @returns true if a path exists without going through the excluded node
+ */
+function hasPathExcluding(start: Function, end: Function, exclude: Function): boolean {
+	if (start === end) return true
+	if (start === exclude) return false
+
+	const visited = new Set<Function>()
+	const queue: Function[] = [start]
+	visited.add(start)
+	visited.add(exclude) // Pre-mark excluded node as visited to skip it
+
+	while (queue.length > 0) {
+		const current = queue.shift()!
+		const triggers = effectTriggers.get(current)
+		if (!triggers) continue
+
+		for (const next of triggers) {
+			if (next === end) return true
+			if (!visited.has(next)) {
+				visited.add(next)
+				queue.push(next)
+			}
+		}
+	}
+
+	return false
+}
+
+/**
  * Removes all edges involving the given effect from the dependency graph
  * Also cleans up transitive closures by propagating cleanup to all affected effects
  * Called when an effect is stopped/cleaned up
@@ -236,16 +301,20 @@ function cleanupEffectFromGraph(effect: ScopedCallback) {
 	// - Remove transitive relationships that depended on B
 
 	if (rootCauses) {
-		// For each X that triggers root: remove root and its consequences from X's consequences
+		// For each X that triggers root: remove root from X's consequences
+		// Only remove root's consequences if no alternate path exists
 		for (const causeRoot of rootCauses) {
 			const causeConsequences = consequencesClosure.get(causeRoot)
 			if (causeConsequences) {
-				// Remove root itself
+				// Remove root itself (it's being cleaned up)
 				causeConsequences.delete(root)
-				// Remove all consequences of root (they're no longer reachable through root)
+				// Only remove consequences of root if there's no alternate path from causeRoot to them
 				if (rootConsequences) {
 					for (const consequence of rootConsequences) {
-						causeConsequences.delete(consequence)
+						// Check if causeRoot can still reach consequence without going through root
+						if (!hasPathExcluding(causeRoot, consequence, root)) {
+							causeConsequences.delete(consequence)
+						}
 					}
 				}
 			}
@@ -253,16 +322,20 @@ function cleanupEffectFromGraph(effect: ScopedCallback) {
 	}
 
 	if (rootConsequences) {
-		// For each Y that root triggers: remove root and its causes from Y's causes
+		// For each Y that root triggers: remove root from Y's causes
+		// Only remove root's causes if no alternate path exists
 		for (const consequenceRoot of rootConsequences) {
 			const consequenceCauses = causesClosure.get(consequenceRoot)
 			if (consequenceCauses) {
-				// Remove root itself
+				// Remove root itself (it's being cleaned up)
 				consequenceCauses.delete(root)
-				// Remove all causes of root (they no longer reach consequence through root)
+				// Only remove causes of root if there's no alternate path from them to consequenceRoot
 				if (rootCauses) {
 					for (const cause of rootCauses) {
-						consequenceCauses.delete(cause)
+						// Check if cause can still reach consequenceRoot without going through root
+						if (!hasPathExcluding(cause, consequenceRoot, root)) {
+							consequenceCauses.delete(cause)
+						}
 					}
 				}
 			}
@@ -277,36 +350,11 @@ function cleanupEffectFromGraph(effect: ScopedCallback) {
 			if (xConsequences) {
 				for (const y of rootConsequences) {
 					// Check if there's still a path from X to Y without going through root
-					// If root was the only path, we need to remove X→Y
-					// We can check this by seeing if there's a direct edge or another path
-					const xTriggers = effectTriggers.get(x)
-					const hasDirectEdge = xTriggers?.has(y)
-
-					// If no direct edge exists, check if there's another transitive path
-					// by checking if Y is still in xConsequences through other means
-					// This is a simplified check - in a perfect world we'd do full path analysis
-					// but for cleanup purposes, if root was in the closure, we conservatively
-					// remove the transitive relationship
-					if (!hasDirectEdge) {
-						// Check if there's another path: look for intermediate nodes
-						let hasOtherPath = false
-						if (xTriggers) {
-							for (const intermediate of xTriggers) {
-								if (intermediate !== root) {
-									const intermediateConsequences = consequencesClosure.get(intermediate)
-									if (intermediateConsequences?.has(y)) {
-										hasOtherPath = true
-										break
-									}
-								}
-							}
-						}
-						// If no other path exists, remove the transitive relationship
-						if (!hasOtherPath) {
-							xConsequences.delete(y)
-							const yCauses = causesClosure.get(y)
-							yCauses?.delete(x)
-						}
+					// Use BFS to find any path that doesn't include root
+					if (!hasPathExcluding(x, y, root)) {
+						xConsequences.delete(y)
+						const yCauses = causesClosure.get(y)
+						yCauses?.delete(x)
 					}
 				}
 			}
@@ -318,16 +366,64 @@ function cleanupEffectFromGraph(effect: ScopedCallback) {
 	consequencesClosure.delete(root)
 }
 
-// Batch queue structure - simplified, using closures for ordering
+// Batch queue structure - optimized with cached in-degrees
 interface BatchQueue {
 	// All effects in the current batch that still need to be executed (todos)
 	all: Map<Function, ScopedCallback> // root → effect
+	// Cached in-degrees for each effect in the batch (number of causes in batch)
+	inDegrees: Map<Function, number> // root → in-degree count
 }
 
 // Track currently executing effects to prevent re-execution
 // These are all the effects triggered under `activeEffect`
 let batchQueue: BatchQueue | undefined
 const batchCleanups = new Set<ScopedCallback>()
+
+/**
+ * Computes and caches in-degrees for all effects in the batch
+ * Called once when batch starts or when new effects are added
+ */
+function computeAllInDegrees(batch: BatchQueue): void {
+	const activeEffect = getActiveEffect()
+	const activeRoot = activeEffect ? getRoot(activeEffect) : null
+
+	// Reset all in-degrees
+	batch.inDegrees.clear()
+
+	for (const [root] of batch.all) {
+		let inDegree = 0
+		const causes = causesClosure.get(root)
+		if (causes) {
+			for (const causeRoot of causes) {
+				// Only count if it's in the batch and not the active/self effect
+				if (batch.all.has(causeRoot) && causeRoot !== activeRoot && causeRoot !== root) {
+					inDegree++
+				}
+			}
+		}
+		batch.inDegrees.set(root, inDegree)
+	}
+}
+
+/**
+ * Decrements in-degrees of all effects that depend on the executed effect
+ * Called after an effect is executed to update the cached in-degrees
+ */
+function decrementInDegreesForExecuted(batch: BatchQueue, executedRoot: Function): void {
+	// Get all effects that this executed effect triggers
+	const consequences = consequencesClosure.get(executedRoot)
+	if (!consequences) return
+
+	for (const consequenceRoot of consequences) {
+		// Only update if it's still in the batch
+		if (batch.all.has(consequenceRoot)) {
+			const currentDegree = batch.inDegrees.get(consequenceRoot) ?? 0
+			if (currentDegree > 0) {
+				batch.inDegrees.set(consequenceRoot, currentDegree - 1)
+			}
+		}
+	}
+}
 
 /**
  * Computes the in-degree (number of dependencies) for an effect in the current batch
@@ -480,11 +576,36 @@ function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?:
 					: `Cycle detected: ${callerRoot.name || callerRoot.toString()} → ${root.name || root.toString()} (and back)`
 
 			const cycleHandling = options.cycleHandling
+			
+			// In strict mode, we throw immediately on detection
+			if (cycleHandling === 'strict') {
+				batchQueue.all.delete(root)
+				const causalChain = getTriggerChain(effect)
+				const creationStack = effectCreationStacks.get(root)
+				
+				throw new ReactiveError(`[reactive] Strict Cycle Prevention: ${cycleMessage}`, {
+					code: ReactiveErrorCode.CycleDetected,
+					cycle: cyclePath.map((r) => r.name || r.toString()),
+					details: cycleMessage,
+					causalChain,
+					creationStack
+				})
+			}
+
 			switch (cycleHandling) {
 				case 'throw':
 					// Remove from batch before throwing
 					batchQueue.all.delete(root)
-					throw new ReactiveError(`[reactive] ${cycleMessage}`, cyclePath)
+					const causalChain = getTriggerChain(effect)
+					const creationStack = effectCreationStacks.get(root)
+
+					throw new ReactiveError(`[reactive] ${cycleMessage}`, {
+						code: ReactiveErrorCode.CycleDetected,
+						cycle: cyclePath.map((r) => r.name || r.toString()),
+						details: cycleMessage,
+						causalChain,
+						creationStack
+					})
 				case 'warn':
 					options.warn(`[reactive] ${cycleMessage}`)
 					// Don't add the edge, break the cycle
@@ -575,21 +696,19 @@ function findCycle(
 }
 
 /**
- * Executes the next effect in dependency order (using closures)
+ * Executes the next effect in dependency order (using cached in-degrees)
  * Finds an effect with in-degree 0 and executes it
  * @returns The return value of the executed effect, or null if batch is complete
  */
 function executeNext(effectuatedRoots: Function[]): any {
-	// Find an effect with in-degree 0 (no dependencies in batch that haven't executed)
+	// Find an effect with in-degree 0 using cached values
 	let nextEffect: ScopedCallback | null = null
 	let nextRoot: Function | null = null
 
 	// Find an effect with in-degree 0 (no dependencies in batch that still need execution)
-	// batchQueue.all is the todo list - effects that still need to be executed
-	// Effects are removed from batchQueue.all when they execute, so we only need to check
-	// if causes are in the batch (not if they've been executed)
-	for (const [root, effect] of batchQueue.all) {
-		const inDegree = computeInDegreeInBatch(root, batchQueue.all)
+	// Using cached in-degrees for O(n) lookup instead of O(n²)
+	for (const [root, effect] of batchQueue!.all) {
+		const inDegree = batchQueue!.inDegrees.get(root) ?? 0
 		if (inDegree === 0) {
 			nextEffect = effect
 			nextRoot = root
@@ -600,21 +719,21 @@ function executeNext(effectuatedRoots: Function[]): any {
 	if (!nextEffect) {
 		// No effect with in-degree 0 - there must be a cycle
 		// If all effects have dependencies, it means there's a circular dependency
-		if (batchQueue.all.size > 0) {
-			let cycle = getCyclePath(batchQueue)
+		if (batchQueue!.all.size > 0) {
+			let cycle = getCyclePath(batchQueue!)
 			// If we couldn't find a cycle path using direct edges, try using closures
 			// (transitive relationships) - if all effects have in-degree > 0, there must be a cycle
 			if (cycle.length === 0) {
 				// Try to find a cycle using consequencesClosure (transitive relationships)
 				// Note: Self-loops are ignored - we only look for cycles between different effects
-				for (const [root] of batchQueue.all) {
+				for (const [root] of batchQueue!.all) {
 					const consequences = consequencesClosure.get(root)
 					if (consequences) {
 						// Check if any consequence in the batch also has root as a consequence
 						for (const consequence of consequences) {
 							// Skip self-loops - they are ignored
 							if (consequence === root) continue
-							if (batchQueue.all.has(consequence)) {
+							if (batchQueue!.all.has(consequence)) {
 								const consequenceConsequences = consequencesClosure.get(consequence)
 								if (consequenceConsequences?.has(root)) {
 									// Found cycle: root -> consequence -> root
@@ -639,20 +758,22 @@ function executeNext(effectuatedRoots: Function[]): any {
 				case 'warn': {
 					options.warn(`[reactive] ${cycleMessage}`)
 					// Break the cycle by executing one effect anyway
-					const firstEffect = batchQueue.all.values().next().value
+					const firstEffect = batchQueue!.all.values().next().value
 					if (firstEffect) {
 						const firstRoot = getRoot(firstEffect)
-						batchQueue.all.delete(firstRoot)
+						batchQueue!.all.delete(firstRoot)
+						batchQueue!.inDegrees.delete(firstRoot)
 						return firstEffect()
 					}
 					break
 				}
 				case 'break': {
 					// Silently break cycle
-					const firstEffect2 = batchQueue.all.values().next().value
+					const firstEffect2 = batchQueue!.all.values().next().value
 					if (firstEffect2) {
 						const firstRoot2 = getRoot(firstEffect2)
-						batchQueue.all.delete(firstRoot2)
+						batchQueue!.all.delete(firstRoot2)
+						batchQueue!.inDegrees.delete(firstRoot2)
 						return firstEffect2()
 					}
 					break
@@ -666,8 +787,10 @@ function executeNext(effectuatedRoots: Function[]): any {
 	// Execute the effect
 	const result = nextEffect()
 
-	// Remove from batch (it's been executed, so no longer a todo)
-	batchQueue.all.delete(nextRoot)
+	// Remove from batch and update in-degrees of dependents
+	batchQueue!.all.delete(nextRoot)
+	batchQueue!.inDegrees.delete(nextRoot)
+	decrementInDegreesForExecuted(batchQueue!, nextRoot)
 
 	return result
 }
@@ -702,6 +825,7 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 		options.beginChain(roots)
 		batchQueue = {
 			all: new Map(),
+			inDegrees: new Map(),
 		}
 
 		// Add initial effects
@@ -711,6 +835,7 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 		}
 
 		let effectuatedRoots: ScopedCallback[] = []
+		computeAllInDegrees(batchQueue)
 		if (immediate) {
 			// Execute immediately (before batch returns)
 			const firstReturn: { value?: any } = {}
@@ -728,24 +853,35 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 				// This is important for @atomic decorator - effects triggered inside should still run
 				while (batchQueue.all.size > 0) {
 					if (effectuatedRoots.length > options.maxEffectChain) {
+						const cycle = findCycleInChain(effectuatedRoots as any)
+						const trace = formatRoots(effectuatedRoots as any)
+						const message = cycle 
+							? `Max effect chain reached (cycle detected: ${formatRoots(cycle)})`
+							: `Max effect chain reached (trace: ${trace})`
+
 						const queuedRoots = batchQueue ? Array.from(batchQueue.all.keys()) : []
 						const queued = queuedRoots.map((r) => r.name || '<anonymous>')
 						const debugInfo = {
+							code: ReactiveErrorCode.MaxDepthExceeded,
 							effectuatedRoots,
+							cycle,
+							trace,
 							maxEffectChain: options.maxEffectChain,
 							queued: queued.slice(0, 50),
 							queuedCount: queued.length,
+							// Try to get causation for the last effect
+							causalChain: effectuatedRoots.length > 0 ? getTriggerChain(batchQueue.all.get(effectuatedRoots[effectuatedRoots.length - 1])!) : [],
 						}
 						switch (options.maxEffectReaction) {
 							case 'throw':
-								throw new ReactiveError('[reactive] Max effect chain reached', debugInfo)
+								throw new ReactiveError(`[reactive] ${message}`, debugInfo)
 							case 'debug':
 								// biome-ignore lint/suspicious/noDebugger: This is the whole point here
 								debugger
-								throw new ReactiveError('[reactive] Max effect chain reached', debugInfo)
+								throw new ReactiveError(`[reactive] ${message}`, debugInfo)
 							case 'warn':
 								options.warn(
-									`[reactive] Max effect chain reached (queued: ${queued.slice(0, 10).join(', ')}${queued.length > 10 ? ', …' : ''})`
+									`[reactive] ${message} (queued: ${queued.slice(0, 10).join(', ')}${queued.length > 10 ? ', …' : ''})`
 								)
 								break
 						}
@@ -770,24 +906,35 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 			try {
 				while (batchQueue.all.size > 0) {
 					if (effectuatedRoots.length > options.maxEffectChain) {
+						const cycle = findCycleInChain(effectuatedRoots as any)
+						const trace = formatRoots(effectuatedRoots as any)
+						const message = cycle 
+							? `Max effect chain reached (cycle detected: ${formatRoots(cycle)})`
+							: `Max effect chain reached (trace: ${trace})`
+
 						const queuedRoots = batchQueue ? Array.from(batchQueue.all.keys()) : []
 						const queued = queuedRoots.map((r) => r.name || '<anonymous>')
 						const debugInfo = {
+							code: ReactiveErrorCode.MaxDepthExceeded,
 							effectuatedRoots,
+							cycle,
+							trace,
 							maxEffectChain: options.maxEffectChain,
 							queued: queued.slice(0, 50),
 							queuedCount: queued.length,
+							// Try to get causation for the last effect
+							causalChain: effectuatedRoots.length > 0 ? getTriggerChain(batchQueue.all.get(effectuatedRoots[effectuatedRoots.length - 1])!) : [],
 						}
 						switch (options.maxEffectReaction) {
 							case 'throw':
-								throw new ReactiveError('[reactive] Max effect chain reached', debugInfo)
+								throw new ReactiveError(`[reactive] ${message}`, debugInfo)
 							case 'debug':
 								// biome-ignore lint/suspicious/noDebugger: This is the whole point here
 								debugger
-								throw new ReactiveError('[reactive] Max effect chain reached', debugInfo)
+								throw new ReactiveError(`[reactive] ${message}`, debugInfo)
 							case 'warn':
 								options.warn(
-									`[reactive] Max effect chain reached (queued: ${queued.slice(0, 10).join(', ')}${queued.length > 10 ? ', …' : ''})`
+									`[reactive] ${message} (queued: ${queued.slice(0, 10).join(', ')}${queued.length > 10 ? ', …' : ''})`
 								)
 								break
 						}
@@ -862,6 +1009,14 @@ export function effect(
 
 	// Use per-effect asyncMode or fall back to global option
 	const asyncMode = effectOptions?.asyncMode ?? options.asyncMode ?? 'cancel'
+	if (options.introspection.enableHistory) {
+		const stack = new Error().stack
+		if (stack) {
+			// Clean up the stack trace to remove internal frames
+			const cleanStack = stack.split('\n').slice(2).join('\n')
+			effectCreationStacks.set(getRoot(fn), cleanStack)
+		}
+	}
 	let cleanup: (() => void) | null = null
 	// capture the parent effect at creation time for ascend
 	const parentsForAscend = captureEffectStack()

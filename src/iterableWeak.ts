@@ -4,12 +4,16 @@
  * Uses weak references but still may iterate through them
  * Note: The behavior is highly dependant on the garbage collector - some entries are perhaps deemed to be collected: don't resuscitate them
  */
-// TODO: register on delete, remove uuid
 export class IterableWeakMap<K extends WeakKey, V> implements Map<K, V> {
 	private uuids = new WeakMap<K, string>()
 	private refs: Record<string, [WeakRef<K>, any]> = {}
+	private readonly registry: FinalizationRegistry<string>
 
 	constructor(entries?: Iterable<[K, V]>) {
+		// Create a FinalizationRegistry to clean up refs when keys are garbage collected
+		this.registry = new FinalizationRegistry((uuid: string) => {
+			delete this.refs[uuid]
+		})
 		if (entries) for (const [k, v] of entries) this.set(k, v)
 	}
 	private createIterator<I>(cb: (key: K, value: V) => I): MapIterator<I> {
@@ -25,6 +29,11 @@ export class IterableWeakMap<K extends WeakKey, V> implements Map<K, V> {
 		})()
 	}
 	clear(): void {
+		// Unregister all keys from the FinalizationRegistry
+		for (const uuid of Object.keys(this.refs)) {
+			const key = this.refs[uuid][0].deref()
+			if (key) this.registry.unregister(key)
+		}
 		this.uuids = new WeakMap<K, string>()
 		this.refs = {}
 	}
@@ -33,6 +42,7 @@ export class IterableWeakMap<K extends WeakKey, V> implements Map<K, V> {
 		if (!uuid) return false
 		delete this.refs[uuid]
 		this.uuids.delete(key)
+		this.registry.unregister(key)
 		return true
 	}
 	forEach(callbackfn: (value: V, key: K, map: Map<K, V>) => void, thisArg?: any): void {
@@ -54,6 +64,8 @@ export class IterableWeakMap<K extends WeakKey, V> implements Map<K, V> {
 			uuid = crypto.randomUUID()
 			this.uuids.set(key, uuid)
 			this.refs[uuid] = [new WeakRef(key), value]
+			// Register key for cleanup when garbage collected
+			this.registry.register(key, uuid, key)
 		}
 		return this
 	}
@@ -82,7 +94,13 @@ export class IterableWeakMap<K extends WeakKey, V> implements Map<K, V> {
 export class IterableWeakSet<K extends WeakKey> implements Set<K> {
 	private uuids = new WeakMap<K, string>()
 	private refs: Record<string, WeakRef<K>> = {}
+	private readonly registry: FinalizationRegistry<string>
+
 	constructor(entries?: Iterable<K>) {
+		// Create a FinalizationRegistry to clean up refs when values are garbage collected
+		this.registry = new FinalizationRegistry((uuid: string) => {
+			delete this.refs[uuid]
+		})
 		if (entries) for (const k of entries) this.add(k)
 	}
 	private createIterator<I>(cb: (key: K) => I): MapIterator<I> {
@@ -98,6 +116,11 @@ export class IterableWeakSet<K extends WeakKey> implements Set<K> {
 	}
 
 	clear(): void {
+		// Unregister all values from the FinalizationRegistry
+		for (const uuid of Object.keys(this.refs)) {
+			const value = this.refs[uuid].deref()
+			if (value) this.registry.unregister(value)
+		}
 		this.uuids = new WeakMap<K, string>()
 		this.refs = {}
 	}
@@ -108,6 +131,8 @@ export class IterableWeakSet<K extends WeakKey> implements Set<K> {
 			uuid = crypto.randomUUID()
 			this.uuids.set(value, uuid)
 			this.refs[uuid] = new WeakRef(value)
+			// Register value for cleanup when garbage collected
+			this.registry.register(value, uuid, value)
 		}
 		return this
 	}
@@ -116,6 +141,7 @@ export class IterableWeakSet<K extends WeakKey> implements Set<K> {
 		if (!uuid) return false
 		delete this.refs[uuid]
 		this.uuids.delete(value)
+		this.registry.unregister(value)
 		return true
 	}
 
