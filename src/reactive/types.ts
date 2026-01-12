@@ -318,6 +318,34 @@ export const options = {
 		 */
 		historySize: 50,
 	},
+
+	/**
+	 * Configuration for zone hooks - control which async APIs are hooked
+	 * Each option controls whether the corresponding async API is wrapped to preserve effect context
+	 * Only applies when asyncMode is enabled (truthy)
+	 */
+	zones: {
+		/**
+		 * Hook setTimeout to preserve effect context
+		 * @default true
+		 */
+		setTimeout: true,
+		/**
+		 * Hook setInterval to preserve effect context
+		 * @default true
+		 */
+		setInterval: true,
+		/**
+		 * Hook requestAnimationFrame (runs in untracked context when hooked)
+		 * @default true
+		 */
+		requestAnimationFrame: true,
+		/**
+		 * Hook queueMicrotask to preserve effect context
+		 * @default true
+		 */
+		queueMicrotask: true,
+	},
 }
 // biome-ignore-end lint/correctness/noUnusedFunctionParameters: Interface declaration with empty defaults
 

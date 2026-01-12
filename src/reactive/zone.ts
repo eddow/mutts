@@ -100,56 +100,60 @@ function hookZone() {
 	}
 
 	// Hook setTimeout - preserve original function properties for Node.js compatibility
-	const wrappedSetTimeout = (<TArgs extends any[]>(
-		callback: (...args: TArgs) => void,
-		delay?: number,
-		...args: TArgs
-	): ReturnType<typeof originalSetTimeout> => {
-		const capturedStack = captureEffectStack()
+	if (options.zones.setTimeout) {
+		const wrappedSetTimeout = (<TArgs extends any[]>(
+			callback: (...args: TArgs) => void,
+			delay?: number,
+			...args: TArgs
+		): ReturnType<typeof originalSetTimeout> => {
+			const capturedStack = captureEffectStack()
 
-		if (capturedStack.length) {
-			return originalSetTimeout.call(
-				globalThis,
-				(...cbArgs: TArgs) => {
-					withEffectStack(capturedStack, () => callback(...cbArgs))
-				},
-				delay,
-				...args
-			) as ReturnType<typeof originalSetTimeout>
-		}
+			if (capturedStack.length) {
+				return originalSetTimeout.call(
+					globalThis,
+					(...cbArgs: TArgs) => {
+						withEffectStack(capturedStack, () => callback(...cbArgs))
+					},
+					delay,
+					...args
+				) as ReturnType<typeof originalSetTimeout>
+			}
 
-		return originalSetTimeout.call(globalThis, callback, delay, ...args)
-	}) as typeof originalSetTimeout
-	Object.assign(wrappedSetTimeout, originalSetTimeout)
-	globalThis.setTimeout = wrappedSetTimeout
+			return originalSetTimeout.call(globalThis, callback, delay, ...args)
+		}) as typeof originalSetTimeout
+		Object.assign(wrappedSetTimeout, originalSetTimeout)
+		globalThis.setTimeout = wrappedSetTimeout
+	}
 
 	// Hook setInterval - preserve original function properties for Node.js compatibility
-	const wrappedSetInterval = (<TArgs extends any[]>(
-		callback: (...args: TArgs) => void,
-		delay?: number,
-		...args: TArgs
-	): ReturnType<typeof originalSetInterval> => {
-		const capturedStack = captureEffectStack()
+	if (options.zones.setInterval) {
+		const wrappedSetInterval = (<TArgs extends any[]>(
+			callback: (...args: TArgs) => void,
+			delay?: number,
+			...args: TArgs
+		): ReturnType<typeof originalSetInterval> => {
+			const capturedStack = captureEffectStack()
 
-		if (capturedStack.length) {
-			return originalSetInterval.call(
-				globalThis,
-				(...cbArgs: TArgs) => {
-					withEffectStack(capturedStack, () => callback(...cbArgs))
-				},
-				delay,
-				...args
-			) as ReturnType<typeof originalSetInterval>
-		}
+			if (capturedStack.length) {
+				return originalSetInterval.call(
+					globalThis,
+					(...cbArgs: TArgs) => {
+						withEffectStack(capturedStack, () => callback(...cbArgs))
+					},
+					delay,
+					...args
+				) as ReturnType<typeof originalSetInterval>
+			}
 
-		return originalSetInterval.call(globalThis, callback, delay, ...args)
-	}) as typeof originalSetInterval
-	Object.assign(wrappedSetInterval, originalSetInterval)
-	globalThis.setInterval = wrappedSetInterval
+			return originalSetInterval.call(globalThis, callback, delay, ...args)
+		}) as typeof originalSetInterval
+		Object.assign(wrappedSetInterval, originalSetInterval)
+		globalThis.setInterval = wrappedSetInterval
+	}
 
 	// Hook requestAnimationFrame if available
 	// requestAnimationFrame callbacks run in root context (untracked) - no effect context
-	if (originalRequestAnimationFrame) {
+	if (options.zones.requestAnimationFrame && originalRequestAnimationFrame) {
 		globalThis.requestAnimationFrame = ((
 			callback: FrameRequestCallback
 		): ReturnType<typeof originalRequestAnimationFrame> => {
@@ -160,7 +164,7 @@ function hookZone() {
 	}
 
 	// Hook queueMicrotask if available
-	if (originalQueueMicrotask) {
+	if (options.zones.queueMicrotask && originalQueueMicrotask) {
 		globalThis.queueMicrotask = ((callback: () => void): void => {
 			const capturedStack = captureEffectStack()
 
