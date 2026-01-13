@@ -43,7 +43,220 @@ service.updateMultiple(5)  // Effect runs only once with final values
 
 The wrapped function preserves its signature (parameters and return value), and all effects triggered by reactive changes inside it are automatically batched.
 
+### `addBatchCleanup()` / `defer()` - Deferring Work to Avoid Cycles
+
+When an effect needs to perform an action that would modify state the effect depends on, this can create a reactive cycle. The `addBatchCleanup` function (also exported as `defer` for semantic clarity) allows you to defer such work until after the current batch of effects completes.
+
+```typescript
+import { addBatchCleanup, effect, reactive } from 'mutts/reactive'
+// or use the semantic alias:
+// import { defer } from 'mutts/reactive'
+
+const state = reactive({ 
+  items: [],
+  processedCount: 0 
+})
+
+effect(() => {
+  // This effect reads state.items
+  const itemCount = state.items.length
+  
+  // If we modify state.processedCount here synchronously,
+  // it could trigger this effect again → potential cycle
+  
+  // Instead, defer the mutation until after this effect completes
+  addBatchCleanup(() => {
+    state.processedCount = itemCount
+  })
+})
+
+state.items.push('new item')
+// Effect runs, deferred callback runs after, no cycle
+```
+
+**Common Use Case: Self-Triggering Effects**
+
+A classic scenario is when an effect needs to create side effects that modify the state it reads:
+
+```typescript
+class Hive {
+  advertisements = reactive({ wood: { demands: [], supplies: [] } })
+  movements = reactive([])
+  
+  setupAdvertisementProcessing() {
+    effect(() => {
+      // Read advertisements
+      const ads = this.advertisements
+      
+      // We need to create movements based on advertisements,
+      // but creating a movement modifies state that might trigger this effect
+      
+      addBatchCleanup(() => {
+        // Deferred: runs after this effect completes
+        if (this.canMatchDemandWithSupply(ads.wood)) {
+          this.createMovement('wood', supplier, demander)
+        }
+      })
+    })
+  }
+  
+  createMovement(good, from, to) {
+    // Modifies reactive state
+    this.movements.push({ good, from, to })
+  }
+}
+```
+
+**vs. `queueMicrotask` Anti-Pattern**
+
+Before `addBatchCleanup` was widely known, developers sometimes used `queueMicrotask` as a workaround:
+
+```typescript
+// ❌ Anti-pattern: Using queueMicrotask
+effect(() => {
+  processAdvertisements()
+  
+  queueMicrotask(() => {
+    createMovement()  // Defers via event loop
+  })
+})
+```
+
+**Problems with `queueMicrotask`:**
+- ❌ **Async timing**: Relies on JavaScript event loop, not reactive system
+- ❌ **Hard to test**: Requires `await` in tests to flush microtasks
+- ❌ **Unclear intent**: Not obvious this is for reactive cycle avoidance
+- ❌ **No batch coordination**: Runs after event loop, not after reactive batch
+
+**Use `addBatchCleanup` instead:**
+```typescript
+// ✅ Correct: Using addBatchCleanup
+effect(() => {
+  processAdvertisements()
+  
+  addBatchCleanup(() => {
+    createMovement()  // Defers to end of reactive batch
+  })
+})
+```
+
+**Benefits:**
+- ✅ **Synchronous**: Runs immediately after batch, no event loop delay
+- ✅ **Testable**: No need for `await` in tests
+- ✅ **Semantic**: Clear that this is deferred work within reactive system
+- ✅ **Batch-aware**: Respects reactive batch boundaries
+
+**Execution Timing:**
+
+`addBatchCleanup` callbacks run:
+1. After **all effects in the current batch** have executed
+2. In **FIFO order** (first added, first executed)
+3. **Before** control returns to the caller
+4. **Synchronously** (no microtask/setTimeout delay)
+
+```typescript
+const state = reactive({ count: 0 })
+
+console.log('1. Starting')
+
+effect(() => {
+  console.log('2. Effect running, count:', state.count)
+  
+  addBatchCleanup(() => {
+    console.log('5. Deferred work A')
+  })
+  
+  addBatchCleanup(() => {
+    console.log('6. Deferred work B')
+  })
+  
+  console.log('3. Effect ending')
+})
+
+console.log('4. After effect created')
+// Deferred callbacks run here
+console.log('7. All done')
+
+// Output:
+// 1. Starting
+// 2. Effect running, count: 0
+// 3. Effect ending
+// 4. After effect created
+// 5. Deferred work A
+// 6. Deferred work B
+// 7. All done
+```
+
+**Outside of Batches:**
+
+If `addBatchCleanup` is called when no batch is active, the callback executes **immediately**:
+
+```typescript
+// Not inside an effect or atomic operation
+addBatchCleanup(() => {
+  console.log('Runs immediately')
+})
+// Callback has already run by this point
+```
+
+**Nested Batches:**
+
+Callbacks added in nested batches are collected and run when the **outermost batch** completes:
+
+```typescript
+effect(() => {
+  addBatchCleanup(() => console.log('Outer deferred'))
+  
+  atomic(() => {
+    addBatchCleanup(() => console.log('Inner deferred'))
+  })()
+})
+
+// Output:
+// Outer deferred
+// Inner deferred
+// (Both run after outer batch completes)
+```
+
+**Error Handling:**
+
+If a deferred callback throws an error, it's logged but doesn't stop other deferred callbacks from running:
+
+```typescript
+effect(() => {
+  addBatchCleanup(() => {
+    throw new Error('First callback fails')
+  })
+  
+  addBatchCleanup(() => {
+    console.log('Second callback still runs')
+  })
+})
+
+// Error is logged, but second callback executes
+```
+
+**Best Practices:**
+
+1. **Use for consequence actions**: When an effect's consequences would trigger the effect again
+2. **Keep callbacks focused**: Each deferred callback should do one thing
+3. **Prefer defer alias**: `defer` is more semantic than `addBatchCleanup` for deferring work
+4. **Document why**: Add a comment explaining why deferral is needed
+
+```typescript
+effect(() => {
+  processData()
+  
+  // Defer movement creation to avoid triggering this effect again
+  // (createMovement modifies state that this effect reads)
+  defer(() => {
+    createMovement(data)
+  })
+})
+```
+
 ### `biDi()` - Bidirectional Binding
+
 
 Creates a bidirectional binding between a reactive value and a non-reactive external value (like DOM elements), automatically preventing infinite loops.
 

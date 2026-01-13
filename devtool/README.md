@@ -28,7 +28,7 @@ devtool/
 
 1. In Chrome, open `chrome://extensions`.
 2. Enable **Developer mode** (toggle in top-right).
-3. Click **Load unpacked** → select `/home/fmdm/dev/mutts/devtool`.
+3. Click **Load unpacked** → select `.../mutts/devtool`.
 4. The extension should appear in your extensions list.
 
 ## Usage

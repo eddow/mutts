@@ -38,12 +38,18 @@ const originalRequestAnimationFrame =
 const originalQueueMicrotask =
 	typeof globalThis.queueMicrotask !== 'undefined' ? globalThis.queueMicrotask : undefined
 
+// Store batch function to avoid circular dependency
+let batchFn: ((cb: () => any, type: 'immediate') => any) | undefined
+
 /**
  * Check the asyncMode option and hook Promise.prototype once if enabled
  * Called lazily on first effect creation
  * asyncMode being truthy enables async zone, false disables it
+ *
+ * @param batch - Optional batch function injection from effects.ts to avoid circular dependency
  */
-export function ensureZoneHooked() {
+export function ensureZoneHooked(batch?: (cb: () => any, type: 'immediate') => any) {
+	if (batch) batchFn = batch
 	if (zoneHooked || !options.asyncMode) return
 	hookZone()
 	zoneHooked = true
@@ -59,20 +65,12 @@ function hookZone() {
 		onFulfilled?: ((value: T) => R1 | PromiseLike<R1>) | null,
 		onRejected?: ((reason: any) => R2 | PromiseLike<R2>) | null
 	): Promise<R1 | R2> {
-		// Capture effect context at the time .then() is called
 		const capturedStack = captureEffectStack()
-
-		// Only wrap if we have an active effect (avoid unnecessary wrapping)
-		if (capturedStack.length) {
-			return originalPromiseThen.call(
-				this,
-				wrapCallback(onFulfilled, capturedStack),
-				wrapCallback(onRejected, capturedStack)
-			)
-		}
-
-		// No active effect, use original directly
-		return originalPromiseThen.call(this, onFulfilled, onRejected)
+		return originalPromiseThen.call(
+			this,
+			wrapCallback(onFulfilled, capturedStack),
+			wrapCallback(onRejected, capturedStack)
+		)
 	}
 
 	Promise.prototype.catch = function <T>(
@@ -80,12 +78,7 @@ function hookZone() {
 		onRejected?: ((reason: any) => T | PromiseLike<T>) | null
 	): Promise<T> {
 		const capturedStack = captureEffectStack()
-
-		if (capturedStack.length) {
-			return originalPromiseCatch.call(this, wrapCallback(onRejected, capturedStack))
-		}
-
-		return originalPromiseCatch.call(this, onRejected)
+		return originalPromiseCatch.call(this, wrapCallback(onRejected, capturedStack))
 	}
 
 	Promise.prototype.finally = function <T>(
@@ -93,107 +86,93 @@ function hookZone() {
 		onFinally?: (() => void) | null
 	): Promise<T> {
 		const capturedStack = captureEffectStack()
-
-		return capturedStack.length && onFinally
-			? originalPromiseFinally.call(this, wrapCallback(onFinally, capturedStack))
-			: originalPromiseFinally.call(this, onFinally)
+		return originalPromiseFinally.call(this, wrapCallback(onFinally, capturedStack))
 	}
 
 	// Hook setTimeout - preserve original function properties for Node.js compatibility
-	if (options.zones.setTimeout) {
-		const wrappedSetTimeout = (<TArgs extends any[]>(
-			callback: (...args: TArgs) => void,
-			delay?: number,
-			...args: TArgs
-		): ReturnType<typeof originalSetTimeout> => {
-			const capturedStack = captureEffectStack()
-
-			if (capturedStack.length) {
-				return originalSetTimeout.call(
-					globalThis,
-					(...cbArgs: TArgs) => {
-						withEffectStack(capturedStack, () => callback(...cbArgs))
-					},
-					delay,
-					...args
-				) as ReturnType<typeof originalSetTimeout>
-			}
-
-			return originalSetTimeout.call(globalThis, callback, delay, ...args)
-		}) as typeof originalSetTimeout
-		Object.assign(wrappedSetTimeout, originalSetTimeout)
-		globalThis.setTimeout = wrappedSetTimeout
-	}
+	const wrappedSetTimeout = (<TArgs extends any[]>(
+		callback: (...args: TArgs) => void,
+		delay?: number,
+		...args: TArgs
+	): ReturnType<typeof originalSetTimeout> => {
+		const capturedStack = options.zones.setTimeout ? captureEffectStack() : undefined
+		return originalSetTimeout.call(
+			globalThis,
+			wrapCallback(callback, capturedStack) as (...args: any[]) => void,
+			delay,
+			...args
+		)
+	}) as typeof originalSetTimeout
+	Object.assign(wrappedSetTimeout, originalSetTimeout)
+	globalThis.setTimeout = wrappedSetTimeout
 
 	// Hook setInterval - preserve original function properties for Node.js compatibility
-	if (options.zones.setInterval) {
-		const wrappedSetInterval = (<TArgs extends any[]>(
-			callback: (...args: TArgs) => void,
-			delay?: number,
-			...args: TArgs
-		): ReturnType<typeof originalSetInterval> => {
-			const capturedStack = captureEffectStack()
-
-			if (capturedStack.length) {
-				return originalSetInterval.call(
-					globalThis,
-					(...cbArgs: TArgs) => {
-						withEffectStack(capturedStack, () => callback(...cbArgs))
-					},
-					delay,
-					...args
-				) as ReturnType<typeof originalSetInterval>
-			}
-
-			return originalSetInterval.call(globalThis, callback, delay, ...args)
-		}) as typeof originalSetInterval
-		Object.assign(wrappedSetInterval, originalSetInterval)
-		globalThis.setInterval = wrappedSetInterval
-	}
+	const wrappedSetInterval = (<TArgs extends any[]>(
+		callback: (...args: TArgs) => void,
+		delay?: number,
+		...args: TArgs
+	): ReturnType<typeof originalSetInterval> => {
+		const capturedStack = options.zones.setInterval ? captureEffectStack() : undefined
+		return originalSetInterval.call(
+			globalThis,
+			wrapCallback(callback, capturedStack) as (...args: any[]) => void,
+			delay,
+			...args
+		)
+	}) as typeof originalSetInterval
+	Object.assign(wrappedSetInterval, originalSetInterval)
+	globalThis.setInterval = wrappedSetInterval
 
 	// Hook requestAnimationFrame if available
-	// requestAnimationFrame callbacks run in root context (untracked) - no effect context
-	if (options.zones.requestAnimationFrame && originalRequestAnimationFrame) {
+	if (originalRequestAnimationFrame) {
 		globalThis.requestAnimationFrame = ((
 			callback: FrameRequestCallback
 		): ReturnType<typeof originalRequestAnimationFrame> => {
-			return originalRequestAnimationFrame.call(globalThis, (time: DOMHighResTimeStamp) => {
-				withEffect(undefined, () => callback(time))
-			})
+			const capturedStack = options.zones.requestAnimationFrame
+				? captureEffectStack()
+				: undefined
+			return originalRequestAnimationFrame.call(
+				globalThis,
+				wrapCallback(callback as any, capturedStack) as FrameRequestCallback
+			)
 		}) as typeof originalRequestAnimationFrame
 	}
 
 	// Hook queueMicrotask if available
-	if (options.zones.queueMicrotask && originalQueueMicrotask) {
+	if (originalQueueMicrotask) {
 		globalThis.queueMicrotask = ((callback: () => void): void => {
-			const capturedStack = captureEffectStack()
-
-			if (capturedStack.length) {
-				originalQueueMicrotask.call(globalThis, () => {
-					withEffectStack(capturedStack, () => callback())
-				})
-				return
-			}
-
-			originalQueueMicrotask.call(globalThis, callback)
+			const capturedStack = options.zones.queueMicrotask ? captureEffectStack() : undefined
+			originalQueueMicrotask.call(globalThis, wrapCallback(callback, capturedStack) as () => void)
 		}) as typeof originalQueueMicrotask
 	}
 }
 
 /**
- * Wraps a callback to restore effect context when executed
+ * Wraps a callback to restore effect context and ensure batching
  */
 function wrapCallback<T extends (...args: any[]) => any>(
 	callback: T | null | undefined,
-	capturedStack: ScopedCallback[]
+	capturedStack: ScopedCallback[] | undefined
 ): T | undefined {
 	if (!callback) return undefined
 
+	// If no stack to restore and no batch function, direct call (optimization)
+	if ((!capturedStack || !capturedStack.length) && !batchFn) {
+		return callback
+	}
+
 	return ((...args: any[]) => {
-		if (capturedStack.length) {
-			return withEffectStack(capturedStack, () => callback(...args))
+		const execute = () => {
+			if (capturedStack && capturedStack.length) {
+				return withEffectStack(capturedStack, () => callback(...args))
+			}
+			return callback(...args)
 		}
-		return callback(...args)
+
+		if (batchFn) {
+			return batchFn(execute, 'immediate')
+		}
+		return execute()
 	}) as T
 }
 

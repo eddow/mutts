@@ -4,6 +4,7 @@ export {
 	addBatchCleanup,
 	atomic,
 	biDi,
+	defer,
 	effect,
 	getActiveEffect,
 	root,

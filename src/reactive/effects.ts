@@ -632,6 +632,29 @@ export function addBatchCleanup(cleanup: ScopedCallback) {
 }
 
 /**
+ * Semantic alias for `addBatchCleanup` - defers work to the end of the current reactive batch.
+ * 
+ * Use this when an effect needs to perform an action that would modify state the effect depends on,
+ * which would create a reactive cycle. The deferred callback runs after all effects complete.
+ * 
+ * @param callback - The callback to defer until after the current batch completes
+ * 
+ * @example
+ * ```typescript
+ * effect(() => {
+ *   processData()
+ *   
+ *   // Defer to avoid cycle (createMovement modifies state this effect reads)
+ *   defer(() => {
+ *     createMovement(data)
+ *   })
+ * })
+ * ```
+ */
+export const defer = addBatchCleanup
+
+
+/**
  * Gets a cycle path for debugging
  * Uses DFS to find cycles in the batch
  * @param batchQueue - The batch queue
@@ -1005,7 +1028,8 @@ export function effect(
 	effectOptions?: EffectOptions
 ): ScopedCallback {
 	// Ensure zone is hooked if asyncZone option is enabled (lazy initialization)
-	ensureZoneHooked()
+	// Inject batch function to allow atomic game loops in requestAnimationFrame
+	ensureZoneHooked(batch)
 
 	// Use per-effect asyncMode or fall back to global option
 	const asyncMode = effectOptions?.asyncMode ?? options.asyncMode ?? 'cancel'
