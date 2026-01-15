@@ -1,19 +1,17 @@
-import { batch, effect } from './effects'
-import { isObject } from './lazy-get'
+import { effect } from './effects'
 import { isNonReactive } from './non-reactive-state'
 import { reactive, unwrap } from './proxy'
 import { markWithRoot } from './tracking'
 import {
-	addBackReference,
-	bubbleUpChange,
 	deepWatchers,
 	effectToDeepWatchedObjects,
-	needsBackReferences,
-	objectParents,
 	objectsWithDeepWatchers,
-	removeBackReference,
 } from './deep-watch-state'
-import { type Evolution, options, type ScopedCallback } from './types'
+import { options, type ScopedCallback } from './types'
+
+function isObject(value: any): value is object {
+	return typeof value === 'object' && value !== null
+}
 
 export {
 	addBackReference,

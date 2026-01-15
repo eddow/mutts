@@ -1,7 +1,7 @@
 import { decorator } from '../decorator'
 import { renamed } from '../utils'
 import { touched1 } from './change'
-import { effect, untracked } from './effects'
+import { effect, root } from './effects'
 import { dependant, getRoot, markWithRoot } from './tracking'
 
 export type Memoizable = object | any[] | symbol | ((...args: any[]) => any)
@@ -27,8 +27,8 @@ function getBranch<Result>(tree: MemoCacheTree<Result>, key: Memoizable): MemoCa
 function memoizeFunction<Result, Args extends Memoizable[]>(
 	fn: (...args: Args) => Result
 ): (...args: Args) => Result {
-	const root = getRoot(fn)
-	const existing = memoizedRegistry.get(root)
+	const fnRoot = getRoot(fn)
+	const existing = memoizedRegistry.get(fnRoot)
 	if (existing) return existing as (...args: Args) => Result
 
 	const cacheRoot: MemoCacheTree<Result> = {}
@@ -43,11 +43,11 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 		}
 
 		dependant(node, 'memoize')
-		if ('result' in node) return node.result
+		if ('result' in node) return node.result!
 
 		// Create memoize internal effect to track dependencies and invalidate cache
 		// Use untracked to prevent the effect creation from being affected by parent effects
-		node.cleanup = untracked(() => effect(
+		node.cleanup = root(() => effect(
 			markWithRoot(() => {
 				// Execute the function and track its dependencies
 				// The function execution will automatically track dependencies on reactive objects
@@ -61,12 +61,12 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 					node.cleanup = undefined
 					stop?.()
 				}
-			}, root)
+			}, fnRoot)
 		))
-		return node.result
+		return node.result!
 	}, fn)
 
-	memoizedRegistry.set(root, memoized)
+	memoizedRegistry.set(fnRoot, memoized)
 	memoizedRegistry.set(memoized, memoized)
 	return memoized as (...args: Args) => Result
 }

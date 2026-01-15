@@ -74,7 +74,7 @@ export function watch(
 ) {
 	return typeof value === 'function'
 		? watchCallBack(value, changed, options)
-		: typeof value === 'object'
+		: typeof value === 'object' && value !== null
 			? watchObject(value, changed, options)
 			: (() => {
 					throw new Error('watch: value must be a function or an object')
@@ -87,7 +87,7 @@ function watchObject(
 	{ immediate = false, deep = false } = {}
 ): ScopedCallback {
 	const myParentEffect = getActiveEffect()
-	if (deep) return deepWatch(value, changed, { immediate })
+	if (deep) return deepWatch(value, changed, { immediate })!
 	return effect(
 		markWithRoot(function watchObjectEffect() {
 			dependant(value)
@@ -209,7 +209,7 @@ export function derived<T>(compute: (dep: DependencyAccess) => T): {
 	value: T
 	[cleanup]: ScopedCallback
 } {
-	const rv = { value: undefined }
+	const rv = { value: undefined as unknown as T }
 	return cleanedBy(
 		rv,
 		untracked(() =>

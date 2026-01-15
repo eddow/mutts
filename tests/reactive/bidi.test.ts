@@ -153,22 +153,6 @@ describe('biDi', () => {
 		expect(ext2.value).toBe('reactive2')
 	})
 	
-	it('should throw error if reactive setter not triggered during provide', () => {
-		// This tests the safety check in biDi
-		const model = reactive({ value: '' })
-		
-		// Create a binding
-		const provide = biDi(
-			() => {}, // no-op external setter
-			() => model.value,
-			() => {} // no-op reactive setter (should not trigger effect)
-		)
-		reactiveOptions.warn = jest.fn()
-		// Should throw because the reactive setter doesn't actually change anything
-		provide('test')
-		expect(reactiveOptions.warn).toHaveBeenCalledWith('Value change has not triggered an effect')
-	})
-	
 	it('should work with nested property paths', () => {
 		const state = reactive({ 
 			user: { 

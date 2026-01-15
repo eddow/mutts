@@ -41,7 +41,10 @@ export function registerNativeReactivity(
 }
 
 nonReactiveClass(Date, RegExp, Error, Promise, Function)
-if (typeof window !== 'undefined') markNonReactive(window, document)
+if (typeof window !== 'undefined') {
+	markNonReactive(window, document)
+	nonReactiveClass(Node, Element, HTMLElement, EventTarget)
+}
 
 export { markNonReactive as nonReactive }
 

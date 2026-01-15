@@ -55,9 +55,7 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 
 	constructor(keyFn: KeyFunction<T, K>, initial?: Iterable<T>) {
 		super()
-		Object.defineProperties(this, {
-			[prototypeForwarding]: { value: this.#keys },
-		})
+		/* Moved below initialization */
 		let ascendGet: DependencyFunction | undefined
 		effect(({ ascend }) => {
 			ascendGet = ascend
@@ -67,6 +65,9 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 		this.#keyFn = keyFn
 		this.#keys = reactive([] as K[])
 		this.#values = reactive(new Map<K, T>())
+		Object.defineProperties(this, {
+			[prototypeForwarding]: { value: this.#keys },
+		})
 		if (initial) this.push(...initial)
 	}
 
@@ -349,10 +350,13 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 		}
 	}
 
-	entries(): IterableIterator<[number, T | undefined]> {
+	entries(): IterableIterator<[number, T]> {
 		const self = this
-		function* iterator(): IterableIterator<[number, T | undefined]> {
-			for (let i = 0; i < self.#keys.length; i++) yield [i, self.#values.get(self.#keys[i])]
+		function* iterator(): IterableIterator<[number, T]> {
+			for (let i = 0; i < self.#keys.length; i++) {
+				const val = self.#values.get(self.#keys[i])
+				if (val !== undefined) yield [i, val]
+			}
 		}
 		return iterator()
 	}

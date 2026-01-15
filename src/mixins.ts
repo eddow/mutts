@@ -95,9 +95,9 @@ export function mixin<MixinFn extends (base: any) => new (...args: any[]) => any
 							!['constructor', 'toString', 'valueOf'].includes(prop)
 						) {
 							// Return a wrapped version that uses unwrapped context
-							return function (...args: any[]) {
+							return function (this: any, ...args: any[]) {
 								// Use the unwrapping function if provided, otherwise use this
-								const context = unwrapFunction(this)
+								const context = unwrapFunction(this as any)
 								return value.apply(context, args)
 							}
 						}

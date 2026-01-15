@@ -135,6 +135,7 @@ export type DecoratorFactory<T> = <Description extends DecoratorDescription<T>>(
  */
 export function legacyDecorator<T = any>(description: DecoratorDescription<T>): any {
 	return function (
+		this: any,
 		target: any,
 		propertyKey?: PropertyKey,
 		descriptor?: PropertyDescriptor,
@@ -143,7 +144,7 @@ export function legacyDecorator<T = any>(description: DecoratorDescription<T>): 
 		if (propertyKey === undefined) {
 			if (isConstructor(target)) {
 				if (!('class' in description)) throw new Error('Decorator cannot be applied to a class')
-				return description.class?.(target)
+				return description.class!(target)
 			}
 		} else if (typeof target === 'object' && ['string', 'symbol'].includes(typeof propertyKey)) {
 			if (!descriptor) throw new Error('Decorator cannot be applied to a field')
@@ -152,17 +153,17 @@ export function legacyDecorator<T = any>(description: DecoratorDescription<T>): 
 					if (!('getter' in description || 'setter' in description))
 						throw new Error('Decorator cannot be applied to a getter or setter')
 					if ('getter' in description) {
-						const newGetter = description.getter?.(descriptor.get, propertyKey)
+						const newGetter = description.getter!(descriptor.get as any, propertyKey)
 						if (newGetter) descriptor.get = newGetter
 					}
 					if ('setter' in description) {
-						const newSetter = description.setter?.(descriptor.set, propertyKey)
+						const newSetter = description.setter!(descriptor.set as any, propertyKey)
 						if (newSetter) descriptor.set = newSetter
 					}
 					return descriptor
 				} else if (typeof descriptor.value === 'function') {
 					if (!('method' in description)) throw new Error('Decorator cannot be applied to a method')
-					const newMethod = description.method?.(descriptor.value, propertyKey)
+					const newMethod = description.method!(descriptor.value, propertyKey)
 					if (newMethod) descriptor.value = newMethod
 					return descriptor
 				}
@@ -170,7 +171,7 @@ export function legacyDecorator<T = any>(description: DecoratorDescription<T>): 
 		}
 		if (!('default' in description))
 			throw new Error('Decorator do not have a default implementation')
-		return description.default.call(this, target, propertyKey, descriptor, ...args)
+		return description.default!.call(this, target, propertyKey, descriptor, ...args)
 	}
 }
 
@@ -180,37 +181,38 @@ export function legacyDecorator<T = any>(description: DecoratorDescription<T>): 
  * @returns A decorator function compatible with Modern decorators
  */
 export function modernDecorator<T = any>(description: DecoratorDescription<T>): any {
-	return function (target: any, context?: DecoratorContext, ...args: any[]) {
+	/*return function (target: any, context?: DecoratorContext, ...args: any[]) {*/
+	return function (this: any, target: any, context?: DecoratorContext, ...args: any[]) {
 		if (!context?.kind || typeof context.kind !== 'string') {
 			if (!('default' in description))
 				throw new Error('Decorator do not have a default implementation')
-			return description.default.call(this, target, context, ...args)
+			return description.default!.call(this, target, context, ...args)
 		}
 		switch (context.kind) {
 			case 'class':
 				if (!('class' in description)) throw new Error('Decorator cannot be applied to a class')
-				return description.class?.(target)
+				return description.class!(target)
 			case 'field':
 				throw new Error('Decorator cannot be applied to a field')
 			case 'getter':
 				if (!('getter' in description)) throw new Error('Decorator cannot be applied to a getter')
-				return description.getter?.(target, context.name)
+				return description.getter!(target, context.name)
 			case 'setter':
 				if (!('setter' in description)) throw new Error('Decorator cannot be applied to a setter')
-				return description.setter?.(target, context.name)
+				return description.setter!(target, context.name)
 			case 'method':
 				if (!('method' in description)) throw new Error('Decorator cannot be applied to a method')
-				return description.method?.(target, context.name)
+				return description.method!(target, context.name)
 			case 'accessor': {
 				if (!('getter' in description || 'setter' in description))
 					throw new Error('Decorator cannot be applied to a getter or setter')
 				const rv: Partial<ClassAccessorDecoratorResult<any, any>> = {}
 				if ('getter' in description) {
-					const newGetter = description.getter?.(target.get, context.name)
+					const newGetter = description.getter!(target.get, context.name)
 					if (newGetter) rv.get = newGetter
 				}
 				if ('setter' in description) {
-					const newSetter = description.setter?.(target.set, context.name)
+					const newSetter = description.setter!(target.set, context.name)
 					if (newSetter) rv.set = newSetter
 				}
 				return rv

@@ -51,7 +51,7 @@ export function Destroyable<
 	T extends new (
 		...args: any[]
 	) => any,
-	Allocated extends Partial<typeof this>,
+	Allocated extends Partial<InstanceType<T>>,
 >(
 	base: T,
 	destructorObj: Destructor<Allocated>

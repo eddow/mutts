@@ -422,7 +422,7 @@ export class ArrayReadForward<T> {
 		locales?: string | string[],
 		options?: Intl.NumberFormatOptions | Intl.DateTimeFormatOptions
 	): string {
-		return this[forwardArray].toLocaleString(locales, options)
+		return this[forwardArray].toLocaleString(locales as string | string[], options)
 	}
 
 	/**
@@ -468,24 +468,15 @@ export class ArrayReadForward<T> {
 	 * Returns a new array with some elements removed and/or replaced at a given index (ES2023)
 	 */
 	toSpliced(start: number, deleteCount?: number, ...items: T[]): T[] {
-		if (this[forwardArray].toSpliced) {
-			return this[forwardArray].toSpliced(start, deleteCount, ...items)
-		}
-		const arr = [...this[forwardArray]]
-		arr.splice(start, deleteCount ?? arr.length - start, ...items)
-		return arr
+		if (deleteCount === undefined) return this[forwardArray].toSpliced(start)
+		return this[forwardArray].toSpliced(start, deleteCount, ...items)
 	}
 
 	/**
 	 * Returns a new array with the element at the given index replaced with the given value (ES2023)
 	 */
 	with(index: number, value: T): T[] {
-		if (this[forwardArray].with) {
-			return this[forwardArray].with(index, value)
-		}
-		const arr = [...this[forwardArray]]
-		arr[index] = value
-		return arr
+		return this[forwardArray].with(index, value)
 	}
 	get [Symbol.unscopables]() {
 		return this[forwardArray][Symbol.unscopables]

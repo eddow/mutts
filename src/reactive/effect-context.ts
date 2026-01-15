@@ -4,13 +4,13 @@ import { ReactiveError, type ScopedCallback } from './types'
 /**
  * Effect context stack for nested tracking (front = active, next = parent)
  */
-const stack: ScopedCallback[] = []
+const stack: (ScopedCallback | undefined)[] = []
 export const effectStack = stack
 
 export function captureEffectStack() {
 	return stack.slice()
 }
-export function isRunning(effect: ScopedCallback): ScopedCallback[] | false {
+export function isRunning(effect: ScopedCallback): (ScopedCallback | undefined)[] | false {
 	const rootEffect = getRoot(effect)
 
 	// Check if the effect is directly in the stack
@@ -55,7 +55,7 @@ export function isRunning(effect: ScopedCallback): ScopedCallback[] | false {
 
 	return false
 }
-export function withEffectStack<T>(snapshot: ScopedCallback[], fn: () => T): T {
+export function withEffectStack<T>(snapshot: (ScopedCallback | undefined)[], fn: () => T): T {
 	const previousStack = stack.slice()
 	assignStack(snapshot)
 	try {
@@ -89,7 +89,7 @@ export function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T): 
 	}
 }
 
-function assignStack(values: ScopedCallback[]) {
+function assignStack(values: (ScopedCallback | undefined)[]) {
 	stack.length = 0
 	stack.push(...values)
 }

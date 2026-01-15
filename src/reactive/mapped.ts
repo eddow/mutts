@@ -83,7 +83,7 @@ export function mapped<T, U>(
 	compute: (input: T, index: number, output: U[]) => U,
 	resize?: (newLength: number, oldLength: number) => void
 ): readonly U[] {
-	const result = []
+	const result: U[] = []
 	const resultReactive = new ReactiveReadOnlyArray(result)
 	const cleanups: ScopedCallback[] = []
 	function input(index: number) {
@@ -118,7 +118,7 @@ export function reduced<T, U, R extends object = any>(
 	inputs: readonly T[],
 	compute: (input: T, factor: R) => readonly U[]
 ): readonly U[] {
-	const result = []
+	const result: U[] = []
 	const resultReactive = new ReactiveReadOnlyArray(result)
 	const cleanupFactor = effect(function computedReducedFactorEffect() {
 		const factor: R = {} as R

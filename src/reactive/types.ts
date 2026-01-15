@@ -202,28 +202,28 @@ export const options = {
 	 * Debug purpose: called when an effect is entered
 	 * @param effect - The effect that is entered
 	 */
-	enter: (effect: Function) => {},
+	enter: (_effect: Function) => {},
 	/**
 	 * Debug purpose: called when an effect is left
 	 * @param effect - The effect that is left
 	 */
-	leave: (effect: Function) => {},
+	leave: (_effect: Function) => {},
 	/**
 	 * Debug purpose: called when an effect is chained
 	 * @param target - The effect that is being triggered
 	 * @param caller - The effect that is calling the target
 	 */
-	chain: (targets: Function[], caller?: Function) => {},
+	chain: (_targets: Function[], _caller?: Function) => {},
 	/**
 	 * Debug purpose: called when an effect chain is started
 	 * @param target - The effect that is being triggered
 	 */
-	beginChain: (targets: Function[]) => {},
+	beginChain: (_targets: Function[]) => {},
 	/**
 	 * Debug purpose: called when an effect chain is ended
 	 */
 	endChain: () => {},
-	garbageCollected: (fn: Function) => {},
+	garbageCollected: (_fn: Function) => {},
 	/**
 	 * Debug purpose: called when an object is touched
 	 * @param obj - The object that is touched
@@ -231,13 +231,13 @@ export const options = {
 	 * @param props - The properties that changed
 	 * @param deps - The dependencies that changed
 	 */
-	touched: (obj: any, evolution: Evolution, props?: any[], deps?: Set<ScopedCallback>) => {},
+	touched: (_obj: any, _evolution: Evolution, _props?: any[], _deps?: Set<ScopedCallback>) => {},
 	/**
 	 * Debug purpose: called when an effect is skipped because it's already running
 	 * @param effect - The effect that is already running
 	 * @param runningChain - The array of effects from the detected one to the currently running one
 	 */
-	skipRunningEffect: (effect: ScopedCallback, runningChain: ScopedCallback[]) => {},
+	skipRunningEffect: (_effect: ScopedCallback, _runningChain: ScopedCallback[]) => {},
 	/**
 	 * Debug purpose: maximum effect chain (like call stack max depth)
 	 * Used to prevent infinite loops

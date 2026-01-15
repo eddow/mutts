@@ -22,7 +22,7 @@ import {
 	type DependencyAccess,
 	type EffectOptions,
 	type Evolution,
-	type AsyncExecutionMode,
+	// type AsyncExecutionMode,
 	type ScopedCallback,
 	ReactiveError,
 	ReactiveErrorCode,
@@ -435,7 +435,7 @@ function decrementInDegreesForExecuted(batch: BatchQueue, executedRoot: Function
  * TODO: Optimization - For large graphs with small batches, iterating over all causes in the closure
  * can be expensive. Consider maintaining a separate "batch causes" set or caching in-degrees.
  */
-function computeInDegreeInBatch(
+/* function computeInDegreeInBatch(
 	root: Function,
 	batchEffects: Map<Function, ScopedCallback>
 ): number {
@@ -811,9 +811,9 @@ function executeNext(effectuatedRoots: Function[]): any {
 	const result = nextEffect()
 
 	// Remove from batch and update in-degrees of dependents
-	batchQueue!.all.delete(nextRoot)
-	batchQueue!.inDegrees.delete(nextRoot)
-	decrementInDegreesForExecuted(batchQueue!, nextRoot)
+	batchQueue!.all.delete(nextRoot!)
+	batchQueue!.inDegrees.delete(nextRoot!)
+	decrementInDegreesForExecuted(batchQueue!, nextRoot!)
 
 	return result
 }
@@ -1001,7 +1001,7 @@ export const atomic = decorator({
 	default<Args extends any[], Return>(
 		original: (...args: Args) => Return
 	): (...args: Args) => Return {
-		return function (...args: Args) {
+		return function (this: any, ...args: Args) {
 			return batch(
 				markWithRoot(() => original.apply(this, args), original),
 				'immediate'
@@ -1238,7 +1238,7 @@ export function untracked<T>(fn: () => T): T {
  * @param fn - The function to execute
  */
 export function root<T>(fn: () => T): T {
-	let rv: T
+	let rv!: T
 	withEffect(
 		undefined,
 		() => {
@@ -1286,13 +1286,13 @@ export { effectTrackers }
 export function biDi<T>(
 	received: (value: T) => void,
 	value: { get: () => T; set: (value: T) => void }
-)
-export function biDi<T>(received: (value: T) => void, get: () => T, set: (value: T) => void)
+): (value: T) => void
+export function biDi<T>(received: (value: T) => void, get: () => T, set: (value: T) => void): (value: T) => void
 export function biDi<T>(
 	received: (value: T) => void,
 	get: (() => T) | { get: () => T; set: (value: T) => void },
 	set?: (value: T) => void
-) {
+): (value: T) => void {
 	if (typeof get !== 'function') {
 		set = get.set
 		get = get.get
@@ -1304,10 +1304,8 @@ export function biDi<T>(
 		}, root)
 	)
 	return atomic((value: T) => {
-		set(value)
-		if (!batchQueue?.all.has(root)) {
-			options.warn('Value change has not triggered an effect')
-		} else {
+		set!(value)
+		if (batchQueue?.all.has(root)) {
 			// Remove the effect from the batch queue so it doesn't execute
 			// This prevents circular updates in bidirectional bindings
 			batchQueue.all.delete(root)

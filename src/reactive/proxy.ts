@@ -29,7 +29,7 @@ import {
 	unreactiveProperties,
 } from './types'
 
-const hasReentry = []
+const hasReentry: any[] = []
 const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
@@ -261,7 +261,7 @@ export const reactive = decorator({
 		})
 		return Reactive as any
 	},
-	get(original) {
+	get(original: any) {
 		return reactiveObject(original)
 	},
 	default: reactiveObject,

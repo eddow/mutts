@@ -447,7 +447,7 @@ export function getDependents(obj: object): ScopedCallback[] {
 	// Scan the trigger graph for effects triggered by this object
 	// This is O(E) where E is the number of edges, might need optimization for large graphs
 	// but acceptable for introspection
-	for (const [source, targetMap] of triggerGraph) {
+	for (const [_source, targetMap] of triggerGraph) {
 		for (const [targetEffect, labelMap] of targetMap) {
 			for (const record of labelMap.values()) {
 				if (record.object === obj) {

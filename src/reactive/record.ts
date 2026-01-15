@@ -192,5 +192,5 @@ export function organize<T>(
 		enumerable: true,
 	})
 	touched1(target, { type: 'set', prop: property }, property)
-	return () => delete target[property]
+	return () => delete (target as any)[property]
 }

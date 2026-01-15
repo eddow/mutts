@@ -1,5 +1,3 @@
-import { isLazyGet, unwrapLazyGet } from './lazy-get'
-
 export const objectToProxy = new WeakMap<object, object>()
 export const proxyToObject = new WeakMap<object, object>()
 
@@ -18,11 +16,8 @@ export function trackProxyObject(proxy: object, target: object) {
 
 export function unwrap<T>(obj: T): T {
 	let current = obj
-	while (current) {
-		if (isLazyGet(current)) current = unwrapLazyGet(current) as T
-		else if (typeof current === 'object' && current !== null && proxyToObject.has(current))
-			current = proxyToObject.get(current) as T
-		else break
+	while (current && typeof current === 'object' && current !== null && proxyToObject.has(current)) {
+		current = proxyToObject.get(current) as T
 	}
 	return current
 }

@@ -14,7 +14,7 @@
  * When enabled (asyncMode = 'cancel' | 'queue' | 'ignore'), async entry points are wrapped ONCE.
  */
 
-import { captureEffectStack, withEffect, withEffectStack } from './effect-context'
+import { captureEffectStack, withEffectStack } from './effect-context'
 import { options, ScopedCallback } from './types'
 
 let zoneHooked = false
@@ -96,12 +96,11 @@ function hookZone() {
 		...args: TArgs
 	): ReturnType<typeof originalSetTimeout> => {
 		const capturedStack = options.zones.setTimeout ? captureEffectStack() : undefined
-		return originalSetTimeout.call(
-			globalThis,
+		return originalSetTimeout.apply(globalThis, [
 			wrapCallback(callback, capturedStack) as (...args: any[]) => void,
 			delay,
-			...args
-		)
+			...args,
+		] as any)
 	}) as typeof originalSetTimeout
 	Object.assign(wrappedSetTimeout, originalSetTimeout)
 	globalThis.setTimeout = wrappedSetTimeout
@@ -113,12 +112,11 @@ function hookZone() {
 		...args: TArgs
 	): ReturnType<typeof originalSetInterval> => {
 		const capturedStack = options.zones.setInterval ? captureEffectStack() : undefined
-		return originalSetInterval.call(
-			globalThis,
+		return originalSetInterval.apply(globalThis, [
 			wrapCallback(callback, capturedStack) as (...args: any[]) => void,
 			delay,
-			...args
-		)
+			...args,
+		] as any)
 	}) as typeof originalSetInterval
 	Object.assign(wrappedSetInterval, originalSetInterval)
 	globalThis.setInterval = wrappedSetInterval
@@ -152,7 +150,7 @@ function hookZone() {
  */
 function wrapCallback<T extends (...args: any[]) => any>(
 	callback: T | null | undefined,
-	capturedStack: ScopedCallback[] | undefined
+	capturedStack: (ScopedCallback | undefined)[] | undefined
 ): T | undefined {
 	if (!callback) return undefined
 

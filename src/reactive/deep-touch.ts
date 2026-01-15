@@ -1,14 +1,17 @@
 import { addState, collectEffects, touched1 } from './change'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { batch } from './effects'
-import { isObject } from './lazy-get'
 import { isNonReactive } from './non-reactive-state'
 import { unwrap } from './proxy-state'
 import { effectParent, watchers } from './tracking'
 import { allProps, type Evolution, options, type ScopedCallback } from './types'
 
+function isObject(value: any): value is object {
+	return typeof value === 'object' && value !== null
+}
+
 function isObjectLike(value: unknown): value is object {
-	return isObject(value) && value !== null
+	return isObject(value)
 }
 
 function getPrototypeToken(value: any): object | null | undefined {

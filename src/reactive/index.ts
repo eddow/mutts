@@ -12,18 +12,6 @@ export {
 	untracked,
 } from './effects'
 export { cleanedBy, cleanup, derived, unreactive, watch } from './interface'
-export {
-	isBigInt,
-	isBoolean,
-	isFunction,
-	isNumber,
-	isObject,
-	isString,
-	isSymbol,
-	isUndefined,
-	lazy,
-	typeOf,
-} from './lazy-get'
 export { mapped, ReadOnlyError, reduced } from './mapped'
 export { type Memoizable, memoize } from './memoize'
 export { immutables, isNonReactive, registerNativeReactivity } from './non-reactive'

@@ -46,7 +46,7 @@ export function collectEffects(
 				for (const effect of deps) {
 					const runningChain = isRunning(effect)
 					if (runningChain) {
-						options.skipRunningEffect(effect, runningChain)
+						options.skipRunningEffect(effect, runningChain as any)
 						continue
 					}
 					effects.add(effect)
