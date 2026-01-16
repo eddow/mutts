@@ -1,4 +1,4 @@
-import { effect, reactive } from 'mutts/reactive'
+import { effect, reactive, unwrap } from 'mutts/reactive'
 import { memoize } from 'mutts/reactive/memoize'
 
 describe('memoize', () => {
@@ -54,6 +54,24 @@ describe('memoize', () => {
 		// Hitting the cache again should use fresh value without recomputation
 		expect(memo(args)).toBe(20)
 		expect(compute).toHaveBeenCalledTimes(2)
+	})
+
+	it('invalidates memoization when an array property is replaced by another array', () => {
+		const state = reactive({ list: [1, 2, 3] })
+		let computations = 0
+		const getList = memoize(() => {
+			computations++
+			return state.list
+		})
+
+		expect(unwrap(getList())).toEqual([1, 2, 3])
+		expect(computations).toBe(1)
+
+		// Replace the array
+		state.list = [4, 5, 6]
+
+		expect(unwrap(getList())).toEqual([4, 5, 6])
+		expect(computations).toBe(2)
 	})
 
 	it('throws when argument is not a non-null object', () => {

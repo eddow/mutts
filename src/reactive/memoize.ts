@@ -1,5 +1,5 @@
 import { decorator } from '../decorator'
-import { renamed } from '../utils'
+import { arrayEquals, renamed } from '../utils'
 import { touched1 } from './change'
 import { effect, root } from './effects'
 import { dependant, getRoot, markWithRoot } from './tracking'
@@ -51,17 +51,23 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 			markWithRoot(() => {
 				// Execute the function and track its dependencies
 				// The function execution will automatically track dependencies on reactive objects
-				node.result = fn(...localArgs)
-				return () => {
-					// When dependencies change, invalidate the cache
-					delete node.result
-					touched1(node, { type: 'invalidate', prop: localArgs }, 'memoize')
-					// Stop the internal memoize effect without recursively re-entering its own cleanup.
-					const stop = node.cleanup
-					node.cleanup = undefined
-					stop?.()
+				const newValue = fn(...localArgs)
+
+				if ('result' in node) {
+					if (!arrayEquals(node.result, newValue)) {
+						node.result = newValue
+						touched1(node, { type: 'invalidate', prop: localArgs }, 'memoize')
+					}
+				} else {
+					node.result = newValue
 				}
-			}, fnRoot)
+				
+				return () => {
+					// When dependencies change, the effect re-runs.
+					// We do NOT delete the result here anymore, because we want to preserve it for comparison in the next run.
+					// We do NOT notify here, because we don't know if the result changed yet.
+				}
+			}, fnRoot), { opaque: true }
 		))
 		return node.result!
 	}, fn)

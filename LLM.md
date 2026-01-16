@@ -11,6 +11,7 @@
     *   `reactive(obj)`: Creates a reactive proxy.
     *   `effect(() => { ... })`: Runs side effects when dependencies change.
     *   `memoize(() => ...)`: Computed values.
+    *   **Opaque Effects**: `effect(fn, { opaque: true })` bypasses deep-touch optimizations to strict identity tracking.
 
 ### 2. Decorators (`mutts/decorator`)
 *   **Unified System**: Works with both **Legacy** (`experimentalDecorators: true`) and **Modern** (Stage 3) decorators.
