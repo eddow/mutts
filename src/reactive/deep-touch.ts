@@ -1,4 +1,4 @@
-import { addState, collectEffects, touched1 } from './change'
+import { addState, collectEffects, touched1, touchedOpaque } from './change'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { batch } from './effects'
 import { isNonReactive } from './non-reactive-state'
@@ -58,6 +58,9 @@ export function notifyPropertyChange(
 		// Deep touch: only notify nested property changes with origin filtering
 		// Don't notify direct property change - the whole point is to avoid parent effects re-running
 		dispatchNotifications(recursiveTouch(oldValue, newValue, new WeakMap(), [], origin))
+        
+        // Notify opaque listeners (like memoize) that always want to know about identity changes
+        touchedOpaque(targetObj, evolution, prop)
 	} else {
 		touched1(targetObj, evolution, prop)
 	}

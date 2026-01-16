@@ -1,7 +1,7 @@
 import { recordTriggerLink } from './debug'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { getActiveEffect, isRunning } from './effect-context'
-import { batch, effectTrackers } from './effects'
+import { batch, effectTrackers, opaqueEffects } from './effects'
 import { unwrap } from './proxy-state'
 import { watchers } from './tracking'
 import { allProps, type Evolution, options, type ScopedCallback, type State } from './types'
@@ -93,4 +93,42 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 	if (objectsWithDeepWatchers.has(obj)) {
 		bubbleUpChange(obj, evolution)
 	}
+}
+
+/**
+ * Triggers only opaque effects for property changes
+ * Used by deep-touch to ensure opaque listeners are notified even when deep optimization is active
+ */
+export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
+    obj = unwrap(obj)
+    const objectWatchers = watchers.get(obj)
+    if (!objectWatchers) return
+
+    const deps = objectWatchers.get(prop)
+    if (!deps) return
+
+    const effects = new Set<ScopedCallback>()
+    const sourceEffect = getActiveEffect()
+
+    for (const effect of deps) {
+        if (!opaqueEffects.has(effect)) continue
+        
+        const runningChain = isRunning(effect)
+        if (runningChain) {
+            options.skipRunningEffect(effect, runningChain as any)
+            continue
+        }
+        effects.add(effect)
+        const trackers = effectTrackers.get(effect)
+        recordTriggerLink(sourceEffect, effect, obj, prop, evolution)
+        if (trackers) {
+            for (const tracker of trackers) tracker(obj, evolution, prop)
+            trackers.delete(effect)
+        }
+    }
+    
+    if (effects.size > 0) {
+        options.touched(obj, evolution, [prop], effects)
+        batch(Array.from(effects))
+    }
 }

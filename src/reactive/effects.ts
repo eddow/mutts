@@ -105,6 +105,8 @@ export function trackEffect(onTouch: EffectTracking) {
 
 const effectTrackers = new WeakMap<ScopedCallback, Set<EffectTracking>>()
 
+export const opaqueEffects = new WeakSet<ScopedCallback>()
+
 // Dependency graph: tracks which effects trigger which other effects
 // Uses roots (Function) as keys for consistency
 const effectTriggers = new WeakMap<Function, IterableWeakSet<Function>>()
@@ -1156,6 +1158,11 @@ export function effect(
 	}
 	// Mark the runEffect callback with the original function as its root
 	markWithRoot(runEffect, fn)
+
+	// Register strict mode if enabled
+    if (effectOptions?.opaque) {
+       opaqueEffects.add(runEffect)
+    }
 
 	if (isDevtoolsEnabled()) {
 		registerEffectForDebug(runEffect)

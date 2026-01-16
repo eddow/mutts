@@ -53,15 +53,11 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 				// The function execution will automatically track dependencies on reactive objects
 				node.result = fn(...localArgs)
 				return () => {
-					// When dependencies change, invalidate the cache
+					// When dependencies change, clear the cache and notify consumers
 					delete node.result
 					touched1(node, { type: 'invalidate', prop: localArgs }, 'memoize')
-					// Stop the internal memoize effect without recursively re-entering its own cleanup.
-					const stop = node.cleanup
-					node.cleanup = undefined
-					stop?.()
 				}
-			}, fnRoot)
+			}, fnRoot), { opaque: true }
 		))
 		return node.result!
 	}, fn)

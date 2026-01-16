@@ -39,20 +39,7 @@ project.map(source: Map<K, T>, apply: (access, target) => U): ProjectResult<Map<
 
 ## Future Evolutions
 
-### 1. Lazy Computing
-
-**Goal:** Compute projected values on-demand rather than eagerly.
-
-**Implementation:**
-- Override `get` accessors on the returned object (array indices, record properties, map entries).
-- On first access, trigger the computation effect and cache the result.
-- Subsequent accesses return the cached value until the source entry changes.
-- Benefits: Better performance for sparse collections, reduced initial computation cost.
-
-**API Impact:**
-- No signature changes; behavior becomes lazy by default or via option flag.
-
-### 2. Bidirectional Transformation (Set Callback)
+### Bidirectional Transformation (Set Callback)
 
 **Goal:** Support writing back to the source through the projected object.
 
@@ -71,7 +58,7 @@ project.array(
 ): ProjectResult<U[]>
 ```
 
-### 3. Readonly Results When No Set Callback
+### Readonly Results When No Set Callback
 
 **Goal:** Make projected objects readonly when no write-back is supported.
 

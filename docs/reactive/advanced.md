@@ -403,6 +403,28 @@ for (let i = 0; i < items.length; i++) {
 effectCleanups.forEach(cleanup => cleanup())
 ```
 
+### Opaque Effects (Strict Mode)
+
+By default, the reactive system uses "Deep Touch" optimization. If a reactive property is replaced with a new object/array that is structurally similar to the old one (e.g., swapping `[1, 2]` with a new `[1, 2]`), the system may skip re-running parent effects and only notify granular child updates. This optimization avoids unnecessary re-renders but can be problematic for effects that rely on strict object identity (like `memoize` or reference checks).
+
+You can mark an effect as "opaque" to opt-out of this optimization. Opaque effects will **always** trigger when their dependencies change identity, regardless of content similarity.
+
+```typescript
+// Standard effect (optimized)
+effect(() => {
+    // If state.list is replaced by a similar list, this might NOT run
+    console.log('List changed', state.list)
+})
+
+// Opaque effect
+effect(() => {
+    // This will ALWAYS run if state.list reference changes
+    console.log('List identity changed', state.list)
+}, { opaque: true })
+```
+
+This is automatically used by `memoize` to ensure cached results are invalidated when references change.
+
 ### Watch Function
 
 The `watch` function provides a more direct way to observe changes in reactive objects. It comes in two forms:
