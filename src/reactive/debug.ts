@@ -6,7 +6,7 @@
  */
 
 import { effectParent, effectToReactiveObjects, getRoot } from './tracking'
-import { allProps, type Evolution, type ScopedCallback, options } from './types'
+import { allProps, type Evolution, options, type ScopedCallback } from './types'
 
 const EXTERNAL_SOURCE = Symbol('external-source')
 type SourceEffect = ScopedCallback | typeof EXTERNAL_SOURCE
@@ -264,7 +264,9 @@ export function getTriggerChain(effect: ScopedCallback, limit = 5): string[] {
 		}
 
 		if (foundSource) {
-			chain.push(`${ensureEffectName(foundSource)} -> (${foundReason}) -> ${ensureEffectName(current)}`)
+			chain.push(
+				`${ensureEffectName(foundSource)} -> (${foundReason}) -> ${ensureEffectName(current)}`
+			)
 			current = foundSource
 		} else if (foundReason) {
 			chain.push(`External -> (${foundReason}) -> ${ensureEffectName(current)}`)
@@ -407,7 +409,7 @@ export function enableDevTools() {
 	if (devtoolsEnabled) return
 	devtoolsEnabled = true
 
-	// @ts-ignore - global window extension
+	// @ts-expect-error - global window extension
 	window.__MUTTS_DEVTOOLS__ = {
 		getGraph: buildReactivityGraph,
 		setEffectName,
@@ -416,7 +418,6 @@ export function enableDevTools() {
 		registerObject: registerObjectForDebug,
 	}
 }
-
 
 export function forceEnableGraphTracking() {
 	devtoolsEnabled = true

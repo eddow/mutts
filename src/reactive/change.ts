@@ -100,35 +100,35 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
  * Used by deep-touch to ensure opaque listeners are notified even when deep optimization is active
  */
 export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
-    obj = unwrap(obj)
-    const objectWatchers = watchers.get(obj)
-    if (!objectWatchers) return
+	obj = unwrap(obj)
+	const objectWatchers = watchers.get(obj)
+	if (!objectWatchers) return
 
-    const deps = objectWatchers.get(prop)
-    if (!deps) return
+	const deps = objectWatchers.get(prop)
+	if (!deps) return
 
-    const effects = new Set<ScopedCallback>()
-    const sourceEffect = getActiveEffect()
+	const effects = new Set<ScopedCallback>()
+	const sourceEffect = getActiveEffect()
 
-    for (const effect of deps) {
-        if (!opaqueEffects.has(effect)) continue
-        
-        const runningChain = isRunning(effect)
-        if (runningChain) {
-            options.skipRunningEffect(effect, runningChain as any)
-            continue
-        }
-        effects.add(effect)
-        const trackers = effectTrackers.get(effect)
-        recordTriggerLink(sourceEffect, effect, obj, prop, evolution)
-        if (trackers) {
-            for (const tracker of trackers) tracker(obj, evolution, prop)
-            trackers.delete(effect)
-        }
-    }
-    
-    if (effects.size > 0) {
-        options.touched(obj, evolution, [prop], effects)
-        batch(Array.from(effects))
-    }
+	for (const effect of deps) {
+		if (!opaqueEffects.has(effect)) continue
+
+		const runningChain = isRunning(effect)
+		if (runningChain) {
+			options.skipRunningEffect(effect, runningChain as any)
+			continue
+		}
+		effects.add(effect)
+		const trackers = effectTrackers.get(effect)
+		recordTriggerLink(sourceEffect, effect, obj, prop, evolution)
+		if (trackers) {
+			for (const tracker of trackers) tracker(obj, evolution, prop)
+			trackers.delete(effect)
+		}
+	}
+
+	if (effects.size > 0) {
+		options.touched(obj, evolution, [prop], effects)
+		batch(Array.from(effects))
+	}
 }

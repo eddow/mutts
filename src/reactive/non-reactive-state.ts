@@ -47,4 +47,3 @@ if (typeof window !== 'undefined') {
 }
 
 export { markNonReactive as nonReactive }
-

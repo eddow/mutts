@@ -27,13 +27,13 @@ export function zip<T extends (readonly unknown[])[]>(...args: T): ElementTypes<
  * @returns True if arrays are equal or values are strictly equal
  */
 export function arrayEquals(a: any, b: any): boolean {
-    if (a === b) return true
-    if (!Array.isArray(a) || !Array.isArray(b)) return false
-    if (a.length !== b.length) return false
-    for (let i = 0; i < a.length; i++) {
-        if (a[i] !== b[i]) return false
-    }
-    return true
+	if (a === b) return true
+	if (!Array.isArray(a) || !Array.isArray(b)) return false
+	if (a.length !== b.length) return false
+	for (let i = 0; i < a.length; i++) {
+		if (a[i] !== b[i]) return false
+	}
+	return true
 }
 
 const nativeConstructors = new Set<Function>([

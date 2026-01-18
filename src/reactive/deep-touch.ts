@@ -58,9 +58,9 @@ export function notifyPropertyChange(
 		// Deep touch: only notify nested property changes with origin filtering
 		// Don't notify direct property change - the whole point is to avoid parent effects re-running
 		dispatchNotifications(recursiveTouch(oldValue, newValue, new WeakMap(), [], origin))
-        
-        // Notify opaque listeners (like memoize) that always want to know about identity changes
-        touchedOpaque(targetObj, evolution, prop)
+
+		// Notify opaque listeners (like memoize) that always want to know about identity changes
+		touchedOpaque(targetObj, evolution, prop)
 	} else {
 		touched1(targetObj, evolution, prop)
 	}

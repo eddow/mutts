@@ -202,7 +202,9 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 			ascend(() => {
 				const stop = effect(function projectRecordKeyEffect() {
 					const sourceKey = key as keyof Source
-					const previous = untracked(() => (target as Record<PropertyKey, ResultValue | undefined>)[key])
+					const previous = untracked(
+						() => (target as Record<PropertyKey, ResultValue | undefined>)[key]
+					)
 					const accessBase = {
 						key: sourceKey,
 						source: observedSource,

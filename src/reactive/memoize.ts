@@ -47,18 +47,21 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 
 		// Create memoize internal effect to track dependencies and invalidate cache
 		// Use untracked to prevent the effect creation from being affected by parent effects
-		node.cleanup = root(() => effect(
-			markWithRoot(() => {
-				// Execute the function and track its dependencies
-				// The function execution will automatically track dependencies on reactive objects
-				node.result = fn(...localArgs)
-				return () => {
-					// When dependencies change, clear the cache and notify consumers
-					delete node.result
-					touched1(node, { type: 'invalidate', prop: localArgs }, 'memoize')
-				}
-			}, fnRoot), { opaque: true }
-		))
+		node.cleanup = root(() =>
+			effect(
+				markWithRoot(() => {
+					// Execute the function and track its dependencies
+					// The function execution will automatically track dependencies on reactive objects
+					node.result = fn(...localArgs)
+					return () => {
+						// When dependencies change, clear the cache and notify consumers
+						delete node.result
+						touched1(node, { type: 'invalidate', prop: localArgs }, 'memoize')
+					}
+				}, fnRoot),
+				{ opaque: true }
+			)
+		)
 		return node.result!
 	}, fn)
 

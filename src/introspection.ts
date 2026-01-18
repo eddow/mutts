@@ -4,16 +4,16 @@
  */
 
 import {
+	type EffectNode,
+	forceEnableGraphTracking,
+	type GraphEdge,
+	getDependencies,
 	getDependencyGraph,
 	getDependents,
-	getDependencies,
 	getMutationHistory,
-	forceEnableGraphTracking,
 	type MutationRecord,
-	type ReactivityGraph,
-	type EffectNode,
 	type ObjectNode,
-	type GraphEdge,
+	type ReactivityGraph,
 } from './reactive/debug'
 import { options, type ReactiveDebugInfo, ReactiveErrorCode } from './reactive/types'
 
@@ -26,7 +26,14 @@ export {
 	ReactiveErrorCode,
 }
 
-export type { MutationRecord, ReactivityGraph, EffectNode, ObjectNode, GraphEdge, ReactiveDebugInfo }
+export type {
+	MutationRecord,
+	ReactivityGraph,
+	EffectNode,
+	ObjectNode,
+	GraphEdge,
+	ReactiveDebugInfo,
+}
 
 /**
  * Enable introspection features (history recording, etc.)

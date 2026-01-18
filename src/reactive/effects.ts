@@ -1,6 +1,6 @@
 import { decorator } from '../decorator'
 import { IterableWeakSet } from '../iterableWeak'
-import { isDevtoolsEnabled, registerEffectForDebug, getTriggerChain } from './debug'
+import { getTriggerChain, isDevtoolsEnabled, registerEffectForDebug } from './debug'
 import {
 	captureEffectStack,
 	effectStack,
@@ -13,8 +13,8 @@ import {
 	effectParent,
 	effectToReactiveObjects,
 	getRoot,
-	markWithRoot,
 	getTrackingDisabled,
+	markWithRoot,
 	setTrackingDisabled,
 	watchers,
 } from './tracking'
@@ -22,11 +22,11 @@ import {
 	type DependencyAccess,
 	type EffectOptions,
 	type Evolution,
-	// type AsyncExecutionMode,
-	type ScopedCallback,
+	options,
 	ReactiveError,
 	ReactiveErrorCode,
-	options,
+	// type AsyncExecutionMode,
+	type ScopedCallback,
 } from './types'
 
 /**
@@ -54,6 +54,7 @@ function formatRoots(roots: Function[], limit = 20): string {
 	const end = names.slice(-10)
 	return `${start.join(' → ')} ... (${names.length - 15} more) ... ${end.join(' → ')}`
 }
+
 import { ensureZoneHooked } from './zone'
 
 type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
@@ -578,24 +579,24 @@ function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?:
 					: `Cycle detected: ${callerRoot.name || callerRoot.toString()} → ${root.name || root.toString()} (and back)`
 
 			const cycleHandling = options.cycleHandling
-			
+
 			// In strict mode, we throw immediately on detection
 			if (cycleHandling === 'strict') {
 				batchQueue.all.delete(root)
 				const causalChain = getTriggerChain(effect)
 				const creationStack = effectCreationStacks.get(root)
-				
+
 				throw new ReactiveError(`[reactive] Strict Cycle Prevention: ${cycleMessage}`, {
 					code: ReactiveErrorCode.CycleDetected,
 					cycle: cyclePath.map((r) => r.name || r.toString()),
 					details: cycleMessage,
 					causalChain,
-					creationStack
+					creationStack,
 				})
 			}
 
 			switch (cycleHandling) {
-				case 'throw':
+				case 'throw': {
 					// Remove from batch before throwing
 					batchQueue.all.delete(root)
 					const causalChain = getTriggerChain(effect)
@@ -606,8 +607,9 @@ function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?:
 						cycle: cyclePath.map((r) => r.name || r.toString()),
 						details: cycleMessage,
 						causalChain,
-						creationStack
+						creationStack,
 					})
+				}
 				case 'warn':
 					options.warn(`[reactive] ${cycleMessage}`)
 					// Don't add the edge, break the cycle
@@ -635,17 +637,17 @@ export function addBatchCleanup(cleanup: ScopedCallback) {
 
 /**
  * Semantic alias for `addBatchCleanup` - defers work to the end of the current reactive batch.
- * 
+ *
  * Use this when an effect needs to perform an action that would modify state the effect depends on,
  * which would create a reactive cycle. The deferred callback runs after all effects complete.
- * 
+ *
  * @param callback - The callback to defer until after the current batch completes
- * 
+ *
  * @example
  * ```typescript
  * effect(() => {
  *   processData()
- *   
+ *
  *   // Defer to avoid cycle (createMovement modifies state this effect reads)
  *   defer(() => {
  *     createMovement(data)
@@ -654,7 +656,6 @@ export function addBatchCleanup(cleanup: ScopedCallback) {
  * ```
  */
 export const defer = addBatchCleanup
-
 
 /**
  * Gets a cycle path for debugging
@@ -859,7 +860,7 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 			addToBatch(effect[i], caller, immediate === 'immediate')
 		}
 
-		let effectuatedRoots: ScopedCallback[] = []
+		const effectuatedRoots: ScopedCallback[] = []
 		computeAllInDegrees(batchQueue)
 		if (immediate) {
 			// Execute immediately (before batch returns)
@@ -880,7 +881,7 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 					if (effectuatedRoots.length > options.maxEffectChain) {
 						const cycle = findCycleInChain(effectuatedRoots as any)
 						const trace = formatRoots(effectuatedRoots as any)
-						const message = cycle 
+						const message = cycle
 							? `Max effect chain reached (cycle detected: ${formatRoots(cycle)})`
 							: `Max effect chain reached (trace: ${trace})`
 
@@ -895,7 +896,12 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 							queued: queued.slice(0, 50),
 							queuedCount: queued.length,
 							// Try to get causation for the last effect
-							causalChain: effectuatedRoots.length > 0 ? getTriggerChain(batchQueue.all.get(effectuatedRoots[effectuatedRoots.length - 1])!) : [],
+							causalChain:
+								effectuatedRoots.length > 0
+									? getTriggerChain(
+											batchQueue.all.get(effectuatedRoots[effectuatedRoots.length - 1])!
+										)
+									: [],
 						}
 						switch (options.maxEffectReaction) {
 							case 'throw':
@@ -933,7 +939,7 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 					if (effectuatedRoots.length > options.maxEffectChain) {
 						const cycle = findCycleInChain(effectuatedRoots as any)
 						const trace = formatRoots(effectuatedRoots as any)
-						const message = cycle 
+						const message = cycle
 							? `Max effect chain reached (cycle detected: ${formatRoots(cycle)})`
 							: `Max effect chain reached (trace: ${trace})`
 
@@ -948,7 +954,12 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 							queued: queued.slice(0, 50),
 							queuedCount: queued.length,
 							// Try to get causation for the last effect
-							causalChain: effectuatedRoots.length > 0 ? getTriggerChain(batchQueue.all.get(effectuatedRoots[effectuatedRoots.length - 1])!) : [],
+							causalChain:
+								effectuatedRoots.length > 0
+									? getTriggerChain(
+											batchQueue.all.get(effectuatedRoots[effectuatedRoots.length - 1])!
+										)
+									: [],
 						}
 						switch (options.maxEffectReaction) {
 							case 'throw':
@@ -1160,9 +1171,9 @@ export function effect(
 	markWithRoot(runEffect, fn)
 
 	// Register strict mode if enabled
-    if (effectOptions?.opaque) {
-       opaqueEffects.add(runEffect)
-    }
+	if (effectOptions?.opaque) {
+		opaqueEffects.add(runEffect)
+	}
 
 	if (isDevtoolsEnabled()) {
 		registerEffectForDebug(runEffect)
@@ -1230,7 +1241,7 @@ export function untracked<T>(fn: () => T): T {
 	// This prevents the parent effect from tracking dependencies during fn execution
 	const wasTrackingDisabled = getTrackingDisabled()
 	setTrackingDisabled(true)
-	
+
 	try {
 		return fn()
 	} finally {
@@ -1246,12 +1257,9 @@ export function untracked<T>(fn: () => T): T {
  */
 export function root<T>(fn: () => T): T {
 	let rv!: T
-	withEffect(
-		undefined,
-		() => {
-			rv = fn()
-		}
-	)
+	withEffect(undefined, () => {
+		rv = fn()
+	})
 	return rv
 }
 
@@ -1294,7 +1302,11 @@ export function biDi<T>(
 	received: (value: T) => void,
 	value: { get: () => T; set: (value: T) => void }
 ): (value: T) => void
-export function biDi<T>(received: (value: T) => void, get: () => T, set: (value: T) => void): (value: T) => void
+export function biDi<T>(
+	received: (value: T) => void,
+	get: () => T,
+	set: (value: T) => void
+): (value: T) => void
 export function biDi<T>(
 	received: (value: T) => void,
 	get: (() => T) | { get: () => T; set: (value: T) => void },

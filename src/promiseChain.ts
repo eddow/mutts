@@ -1,12 +1,13 @@
-type Resolved<T> = T extends Promise<infer U>
-	? Resolved<U>
-	: T extends (...args: infer Args) => infer R
-		? (...args: Args) => Resolved<R>
-		: T extends object
-			? {
-					[k in keyof T]: k extends 'then' | 'catch' | 'finally' ? T[k] : Resolved<T[k]>
-				}
-			: T
+type Resolved<T> =
+	T extends Promise<infer U>
+		? Resolved<U>
+		: T extends (...args: infer Args) => infer R
+			? (...args: Args) => Resolved<R>
+			: T extends object
+				? {
+						[k in keyof T]: k extends 'then' | 'catch' | 'finally' ? T[k] : Resolved<T[k]>
+					}
+				: T
 type PromiseAnd<T> = Resolved<T> & Promise<Resolved<T>>
 /**
  * Type that transforms promises into chainable objects

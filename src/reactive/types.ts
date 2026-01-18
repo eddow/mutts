@@ -90,8 +90,8 @@ export interface EffectOptions {
 	asyncMode?: AsyncExecutionMode
 	/**
 	 * If true, this effect is "opaque" to deep optimizations: it sees the object reference itself
-     * and must be notified when it changes, regardless of deep content similarity.
-     * Use this for effects that depend on object identity (like memoize).
+	 * and must be notified when it changes, regardless of deep content similarity.
+	 * Use this for effects that depend on object identity (like memoize).
 	 */
 	opaque?: boolean
 }

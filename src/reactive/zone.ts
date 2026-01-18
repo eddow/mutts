@@ -126,9 +126,7 @@ function hookZone() {
 		globalThis.requestAnimationFrame = ((
 			callback: FrameRequestCallback
 		): ReturnType<typeof originalRequestAnimationFrame> => {
-			const capturedStack = options.zones.requestAnimationFrame
-				? captureEffectStack()
-				: undefined
+			const capturedStack = options.zones.requestAnimationFrame ? captureEffectStack() : undefined
 			return originalRequestAnimationFrame.call(
 				globalThis,
 				wrapCallback(callback as any, capturedStack) as FrameRequestCallback
@@ -161,7 +159,7 @@ function wrapCallback<T extends (...args: any[]) => any>(
 
 	return ((...args: any[]) => {
 		const execute = () => {
-			if (capturedStack && capturedStack.length) {
+			if (capturedStack?.length) {
 				return withEffectStack(capturedStack, () => callback(...args))
 			}
 			return callback(...args)

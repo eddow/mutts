@@ -68,7 +68,12 @@ export function dependant(obj: any, prop: any = allProps) {
 	const currentActiveEffect = getActiveEffect()
 
 	// Early return if no active effect, tracking disabled, or invalid prop
-	if (!currentActiveEffect || getTrackingDisabled() || (typeof prop === 'symbol' && prop !== allProps)) return
+	if (
+		!currentActiveEffect ||
+		getTrackingDisabled() ||
+		(typeof prop === 'symbol' && prop !== allProps)
+	)
+		return
 
 	registerDependency(obj, prop, currentActiveEffect)
 }
@@ -85,7 +90,7 @@ function registerDependency(obj: any, prop: any, currentActiveEffect: ScopedCall
 		objectWatchers.set(prop, deps)
 	}
 	deps.add(currentActiveEffect)
-	
+
 	// Track which reactive objects this effect is watching
 	const effectObjects = effectToReactiveObjects.get(currentActiveEffect)
 	if (effectObjects) {

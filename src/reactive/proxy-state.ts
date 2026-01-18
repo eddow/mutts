@@ -25,4 +25,3 @@ export function unwrap<T>(obj: T): T {
 export function isReactive(obj: any): boolean {
 	return proxyToObject.has(obj)
 }
-

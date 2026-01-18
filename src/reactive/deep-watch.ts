@@ -1,12 +1,12 @@
-import { effect } from './effects'
-import { isNonReactive } from './non-reactive-state'
-import { reactive, unwrap } from './proxy'
-import { markWithRoot } from './tracking'
 import {
 	deepWatchers,
 	effectToDeepWatchedObjects,
 	objectsWithDeepWatchers,
 } from './deep-watch-state'
+import { effect } from './effects'
+import { isNonReactive } from './non-reactive-state'
+import { reactive, unwrap } from './proxy'
+import { markWithRoot } from './tracking'
 import { options, type ScopedCallback } from './types'
 
 function isObject(value: any): value is object {

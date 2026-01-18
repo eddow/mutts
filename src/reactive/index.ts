@@ -1,4 +1,14 @@
 export { getState, touched, touched1 } from './change'
+export type { ReactivityGraph } from './debug'
+export {
+	buildReactivityGraph,
+	enableDevTools,
+	isDevtoolsEnabled,
+	registerEffectForDebug,
+	registerObjectForDebug,
+	setEffectName,
+	setObjectName,
+} from './debug'
 export { deepWatch } from './deep-watch'
 export {
 	addBatchCleanup,
@@ -28,16 +38,6 @@ export {
 	type ScopedCallback,
 } from './types'
 export { isZoneEnabled, setZoneEnabled } from './zone'
-export {
-	buildReactivityGraph,
-	enableDevTools,
-	isDevtoolsEnabled,
-	setEffectName,
-	setObjectName,
-	registerEffectForDebug,
-	registerObjectForDebug,
-} from './debug'
-export type { ReactivityGraph } from './debug'
 
 import { ReactiveArray } from './array'
 import {

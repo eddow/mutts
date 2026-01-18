@@ -26,6 +26,8 @@ import {
 	nonReactiveMark,
 	options,
 	prototypeForwarding,
+	ReactiveError,
+	ReactiveErrorCode,
 	unreactiveProperties,
 } from './types'
 
@@ -46,7 +48,8 @@ const reactiveHandlers = {
 			prototypeForwarding in obj &&
 			// biome-ignore lint/suspicious/useIsArray: This is the whole point here
 			obj[prototypeForwarding] instanceof Array &&
-			(typeof prop === 'string' && (prop === 'length' || !Number.isNaN(Number(prop))))
+			typeof prop === 'string' &&
+			(prop === 'length' || !Number.isNaN(Number(prop)))
 		if (isArrayCase) {
 			dependant(obj, prop === 'length' ? 'length' : Number(prop))
 		}
@@ -148,7 +151,14 @@ const reactiveHandlers = {
 		return true
 	},
 	has(obj: any, prop: PropertyKey): boolean {
-		if (hasReentry.includes(obj)) debugger
+		if (hasReentry.includes(obj))
+			throw new ReactiveError(
+				`[reactive] Circular dependency detected in 'has' check for property '${String(prop)}'`,
+				{
+					code: ReactiveErrorCode.CycleDetected,
+					cycle: [], // We don't have the full cycle here, but we know it involves obj
+				}
+			)
 		hasReentry.push(obj)
 		dependant(obj, prop)
 		const rv = Reflect.has(obj, prop)

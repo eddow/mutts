@@ -1,4 +1,4 @@
-import { effect, reactive, unwrap } from 'mutts/reactive'
+import { atomic, effect, reactive, unwrap } from 'mutts/reactive'
 import { memoize } from 'mutts/reactive/memoize'
 
 describe('memoize', () => {
@@ -27,8 +27,10 @@ describe('memoize', () => {
 		a.foo = 2
 		expect(memo3(a, b)).toBe(5)
 		expect(compute2).toHaveBeenCalledTimes(3)
-		a.foo = 3
-		b.bar = 4
+		atomic(() => {
+			a.foo = 3
+			b.bar = 4
+		})()
 		expect(memo3(a, b)).toBe(7)
 		expect(compute2).toHaveBeenCalledTimes(4)
 	})
