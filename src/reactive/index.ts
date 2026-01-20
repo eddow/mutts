@@ -13,6 +13,7 @@ export { deepWatch } from './deep-watch'
 export {
 	addBatchCleanup,
 	atomic,
+	batch, // TODO: Batch is now exported for testing purposes, though it shouldn't be - modify the tests to go through `atomic`
 	biDi,
 	defer,
 	effect,

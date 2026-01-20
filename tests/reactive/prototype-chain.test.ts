@@ -53,4 +53,10 @@ describe('prototype chain dependency tracking', () => {
 		leaf.x = 4
 		expect(runs).toBe(4)
 	})
+
+	it('should not loop infinitely when accessing unknown property on ReactiveArray (regression)', () => {
+		const arr = reactive([1, 2, 3])
+		// This should not hang
+		expect((arr as any).nonExistentProperty).toBeUndefined()
+	})
 })

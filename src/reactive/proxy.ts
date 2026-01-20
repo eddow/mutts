@@ -79,7 +79,11 @@ const reactiveHandlers = {
 			while (current && current !== Object.prototype) {
 				dependant(current, prop)
 				if (Object.hasOwn(current, prop)) break
-				current = reactiveObject(Object.getPrototypeOf(current))
+				let next = reactiveObject(Object.getPrototypeOf(current))
+				if (next === current) {
+					next = reactiveObject(Object.getPrototypeOf(unwrap(current)))
+				}
+				current = next
 			}
 		}
 		const value = ReflectGet(obj, prop, receiver)

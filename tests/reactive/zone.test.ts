@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeAll, afterAll } from '@jest/globals'
-import { effect, reactive, isZoneEnabled, setZoneEnabled, reactiveOptions } from '../../src/reactive/index'
+import { effect, reactive, isZoneEnabled, setZoneEnabled, reactiveOptions, unwrap } from '../../src/reactive/index'
 
 describe('Zone: Promise context preservation', () => {
 	beforeAll(() => {
@@ -120,7 +120,7 @@ describe('Zone: Promise context preservation', () => {
 		expect(isZoneEnabled()).toBe(true)
 	})
 
-	it.skip('should handle multiple concurrent promises', async () => {
+	it('should handle multiple concurrent promises', async () => {
 		const state = reactive({ results: [] as number[] })
 
 		effect(() => {
@@ -135,14 +135,16 @@ describe('Zone: Promise context preservation', () => {
 		await new Promise((resolve) => setTimeout(resolve, 100))
 
 		// Verify the results array was set correctly
-		if (!Array.isArray(state.results) || state.results.length === 0) {
+		// Note: We MUST unwrap() because state.results is a ReactiveArray proxy, which behaves like an object
+		// and JSON.stringify/jest matchers treat it as {} unless unwrapped.
+		if (!Array.isArray(unwrap(state.results)) || unwrap(state.results).length === 0) {
 			// If it failed, at least verify the zone is working (context was preserved)
 			expect(state.results).toBeDefined()
 			// Skip the full assertion if zone isn't working for Promise.all
 			return
 		}
 
-		expect(state.results).toEqual([1, 2, 3])
+		expect(unwrap(state.results)).toEqual([1, 2, 3])
 	})
 
 	it('should still work with manual tracked() wrapper', async () => {

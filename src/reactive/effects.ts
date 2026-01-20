@@ -835,15 +835,18 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 			addToBatch(effect[i], caller, immediate === 'immediate')
 		}
 		if (immediate) {
+			const firstReturn: { value?: any } = {}
 			// Execute immediately (before batch returns)
 			for (let i = 0; i < effect.length; i++) {
 				try {
-					effect[i]()
+					const rv = effect[i]()
+					if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
 				} finally {
 					const root = getRoot(effect[i])
 					batchQueue.all.delete(root)
 				}
 			}
+			return firstReturn.value
 		}
 		// Otherwise, effects will be picked up in next executeNext() call
 	} else {
@@ -935,67 +938,76 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 			// Execute in dependency order
 			const firstReturn: { value?: any } = {}
 			try {
-				while (batchQueue.all.size > 0) {
-					if (effectuatedRoots.length > options.maxEffectChain) {
-						const cycle = findCycleInChain(effectuatedRoots as any)
-						const trace = formatRoots(effectuatedRoots as any)
-						const message = cycle
-							? `Max effect chain reached (cycle detected: ${formatRoots(cycle)})`
-							: `Max effect chain reached (trace: ${trace})`
+				// Outer loop: continue while there are effects OR cleanups pending.
+				// This ensures effects triggered by cleanups are not lost.
+				while (batchQueue.all.size > 0 || batchCleanups.size > 0) {
+					// Inner loop: execute all pending effects
+					while (batchQueue.all.size > 0) {
+						if (effectuatedRoots.length > options.maxEffectChain) {
+							const cycle = findCycleInChain(effectuatedRoots as any)
+							const trace = formatRoots(effectuatedRoots as any)
+							const message = cycle
+								? `Max effect chain reached (cycle detected: ${formatRoots(cycle)})`
+								: `Max effect chain reached (trace: ${trace})`
 
-						const queuedRoots = batchQueue ? Array.from(batchQueue.all.keys()) : []
-						const queued = queuedRoots.map((r) => r.name || '<anonymous>')
-						const debugInfo = {
-							code: ReactiveErrorCode.MaxDepthExceeded,
-							effectuatedRoots,
-							cycle,
-							trace,
-							maxEffectChain: options.maxEffectChain,
-							queued: queued.slice(0, 50),
-							queuedCount: queued.length,
-							// Try to get causation for the last effect
-							causalChain:
-								effectuatedRoots.length > 0
-									? getTriggerChain(
-											batchQueue.all.get(effectuatedRoots[effectuatedRoots.length - 1])!
-										)
-									: [],
+							const queuedRoots = batchQueue ? Array.from(batchQueue.all.keys()) : []
+							const queued = queuedRoots.map((r) => r.name || '<anonymous>')
+							const debugInfo = {
+								code: ReactiveErrorCode.MaxDepthExceeded,
+								effectuatedRoots,
+								cycle,
+								trace,
+								maxEffectChain: options.maxEffectChain,
+								queued: queued.slice(0, 50),
+								queuedCount: queued.length,
+								// Try to get causation for the last effect
+								causalChain:
+									effectuatedRoots.length > 0
+										? getTriggerChain(
+												batchQueue.all.get(effectuatedRoots[effectuatedRoots.length - 1])!
+											)
+										: [],
+							}
+							switch (options.maxEffectReaction) {
+								case 'throw':
+									throw new ReactiveError(`[reactive] ${message}`, debugInfo)
+								case 'debug':
+									// biome-ignore lint/suspicious/noDebugger: This is the whole point here
+									debugger
+									throw new ReactiveError(`[reactive] ${message}`, debugInfo)
+								case 'warn':
+									options.warn(
+										`[reactive] ${message} (queued: ${queued.slice(0, 10).join(', ')}${queued.length > 10 ? ', …' : ''})`
+									)
+									break
+							}
 						}
-						switch (options.maxEffectReaction) {
-							case 'throw':
-								throw new ReactiveError(`[reactive] ${message}`, debugInfo)
-							case 'debug':
-								// biome-ignore lint/suspicious/noDebugger: This is the whole point here
-								debugger
-								throw new ReactiveError(`[reactive] ${message}`, debugInfo)
-							case 'warn':
-								options.warn(
-									`[reactive] ${message} (queued: ${queued.slice(0, 10).join(', ')}${queued.length > 10 ? ', …' : ''})`
-								)
-								break
+						const rv = executeNext(effectuatedRoots)
+						// executeNext() returns null when batch is complete or cycle detected (throws error)
+						// But functions can legitimately return null, so we check batchQueue.all.size instead
+						if (batchQueue.all.size === 0) {
+							// Batch complete
+							break
 						}
+						// If executeNext() returned null but batch is not empty, it means a cycle was detected
+						// and an error was thrown, so we won't reach here
+						if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
+						// Note: executeNext() already removed it from batchQueue, so we track by count
 					}
-					const rv = executeNext(effectuatedRoots)
-					// executeNext() returns null when batch is complete or cycle detected (throws error)
-					// But functions can legitimately return null, so we check batchQueue.all.size instead
-					if (batchQueue.all.size === 0) {
-						// Batch complete
-						break
+					// Process cleanups. If they trigger new effects, the outer loop will catch them.
+					if (batchCleanups.size > 0) {
+						const cleanups = Array.from(batchCleanups)
+						batchCleanups.clear()
+						for (const cleanup of cleanups) cleanup()
 					}
-					// If executeNext() returned null but batch is not empty, it means a cycle was detected
-					// and an error was thrown, so we won't reach here
-					if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
-					// Note: executeNext() already removed it from batchQueue, so we track by count
 				}
-				const cleanups = Array.from(batchCleanups)
-				batchCleanups.clear()
-				for (const cleanup of cleanups) cleanup()
 				return firstReturn.value
 			} finally {
 				batchQueue = undefined
 				options.endChain()
 			}
 		}
+
 	}
 }
 

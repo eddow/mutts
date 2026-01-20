@@ -22,7 +22,7 @@ describe('Memory Performance Profiling', () => {
 
 			console.log(formatMemoryProfile(memoryProfile, 'Reactive object creation'))
 			// Reactive objects should have minimal memory overhead
-			expect(memoryProfile.deltaKB).toBeLessThan(10) // Less than 10KB per object
+			expect(memoryProfile.delta / 1024).toBeLessThan(10) // Less than 10KB per object
 		})
 
 		it('benchmark: plain object creation vs reactive', () => {
@@ -72,7 +72,7 @@ describe('Memory Performance Profiling', () => {
 
 			console.log(formatMemoryProfile(memoryProfile, 'Effect lifecycle'))
 			// Effects should cleanup properly
-			expect(memoryProfile.deltaKB).toBeLessThan(50) // Less than 50KB per effect
+			expect(memoryProfile.delta / 1024).toBeLessThan(50) // Less than 50KB per effect
 		})
 
 		it('benchmark: multiple effects memory overhead', () => {
@@ -99,7 +99,7 @@ describe('Memory Performance Profiling', () => {
 			)
 
 			console.log(formatMemoryProfile(memoryProfile, 'Multiple effects'))
-			expect(memoryProfile.deltaKB).toBeLessThan(100) // Less than 100KB per 10 effects
+			expect(memoryProfile.delta / 1024).toBeLessThan(100) // Less than 100KB per 10 effects
 		})
 	})
 
@@ -117,7 +117,7 @@ describe('Memory Performance Profiling', () => {
 			)
 
 			console.log(formatMemoryProfile(memoryProfile, 'Array operations'))
-			expect(memoryProfile.deltaKB).toBeLessThan(20) // Less than 20KB per operation batch
+			expect(memoryProfile.delta / 1024).toBeLessThan(20) // Less than 20KB per operation batch
 		})
 	})
 
@@ -145,7 +145,7 @@ describe('Memory Performance Profiling', () => {
 			)
 
 			console.log(formatMemoryProfile(memoryProfile, 'Dependency tracking'))
-			expect(memoryProfile.deltaKB).toBeLessThan(30) // Less than 30KB per effect with dependencies
+			expect(memoryProfile.delta / 1024).toBeLessThan(30) // Less than 30KB per effect with dependencies
 		})
 	})
 })
