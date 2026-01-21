@@ -60,6 +60,69 @@ import { ensureZoneHooked } from './zone'
 type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
 
 export { captureEffectStack, withEffectStack, getActiveEffect, effectStack }
+export interface ActivationRecord {
+	effect: ScopedCallback
+	obj: any
+	evolution: Evolution
+	prop: any
+	batchId: number
+}
+
+// Nested map structure for efficient counting and batch cleanup
+// batchId -> effect root -> obj -> prop -> count
+let activationRegistry: Map<Function, Map<any, Map<any, number>>> | undefined
+
+export const activationLog: Omit<ActivationRecord, 'batchId'>[] = new Array(100)
+
+export function getActivationLog() {
+	return activationLog
+}
+
+export function recordActivation(
+	effect: ScopedCallback,
+	obj: any,
+	evolution: Evolution,
+	prop: any
+) {
+	const root = getRoot(effect)
+
+	if (!activationRegistry) return
+	let effectData = activationRegistry.get(root)
+	if (!effectData) {
+		effectData = new Map()
+		activationRegistry.set(root, effectData)
+	}
+	let objData = effectData.get(obj)
+	if (!objData) {
+		objData = new Map()
+		effectData.set(obj, objData)
+	}
+	const count = (objData.get(prop) ?? 0) + 1
+	objData.set(prop, count)
+
+	// Keep a limited history for diagnostics
+	activationLog.unshift({
+		effect,
+		obj,
+		evolution,
+		prop,
+	})
+	activationLog.pop()
+
+	if (count >= options.maxTriggerPerBatch) {
+		const effectName = (root as any)?.name || 'anonymous'
+		const message = `Aggressive trigger detected: effect "${effectName}" triggered ${count} times in the batch by the same cause.`
+		if (options.maxEffectReaction === 'throw') {
+			throw new ReactiveError(message, {
+				code: ReactiveErrorCode.MaxReactionExceeded,
+				count,
+				effect: effectName,
+			})
+		}
+		options.warn(`[reactive] ${message}`)
+	}
+}
+
 /**
  * Registers a debug callback that is called when the current effect is triggered by a dependency change
  *
@@ -380,6 +443,9 @@ interface BatchQueue {
 // Track currently executing effects to prevent re-execution
 // These are all the effects triggered under `activeEffect`
 let batchQueue: BatchQueue | undefined
+export function hasBatched(effect: ScopedCallback) {
+	return batchQueue?.all.has(getRoot(effect))
+}
 const batchCleanups = new Set<ScopedCallback>()
 
 /**
@@ -851,6 +917,8 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 		// Otherwise, effects will be picked up in next executeNext() call
 	} else {
 		// New batch - initialize
+		if (!activationRegistry) activationRegistry = new Map()
+		else throw new Error('Batch already in progress')
 		options.beginChain(roots)
 		batchQueue = {
 			all: new Map(),
@@ -931,6 +999,7 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 				for (const cleanup of cleanups) cleanup()
 				return firstReturn.value
 			} finally {
+				activationRegistry = undefined
 				batchQueue = undefined
 				options.endChain()
 			}
@@ -1003,11 +1072,11 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 				}
 				return firstReturn.value
 			} finally {
+				activationRegistry = undefined
 				batchQueue = undefined
 				options.endChain()
 			}
 		}
-
 	}
 }
 

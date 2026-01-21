@@ -1,9 +1,29 @@
 import { ReflectGet, ReflectSet } from '../utils'
+import { setEffectName } from './debug'
+import { getActiveEffect } from './effect-context'
 import { effect, untracked } from './effects'
 import { cleanedBy, cleanup } from './interface'
 import { reactive } from './proxy'
 import { Register } from './register'
-import { type ScopedCallback } from './types'
+import { type ProjectionContext, projectionInfo, type ScopedCallback } from './types'
+
+/**
+ * Maps projection effects (item effects) to their projection context
+ */
+export const effectProjectionMetadata = new WeakMap<ScopedCallback, ProjectionContext>()
+
+/**
+ * Returns the projection context of the currently running effect, if any.
+ */
+export function getActiveProjection(): ProjectionContext | undefined {
+	const active = getActiveEffect()
+	return active ? effectProjectionMetadata.get(active) : undefined
+}
+
+/* TODO
+It seems to work and I feel like it's correct but I couldn't validate theoretically that `ascend`
+is the correct way to deal with nested effects.
+*/
 
 type ProjectOldValue<Target> = Target extends readonly (infer Item)[]
 	? Item
@@ -50,8 +70,17 @@ function defineAccessValue<Access extends { get(): unknown; set(value: unknown):
 function makeCleanup<Result extends object>(
 	target: Result,
 	effectMap: Map<unknown, ScopedCallback>,
-	onDispose: () => void
+	onDispose: () => void,
+	metadata?: any
 ): ProjectResult<Result> {
+	if (metadata) {
+		Object.defineProperty(target, projectionInfo, {
+			value: metadata,
+			writable: false,
+			enumerable: false,
+			configurable: true,
+		})
+	}
 	return cleanedBy(target, () => {
 		onDispose()
 		for (const stop of effectMap.values()) stop?.()
@@ -80,6 +109,9 @@ function projectArray<SourceValue, ResultValue>(
 		}
 	}
 
+	const parent = getActiveProjection()
+	const depth = parent ? parent.depth + 1 : 0
+
 	const cleanupLength = effect(function projectArrayLengthEffect({ ascend }) {
 		const length = observedSource.length
 		normalizeTargetLength(length)
@@ -102,13 +134,27 @@ function projectArray<SourceValue, ResultValue>(
 					const produced = apply(accessBase, target)
 					target[index] = produced
 				})
+				setEffectName(stop, `project[${depth}]:${index}`)
+				effectProjectionMetadata.set(stop, {
+					source: observedSource,
+					key: index,
+					target,
+					depth,
+					parent,
+				})
 				indexEffects.set(i, stop)
 			})
 		}
 		for (const index of existing) if (index >= length) disposeIndex(index)
 	})
 
-	return makeCleanup(target, indexEffects, () => cleanupLength())
+	return makeCleanup(target, indexEffects, () => cleanupLength(), {
+		source: observedSource,
+		target,
+		apply,
+		depth,
+		parent,
+	} as ProjectionContext)
 }
 
 function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
@@ -135,6 +181,9 @@ function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
 		}
 	}
 
+	const parent = getActiveProjection()
+	const depth = parent ? parent.depth + 1 : 0
+
 	const cleanupKeys = effect(function projectRegisterEffect({ ascend }) {
 		const keys = new Set<Key>()
 		for (const key of observedSource.mapKeys()) keys.add(key)
@@ -158,6 +207,14 @@ function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
 					const produced = apply(accessBase, target)
 					target.set(key, produced)
 				})
+				setEffectName(stop, `project[${depth}]:${String(key)}`)
+				effectProjectionMetadata.set(stop, {
+					source: observedSource,
+					key,
+					target,
+					depth,
+					parent,
+				})
 				keyEffects.set(key, stop)
 			})
 		}
@@ -165,7 +222,13 @@ function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
 		for (const key of Array.from(keyEffects.keys())) if (!keys.has(key)) disposeKey(key)
 	})
 
-	return makeCleanup(target, keyEffects, () => cleanupKeys())
+	return makeCleanup(target, keyEffects, () => cleanupKeys(), {
+		source: observedSource,
+		target,
+		apply,
+		depth,
+		parent,
+	} as ProjectionContext)
 }
 
 function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
@@ -190,6 +253,9 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 			Reflect.deleteProperty(target as Record<PropertyKey, unknown>, key)
 		}
 	}
+
+	const parent = getActiveProjection()
+	const depth = parent ? parent.depth + 1 : 0
 
 	const cleanupKeys = effect(function projectRecordEffect({ ascend }) {
 		const keys = new Set<PropertyKey>()
@@ -222,6 +288,14 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 					const produced = apply(accessBase, target)
 					;(target as any)[sourceKey] = produced
 				})
+				setEffectName(stop, `project[${depth}]:${String(key)}`)
+				effectProjectionMetadata.set(stop, {
+					source: observedSource,
+					key,
+					target,
+					depth,
+					parent,
+				})
 				keyEffects.set(key, stop)
 			})
 		}
@@ -229,7 +303,13 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 		for (const key of Array.from(keyEffects.keys())) if (!keys.has(key)) disposeKey(key)
 	})
 
-	return makeCleanup(target, keyEffects, () => cleanupKeys())
+	return makeCleanup(target, keyEffects, () => cleanupKeys(), {
+		source: observedSource,
+		target,
+		apply,
+		depth,
+		parent,
+	} as ProjectionContext)
 }
 
 function projectMap<Key, Value, ResultValue>(
@@ -249,6 +329,9 @@ function projectMap<Key, Value, ResultValue>(
 			target.delete(key)
 		}
 	}
+
+	const parent = getActiveProjection()
+	const depth = parent ? parent.depth + 1 : 0
 
 	const cleanupKeys = effect(function projectMapEffect({ ascend }) {
 		const keys = new Set<Key>()
@@ -273,6 +356,14 @@ function projectMap<Key, Value, ResultValue>(
 					const produced = apply(accessBase, target)
 					target.set(key, produced)
 				})
+				setEffectName(stop, `project[${depth}]:${String(key)}`)
+				effectProjectionMetadata.set(stop, {
+					source: observedSource,
+					key,
+					target,
+					depth,
+					parent,
+				})
 				keyEffects.set(key, stop)
 			})
 		}
@@ -280,7 +371,13 @@ function projectMap<Key, Value, ResultValue>(
 		for (const key of Array.from(keyEffects.keys())) if (!keys.has(key)) disposeKey(key)
 	})
 
-	return makeCleanup(target, keyEffects, () => cleanupKeys())
+	return makeCleanup(target, keyEffects, () => cleanupKeys(), {
+		source: observedSource,
+		target,
+		apply,
+		depth,
+		parent,
+	} as ProjectionContext)
 }
 
 type ProjectOverload = {

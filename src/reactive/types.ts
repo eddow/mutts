@@ -141,6 +141,22 @@ export const prototypeForwarding: unique symbol = Symbol('prototype-forwarding')
  */
 export const allProps = Symbol('all-props')
 
+/**
+ * Symbol for accessing projection information on reactive objects
+ */
+export const projectionInfo = Symbol('projection-info')
+
+/**
+ * Context for a running projection item effect
+ */
+export interface ProjectionContext {
+	source: any
+	key?: any
+	target: any
+	depth: number
+	parent?: ProjectionContext
+}
+
 // Symbol to mark functions with their root function
 const rootFunction = Symbol('root-function')
 
@@ -250,6 +266,12 @@ export const options = {
 	 * @default 100
 	 */
 	maxEffectChain: 100,
+	/**
+	 * Maximum number of times an effect can be triggered by the same cause in a single batch
+	 * Used to detect aggressive re-computation or infinite loops
+	 * @default 10
+	 */
+	maxTriggerPerBatch: 10,
 	/**
 	 * Debug purpose: maximum effect reaction (like call stack max depth)
 	 * Used to prevent infinite loops

@@ -18,7 +18,7 @@ export class ReactiveWeakMap<K extends object, V> {
 		Object.defineProperties(this, {
 			[native]: { value: original },
 			[prototypeForwarding]: { value: original },
-			content: { value: Symbol('content') },
+			content: { value: Symbol('WeakMapContent') },
 			[Symbol.toStringTag]: { value: 'ReactiveWeakMap' },
 		})
 	}
@@ -69,7 +69,7 @@ export class ReactiveMap<K, V> {
 		Object.defineProperties(this, {
 			[native]: { value: original },
 			[prototypeForwarding]: { value: original },
-			content: { value: Symbol('content') },
+			content: { value: Symbol('MapContent') },
 			[Symbol.toStringTag]: { value: 'ReactiveMap' },
 		})
 	}

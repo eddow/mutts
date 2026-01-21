@@ -10,7 +10,6 @@ export const native = Symbol('native')
 const isArray = Array.isArray
 Array.isArray = ((value: any) =>
 	isArray(value) ||
-	// biome-ignore lint/suspicious/useIsArray: We are defining it
 	(value &&
 		typeof value === 'object' &&
 		prototypeForwarding in value &&

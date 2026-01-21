@@ -18,7 +18,7 @@ export class ReactiveWeakSet<T extends object> {
 		Object.defineProperties(this, {
 			[native]: { value: original },
 			[prototypeForwarding]: { value: original },
-			content: { value: Symbol('content') },
+			content: { value: Symbol('WeakSetContent') },
 			[Symbol.toStringTag]: { value: 'ReactiveWeakSet' },
 		})
 	}
@@ -58,7 +58,7 @@ export class ReactiveSet<T> {
 		Object.defineProperties(this, {
 			[native]: { value: original },
 			[prototypeForwarding]: { value: original },
-			content: { value: Symbol('content') },
+			content: { value: Symbol('SetContent') },
 			[Symbol.toStringTag]: { value: 'ReactiveSet' },
 		})
 	}
