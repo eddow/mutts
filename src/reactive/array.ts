@@ -15,7 +15,7 @@ Array.isArray = ((value: any) =>
 		prototypeForwarding in value &&
 		Array.isArray(value[prototypeForwarding]))) as any
 export class ReactiveBaseArray {
-	declare readonly [native]: any[]
+	readonly [native]!: any[]
 
 	// Safe array access with negative indices
 	at(index: number): any {
@@ -292,7 +292,6 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 		}
 	},
 }) {
-	declare length: number
 	constructor(original: any[]) {
 		super()
 		Object.defineProperties(this, {
@@ -363,8 +362,8 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 				deleteCount === items.length
 					? range(start, start + deleteCount)
 					: range(start, oldLength + Math.max(items.length - deleteCount, 0), {
-							length: true,
-						})
+						length: true,
+					})
 			)
 		}
 	}

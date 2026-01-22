@@ -11,8 +11,8 @@ const native = Symbol('native')
  * Only tracks individual value operations, no size tracking (WeakSet limitation)
  */
 export class ReactiveWeakSet<T extends object> {
-	declare readonly [native]: WeakSet<T>
-	declare readonly content: symbol
+	readonly [native]!: WeakSet<T>
+	readonly content!: symbol
 
 	constructor(original: WeakSet<T>) {
 		Object.defineProperties(this, {
@@ -52,8 +52,8 @@ export class ReactiveWeakSet<T extends object> {
  * Tracks size changes, individual value operations, and collection-wide operations
  */
 export class ReactiveSet<T> {
-	declare readonly [native]: Set<T>
-	declare readonly content: symbol
+	readonly [native]!: Set<T>
+	readonly content!: symbol
 	constructor(original: Set<T>) {
 		Object.defineProperties(this, {
 			[native]: { value: original },

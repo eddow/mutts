@@ -117,7 +117,7 @@ export function Destroyable<
 		base = undefined
 	}
 	if (!base) {
-		base = class {} as T
+		base = class { } as T
 	}
 
 	return class Destroyable extends (base as T) {
@@ -139,7 +139,7 @@ export function Destroyable<
 			return Destroyable.destructors.has(obj)
 		}
 
-		declare [forwardProperties]: PropertyKey[]
+		[forwardProperties]!: PropertyKey[]
 		readonly [allocatedValues]: Allocated
 		constructor(...args: any[]) {
 			super(...args)

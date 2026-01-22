@@ -8,7 +8,7 @@ import { dependant } from './tracking'
 import { prototypeForwarding, type ScopedCallback } from './types'
 
 // TODO: Lazy reactivity ?
-export class ReadOnlyError extends Error {}
+export class ReadOnlyError extends Error { }
 /**
  * Reactive wrapper around JavaScript's Array class with full array method support
  * Tracks length changes, individual index operations, and collection-wide operations
@@ -29,7 +29,6 @@ class ReactiveReadOnlyArrayClass extends Indexable(ReactiveBaseArray, {
 		throw new ReadOnlyError(`Setting length to ${value} on a read-only array`)
 	},
 }) {
-	declare length: number
 	constructor(original: any[]) {
 		super()
 		Object.defineProperties(this, {

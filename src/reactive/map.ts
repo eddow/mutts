@@ -12,8 +12,8 @@ const native = Symbol('native')
  * Only tracks individual key operations, no size tracking (WeakMap limitation)
  */
 export class ReactiveWeakMap<K extends object, V> {
-	declare readonly [native]: WeakMap<K, V>
-	declare readonly content: symbol
+	readonly [native]!: WeakMap<K, V>
+	readonly content!: symbol
 	constructor(original: WeakMap<K, V>) {
 		Object.defineProperties(this, {
 			[native]: { value: original },
@@ -62,8 +62,8 @@ export class ReactiveWeakMap<K extends object, V> {
  * Tracks size changes, individual key operations, and collection-wide operations
  */
 export class ReactiveMap<K, V> {
-	declare readonly [native]: Map<K, V>
-	declare readonly content: symbol
+	readonly [native]!: Map<K, V>
+	readonly content!: symbol
 
 	constructor(original: Map<K, V>) {
 		Object.defineProperties(this, {
