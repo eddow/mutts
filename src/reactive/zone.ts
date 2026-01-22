@@ -15,7 +15,7 @@
  */
 
 import { captureEffectStack, withEffectStack } from './effect-context'
-import { options, ScopedCallback } from './types'
+import { options, type ScopedCallback } from './types'
 
 let zoneHooked = false
 

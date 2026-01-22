@@ -1,4 +1,4 @@
-import { decorator, GenericClassDecorator } from './decorator'
+import { decorator, type GenericClassDecorator } from './decorator'
 
 // In order to avoid async re-entrance, we could use zone.js or something like that.
 const syncCalculating: { object: object; prop: PropertyKey }[] = []

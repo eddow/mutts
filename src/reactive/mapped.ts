@@ -5,7 +5,7 @@ import { effect, untracked } from './effects'
 import { cleanedBy } from './interface'
 import { reactive } from './proxy'
 import { dependant } from './tracking'
-import { prototypeForwarding, ScopedCallback } from './types'
+import { prototypeForwarding, type ScopedCallback } from './types'
 
 // TODO: Lazy reactivity ?
 export class ReadOnlyError extends Error {}

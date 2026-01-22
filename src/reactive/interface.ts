@@ -1,4 +1,4 @@
-import { decorator, GenericClassDecorator } from '../decorator'
+import { decorator, type GenericClassDecorator } from '../decorator'
 import { deepWatch } from './deep-watch'
 import { withEffect } from './effect-context'
 import { effect, getActiveEffect, untracked } from './effects'
