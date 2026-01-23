@@ -19,3 +19,10 @@ The Mutts Reactive System documentation has been split into focused sections for
 *   **[Prototype Chains](./reactive/advanced.md#prototype-chains-and-pure-objects)**: Advanced inheritance patterns
 *   **[Memoization](./reactive/advanced.md#memoization)**: Caching strategies
 *   **[Debugging](./reactive/advanced.md#debugging-and-development)**: Cycle detection and troubleshooting
+
+## Debugging tools
+
+The reactive system is currently in a gamma state. The interface is quite fixed, the debugging tools are in place but :
+- still unfinished
+- not deactivatable
+- harming the performances of the application

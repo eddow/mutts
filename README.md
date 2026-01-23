@@ -16,7 +16,7 @@ npm install mutts
 
 > [!TIP]
 > **Are you an AI Agent?**
-> If you are an LLM or autonomous agent trying to fix bugs or understand this codebase, please read the **[AI Agent Manual](./docs/ai.md)**.
+> If you are an LLM or autonomous agent trying to fix bugs or understand this codebase, please read the **[AI Agent Manual](./docs/ai/manual.md)**.
 > It contains structured protocols, error code definitions, and introspection API details designed specifically for you.
 > A precise **[API Reference](./docs/ai/api-reference.md)** is also available for type lookups.
 
