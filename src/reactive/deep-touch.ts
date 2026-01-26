@@ -3,7 +3,7 @@ import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { batch } from './effects'
 import { isNonReactive } from './non-reactive-state'
 import { unwrap } from './proxy-state'
-import { effectParent, watchers } from './tracking'
+import { effectParent, watchers } from './registry'
 import { allProps, type Evolution, options, type ScopedCallback } from './types'
 
 function isObject(value: any): value is object {

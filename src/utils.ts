@@ -1,3 +1,5 @@
+import { prototypeForwarding } from './reactive/types'
+
 type ElementTypes<T extends readonly unknown[]> = {
 	[K in keyof T]: T[K] extends readonly (infer U)[] ? U : T[K]
 }
@@ -114,4 +116,143 @@ export function ReflectSet(obj: any, prop: any, value: any, receiver: any) {
 export function isOwnAccessor(obj: any, prop: any) {
 	const opd = Object.getOwnPropertyDescriptor(obj, prop)
 	return !!(opd?.get || opd?.set)
+}
+
+/**
+ * Deeply compares two values.
+ * For objects, compares prototypes with === and then own properties recursively.
+ * Uses a cache to handle circular references.
+ * @param a - First value
+ * @param b - Second value
+ * @param cache - Map for circular reference protection (internal use)
+ * @returns True if values are deeply equal
+ */
+export function deepCompare(a: any, b: any, cache = new Map<object, Set<object>>()): boolean {
+	// Unwrap mutts proxies if present
+	while (a && typeof a === 'object' && prototypeForwarding in a) {
+		a = (a as any)[prototypeForwarding]
+	}
+	while (b && typeof b === 'object' && prototypeForwarding in b) {
+		b = (b as any)[prototypeForwarding]
+	}
+
+	if (a === b) return true
+
+	if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) {
+		return a === b
+	}
+
+	// Prototype check
+	const protoA = Object.getPrototypeOf(a)
+	const protoB = Object.getPrototypeOf(b)
+	if (protoA !== protoB) {
+		console.warn(`[deepCompare] prototype mismatch:`, { nameA: a?.constructor?.name, nameB: b?.constructor?.name })
+		return false
+	}
+	// Circular reference protection
+	let compared = cache.get(a)
+	if (compared?.has(b)) return true
+	if (!compared) {
+		compared = new Set()
+		cache.set(a, compared)
+	}
+	compared.add(b)
+
+	// Handle specific object types
+	if (Array.isArray(a)) {
+		if (!Array.isArray(b)) {
+			console.warn(`[deepCompare] B is not an array`)
+			return false
+		}
+		if (a.length !== b.length) {
+			console.warn(`[deepCompare] array length mismatch:`, { lenA: a.length, lenB: b.length })
+			return false
+		}
+		for (let i = 0; i < a.length; i++) {
+			if (!deepCompare(a[i], b[i], cache)) {
+				console.warn(`[deepCompare] array element mismatch at index ${i}`)
+				return false
+			}
+		}
+		return true
+	}
+
+	if (a instanceof Date) {
+		const match = b instanceof Date && a.getTime() === b.getTime()
+		if (!match) console.warn(`[deepCompare] Date mismatch`)
+		return match
+	}
+	if (a instanceof RegExp) {
+		const match = b instanceof RegExp && a.toString() === b.toString()
+		if (!match) console.warn(`[deepCompare] RegExp mismatch`)
+		return match
+	}
+	if (a instanceof Set) {
+		if (!(b instanceof Set) || a.size !== b.size) {
+			console.warn(`[deepCompare] Set size mismatch`)
+			return false
+		}
+		for (const val of a) {
+			let found = false
+			for (const bVal of b) {
+				if (deepCompare(val, bVal, cache)) {
+					found = true
+					break
+				}
+			}
+			if (!found) {
+				console.warn(`[deepCompare] missing Set element`)
+				return false
+			}
+		}
+		return true
+	}
+	if (a instanceof Map) {
+		if (!(b instanceof Map) || a.size !== b.size) {
+			console.warn(`[deepCompare] Map size mismatch`)
+			return false
+		}
+		for (const [key, val] of a) {
+			if (!b.has(key)) {
+				let foundMatch = false
+				for (const [bKey, bVal] of b) {
+					if (deepCompare(key, bKey, cache) && deepCompare(val, bVal, cache)) {
+						foundMatch = true
+						break
+					}
+				}
+				if (!foundMatch) {
+					console.warn(`[deepCompare] missing Map key`)
+					return false
+				}
+			} else {
+				if (!deepCompare(val, b.get(key), cache)) {
+					console.warn(`[deepCompare] Map value mismatch for key`)
+					return false
+				}
+			}
+		}
+		return true
+	}
+
+	// Compare own properties
+	const keysA = Object.keys(a)
+	const keysB = Object.keys(b)
+	if (keysA.length !== keysB.length) {
+		console.warn(`[deepCompare] keys length mismatch:`, { lenA: keysA.length, lenB: keysB.length, keysA, keysB, a, b })
+		return false
+	}
+
+	for (const key of keysA) {
+		if (!Object.prototype.hasOwnProperty.call(b, key)) {
+			console.warn(`[deepCompare] missing key ${String(key)} in B`)
+			return false
+		}
+		if (!deepCompare(a[key], b[key], cache)) {
+			console.warn(`[deepCompare] value mismatch for key ${String(key)}:`, { valA: a[key], valB: b[key] })
+			return false
+		}
+	}
+
+	return true
 }

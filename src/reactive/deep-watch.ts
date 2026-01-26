@@ -6,7 +6,7 @@ import {
 import { effect } from './effects'
 import { isNonReactive } from './non-reactive-state'
 import { reactive, unwrap } from './proxy'
-import { markWithRoot } from './tracking'
+import { markWithRoot } from './registry'
 import { options, type ScopedCallback } from './types'
 
 function isObject(value: any): value is object {

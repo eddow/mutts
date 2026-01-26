@@ -147,6 +147,16 @@ export const allProps = Symbol('all-props')
 export const projectionInfo = Symbol('projection-info')
 
 /**
+ * Symbol to check if an effect is stopped
+ */
+export const stopped = Symbol('stopped')
+
+/**
+ * Symbol to access effect cleanup function
+ */
+export const cleanup = Symbol('cleanup')
+
+/**
  * Context for a running projection item effect
  */
 export interface ProjectionContext {
@@ -278,6 +288,28 @@ export const options = {
 	 * @default 'throw'
 	 */
 	maxEffectReaction: 'throw' as 'throw' | 'debug' | 'warn',
+	/**
+	 * Callback called when a memoization discrepancy is detected (debug only)
+	 * When defined, memoized functions will run a second time (untracked) to verify consistency.
+	 * If the untracked run returns a different value than the cached one, this callback is triggered.
+	 * 
+	 * This is the primary tool for detecting missing reactive dependencies in computed values.
+	 * 
+	 * @param cached - The value currently in the memoization cache
+	 * @param fresh - The value obtained by re-running the function untracked
+	 * @param fn - The memoized function itself
+	 * @param args - Arguments passed to the function
+	 * 
+	 * @example
+	 * ```typescript
+	 * reactiveOptions.onMemoizationDiscrepancy = (cached, fresh, fn, args) => {
+	 *   throw new Error(`Memoization discrepancy in ${fn.name}!`);
+	 * };
+	 * ```
+	 */
+	onMemoizationDiscrepancy: undefined as
+		| ((cached: any, fresh: any, fn: Function, args: any[], cause: "calculation" | "comparison") => void)
+		| undefined,
 	/**
 	 * How to handle cycles detected in effect batches
 	 * - 'throw': Throw an error with cycle information (default, recommended for development)

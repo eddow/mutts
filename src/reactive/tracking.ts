@@ -1,45 +1,14 @@
 import { getActiveEffect } from './effect-context'
+import {
+	effectToReactiveObjects,
+	getRoot,
+	globalTrackingDisabled,
+	setGlobalTrackingDisabled,
+	trackingDisabledEffects,
+	watchers,
+} from './registry'
 import { unwrap } from './proxy-state'
-import { allProps, rootFunction, type ScopedCallback } from './types'
-
-// Track which effects are watching which reactive objects for cleanup
-export const effectToReactiveObjects = new WeakMap<ScopedCallback, Set<object>>()
-
-// Track effects per reactive object and property
-export const watchers = new WeakMap<object, Map<any, Set<ScopedCallback>>>()
-
-// runEffect -> set<stop>
-export const effectChildren = new WeakMap<ScopedCallback, Set<ScopedCallback>>()
-
-// Track parent effect relationships for hierarchy traversal (used in deep touch filtering)
-export const effectParent = new WeakMap<ScopedCallback, ScopedCallback | undefined>()
-
-/**
- * Marks a function with its root function for effect tracking
- * @param fn - The function to mark
- * @param root - The root function
- * @returns The marked function
- */
-export function markWithRoot<T extends Function>(fn: T, root: Function): T {
-	// Mark fn with the new root
-	return Object.defineProperty(fn, rootFunction, {
-		value: getRoot(root),
-		writable: false,
-	})
-}
-
-/**
- * Gets the root function of a function for effect tracking
- * @param fn - The function to get the root of
- * @returns The root function
- */
-export function getRoot<T extends Function | undefined>(fn: T): T {
-	return (fn as any)?.[rootFunction] || fn
-}
-
-// Flag to disable dependency tracking for the current active effect (not globally)
-const trackingDisabledEffects = new WeakSet<ScopedCallback>()
-let globalTrackingDisabled = false
+import { allProps, type ScopedCallback } from './types'
 
 export function getTrackingDisabled(): boolean {
 	const active = getActiveEffect()
@@ -50,13 +19,15 @@ export function getTrackingDisabled(): boolean {
 export function setTrackingDisabled(value: boolean): void {
 	const active = getActiveEffect()
 	if (!active) {
-		globalTrackingDisabled = value
+		setGlobalTrackingDisabled(value)
 		return
 	}
 	const root = getRoot(active)
 	if (value) trackingDisabledEffects.add(root)
 	else trackingDisabledEffects.delete(root)
 }
+
+
 
 /**
  * Marks a property as a dependency of the current effect

@@ -7,7 +7,7 @@ const syncCalculating: { object: object; prop: PropertyKey }[] = []
  * Prevents circular dependencies and provides automatic cache invalidation
  */
 export const cached = decorator({
-	getter(original, propertyKey) {
+	getter(original, target, propertyKey) {
 		return function (this: any) {
 			const alreadyCalculating = syncCalculating.findIndex(
 				(c) => c.object === this && c.prop === propertyKey
@@ -83,19 +83,19 @@ export function describe(descriptor: {
  */
 export const deprecated = Object.assign(
 	decorator({
-		method(original, propertyKey) {
+		method(original, target, propertyKey) {
 			return function (this: any, ...args: any[]) {
 				deprecated.warn(this, propertyKey)
 				return original.apply(this, args)
 			}
 		},
-		getter(original, propertyKey) {
+		getter(original, target, propertyKey) {
 			return function (this: any) {
 				deprecated.warn(this, propertyKey)
 				return original.call(this)
 			}
 		},
-		setter(original, propertyKey) {
+		setter(original, target, propertyKey) {
 			return function (this: any, value: any) {
 				deprecated.warn(this, propertyKey)
 				return original.call(this, value)
@@ -111,19 +111,19 @@ export const deprecated = Object.assign(
 		},
 		default(message: string) {
 			return decorator({
-				method(original, propertyKey) {
+				method(original, target, propertyKey) {
 					return function (this: any, ...args: any[]) {
 						deprecated.warn(this, propertyKey, message)
 						return original.apply(this, args)
 					}
 				},
-				getter(original, propertyKey) {
+				getter(original, target, propertyKey) {
 					return function (this: any) {
 						deprecated.warn(this, propertyKey, message)
 						return original.call(this)
 					}
 				},
-				setter(original, propertyKey) {
+				setter(original, target, propertyKey) {
 					return function (this: any, value: any) {
 						deprecated.warn(this, propertyKey, message)
 						return original.call(this, value)
@@ -157,7 +157,7 @@ export const deprecated = Object.assign(
  */
 export function debounce(delay: number) {
 	return decorator({
-		method(original, _propertyKey) {
+		method(original, target, _propertyKey) {
 			let timeoutId: ReturnType<typeof setTimeout> | null = null
 
 			return function (this: any, ...args: any[]) {
@@ -183,7 +183,7 @@ export function debounce(delay: number) {
  */
 export function throttle(delay: number) {
 	return decorator({
-		method(original, _propertyKey) {
+		method(original, target, _propertyKey) {
 			let lastCallTime = 0
 			let timeoutId: ReturnType<typeof setTimeout> | null = null
 

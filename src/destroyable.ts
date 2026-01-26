@@ -165,7 +165,7 @@ const forwardProperties = Symbol('forwardProperties')
  * Use with accessor properties or explicit get/set pairs
  */
 export const allocated = decorator({
-	setter(original, propertyKey) {
+	setter(original, target, propertyKey) {
 		return function (value) {
 			this[allocatedValues][propertyKey] = value
 			return original.call(this, value)

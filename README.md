@@ -171,6 +171,7 @@ A comprehensive reactivity system. See the **[Introduction](./docs/reactive/core
 - **Back-Reference System**: Efficient change propagation through object hierarchies
 - **Type Safety**: Full TypeScript support with proper type inference
 - **Performance Optimized**: Lazy back-reference creation and efficient dependency tracking
+- **Debugging & Development**: Built-in tools like cycle detection and memoization discrepancy check
 
 **Use Cases:**
 - State management systems

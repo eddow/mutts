@@ -5,7 +5,7 @@
  * - Provides graph data for tooling (DevTools panel, etc.)
  */
 
-import { effectParent, effectToReactiveObjects, getRoot } from './tracking'
+import { effectParent, effectToReactiveObjects, getRoot } from './registry'
 import { allProps, type Evolution, options, type ScopedCallback } from './types'
 
 const EXTERNAL_SOURCE = Symbol('external-source')

@@ -1,8 +1,10 @@
 import { decorator } from '../decorator'
-import { renamed } from '../utils'
+import { deepCompare, renamed } from '../utils'
 import { touched1 } from './change'
-import { effect, root } from './effects'
-import { dependant, getRoot, markWithRoot } from './tracking'
+import { effect, root, untracked } from './effects'
+import { dependant } from './tracking'
+import { getRoot, markWithRoot } from './registry'
+import { options, rootFunction } from './types'
 
 export type Memoizable = object | any[] | symbol | ((...args: any[]) => any)
 
@@ -12,7 +14,7 @@ type MemoCacheTree<Result> = {
 	branches?: WeakMap<Memoizable, MemoCacheTree<Result>>
 }
 
-const memoizedRegistry = new WeakMap<Function, Function>()
+const memoizedRegistry = new WeakMap<any, Function>()
 
 function getBranch<Result>(tree: MemoCacheTree<Result>, key: Memoizable): MemoCacheTree<Result> {
 	tree.branches ??= new WeakMap()
@@ -38,18 +40,27 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 			throw new Error('memoize expects non-null object arguments')
 
 		let node: MemoCacheTree<Result> = cacheRoot
+		// Note: decorators add `this` as first argument
 		for (const arg of localArgs) {
 			node = getBranch(node, arg)
 		}
 
 		dependant(node, 'memoize')
-		if ('result' in node) return node.result!
+		if ('result' in node) {
+			if (options.onMemoizationDiscrepancy) {
+				const fresh = untracked(() => fn(...localArgs))
+				if (!deepCompare(node.result, fresh)) {
+					options.onMemoizationDiscrepancy(node.result, fresh, fn, localArgs, "calculation")
+				}
+			}
+			return node.result!
+		}
 
 		// Create memoize internal effect to track dependencies and invalidate cache
 		// Use untracked to prevent the effect creation from being affected by parent effects
 		node.cleanup = root(() =>
 			effect(
-				markWithRoot(() => {
+				() => {
 					// Execute the function and track its dependencies
 					// The function execution will automatically track dependencies on reactive objects
 					node.result = fn(...localArgs)
@@ -57,11 +68,25 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 						// When dependencies change, clear the cache and notify consumers
 						delete node.result
 						touched1(node, { type: 'invalidate', prop: localArgs }, 'memoize')
+						// Lazy memoization: stop the effect so it doesn't re-run immediately.
+						// It will be re-created on next access.
+						if (node.cleanup) {
+							node.cleanup()
+							node.cleanup = undefined
+						}
 					}
-				}, fnRoot),
+				},
 				{ opaque: true }
 			)
 		)
+
+		if (options.onMemoizationDiscrepancy) {
+			const fresh = untracked(() => fn(...localArgs))
+			if (!deepCompare(node.result, fresh)) {
+				options.onMemoizationDiscrepancy(node.result, fresh, fn, localArgs, "comparison")
+			}
+		}
+
 		return node.result!
 	}, fn)
 
@@ -71,35 +96,46 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 }
 
 export const memoize = decorator({
-	getter(original, propertyKey) {
-		const memoized = memoizeFunction(
-			markWithRoot(
-				renamed(
-					(that: object) => {
-						return original.call(that)
-					},
-					`${String(this.constructor.name)}.${String(propertyKey)}`
-				),
-				original
-			)
-		)
+	getter(original, target, propertyKey) {
 		return function (this: any) {
+			const memoized = memoizeFunction(
+				markWithRoot(
+					renamed(
+						(that: object) => {
+							return original.call(that)
+						},
+						`${String(target?.constructor?.name ?? target?.name ?? 'Object')}.${String(propertyKey)}`
+					),
+					{
+						method: original,
+						propertyKey,
+						scope: this,
+						...(original[rootFunction] ? { [rootFunction]: original[rootFunction] } : {})
+					}
+				)
+			)
 			return memoized(this)
 		}
 	},
-	method(original, name) {
-		const memoized = memoizeFunction(
-			markWithRoot(
-				renamed(
-					(that: object, ...args: object[]) => {
-						return original.call(that, ...args)
-					},
-					`${String(this.constructor.name)}.${String(name)}`
-				),
-				original
-			)
-		) as (...args: object[]) => unknown
+	method(original, target, name) {
 		return function (this: any, ...args: object[]) {
+			const memoized = memoizeFunction(
+				markWithRoot(
+					renamed(
+						(that: object, ...args: object[]) => {
+							return original.call(that, ...args)
+						},
+						`${String(target?.constructor?.name ?? target?.name ?? 'Object')}.${String(name)}`
+					),
+					{
+						method: original,
+						propertyKey: name,
+						args,
+						scope: this,
+						...(original[rootFunction] ? { [rootFunction]: original[rootFunction] } : {})
+					}
+				)
+			) as (...args: object[]) => unknown
 			return memoized(this, ...args)
 		}
 	},

@@ -1,4 +1,4 @@
-import { effectParent, getRoot } from './tracking'
+import { effectParent, getRoot } from './registry'
 import { ReactiveError, type ScopedCallback } from './types'
 
 /**
@@ -77,7 +77,7 @@ export function getActiveEffect() {
  * @returns The result of the function
  */
 export function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T): T {
-	// console.log('[Mutts] withEffect', effect ? 'Active' : 'NULL');
+
 	if (getRoot(effect) === getRoot(getActiveEffect())) return fn()
 	stack.unshift(effect)
 	try {

@@ -3,7 +3,7 @@ import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { getActiveEffect, isRunning } from './effect-context'
 import { batch, effectTrackers, hasBatched, opaqueEffects, recordActivation } from './effects'
 import { unwrap } from './proxy-state'
-import { watchers } from './tracking'
+import { watchers } from './registry'
 import { allProps, type Evolution, options, type ScopedCallback, type State } from './types'
 
 const states = new WeakMap<object, State>()

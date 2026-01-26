@@ -1,4 +1,4 @@
-import { atomic, effect, reactive, unwrap } from 'mutts/reactive'
+import { atomic, effect, reactive, reactiveOptions, unwrap } from 'mutts/reactive'
 import { memoize } from 'mutts/reactive/memoize'
 
 describe('memoize', () => {
@@ -142,6 +142,72 @@ describe('memoize', () => {
 			calc.increment.value = 2
 			expect(calc.compute(first, second)).toBe(7)
 			expect(calc.calls).toBe(4)
+		})
+	})
+
+	describe('discrepancy detection', () => {
+		afterEach(() => {
+			reactiveOptions.onMemoizationDiscrepancy = undefined
+		})
+
+		it('detects discrepancy when a non-reactive dependency changes', () => {
+			let nonReactiveValue = 1
+			const callback = jest.fn()
+			reactiveOptions.onMemoizationDiscrepancy = callback
+
+			const memo = memoize(({ obj }: { obj: object }) => {
+				return nonReactiveValue
+			})
+
+			const arg = { obj: {} }
+			expect(memo(arg)).toBe(1)
+			expect(callback).not.toHaveBeenCalled()
+
+			nonReactiveValue = 2
+			// The memo depends on arg.obj (which didn't change), so it's a cache hit
+			// But the discrepancy detector should catch that fresh execution returns 2
+			expect(memo(arg)).toBe(1)
+			expect(callback).toHaveBeenCalledWith(1, 2, expect.any(Function), [arg])
+		})
+
+		it('does NOT trigger discrepancy when result is structurally equal (deepCompare)', () => {
+			let nonReactiveValue = [1, 2]
+			const callback = jest.fn()
+			reactiveOptions.onMemoizationDiscrepancy = callback
+
+			const memo = memoize(({ obj }: { obj: object }) => {
+				return [...nonReactiveValue]
+			})
+
+			const arg = { obj: {} }
+			expect(memo(arg)).toEqual([1, 2])
+			expect(callback).not.toHaveBeenCalled()
+
+			// Change to a new array but with same content
+			nonReactiveValue = [1, 2]
+			expect(memo(arg)).toEqual([1, 2])
+			// Should NOT have called callback because [1, 2] deepEquals [1, 2]
+			expect(callback).not.toHaveBeenCalled()
+
+			// Change content
+			nonReactiveValue = [1, 3]
+			expect(memo(arg)).toEqual([1, 2])
+			expect(callback).toHaveBeenCalledWith([1, 2], [1, 3], expect.any(Function), [arg])
+		})
+
+		it('triggers on initial execution if there is an immediate discrepancy (unlikely but possible if side effects)', () => {
+			let count = 0
+			const callback = jest.fn()
+			reactiveOptions.onMemoizationDiscrepancy = callback
+
+			const memo = memoize(({ obj }: { obj: object }) => {
+				return ++count
+			})
+
+			const arg = { obj: {} }
+			// First call: count becomes 1. Fresh call in detector: count becomes 2.
+			expect(memo(arg)).toBe(1)
+			expect(callback).toHaveBeenCalledWith(1, 2, expect.any(Function), [arg])
 		})
 	})
 })

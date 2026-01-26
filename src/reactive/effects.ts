@@ -9,15 +9,17 @@ import {
 	withEffectStack,
 } from './effect-context'
 import {
+	getTrackingDisabled,
+	setTrackingDisabled,
+} from './tracking'
+import {
 	effectChildren,
 	effectParent,
 	effectToReactiveObjects,
 	getRoot,
-	getTrackingDisabled,
 	markWithRoot,
-	setTrackingDisabled,
 	watchers,
-} from './tracking'
+} from './registry'
 import {
 	type DependencyAccess,
 	type EffectOptions,
@@ -27,6 +29,8 @@ import {
 	ReactiveErrorCode,
 	// type AsyncExecutionMode,
 	type ScopedCallback,
+	cleanup as cleanupSymbol,
+	stopped,
 } from './types'
 
 /**
@@ -621,6 +625,11 @@ function wouldCreateCycle(callerRoot: Function, targetRoot: Function): boolean {
  * @param immediate - If true, don't create edges in the dependency graph
  */
 function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?: boolean) {
+	const cleanupFn = (effect as any)[cleanupSymbol]
+	if (cleanupFn) cleanupFn()
+	// If the effect was stopped during cleanup (e.g. lazy memoization), don't add it to the batch
+	if ((effect as any)[stopped]) return
+
 	if (!batchQueue) return
 
 	const root = getRoot(effect)
@@ -1085,21 +1094,21 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
  */
 export const atomic = decorator({
 	method(original) {
-		return function (...args: any[]) {
-			return batch(
-				markWithRoot(() => original.apply(this, args), original),
-				'immediate'
-			)
+		return function (this: any, ...args: any[]) {
+			const atomicEffect = () => original.apply(this, args)
+			// Debug: helpful to have a name
+			Object.defineProperty(atomicEffect, 'name', { value: `atomic(${original.name})` })
+			return batch(atomicEffect, 'immediate')
 		}
 	},
 	default<Args extends any[], Return>(
 		original: (...args: Args) => Return
 	): (...args: Args) => Return {
 		return function (this: any, ...args: Args) {
-			return batch(
-				markWithRoot(() => original.apply(this, args), original),
-				'immediate'
-			)
+			const atomicEffect = () => original.apply(this, args)
+			// Debug: helpful to have a name
+			Object.defineProperty(atomicEffect, 'name', { value: `atomic(${original.name})` })
+			return batch(atomicEffect, 'immediate')
 		}
 	},
 })
@@ -1138,7 +1147,7 @@ export function effect(
 	let cleanup: (() => void) | null = null
 	// capture the parent effect at creation time for ascend
 	const parentsForAscend = captureEffectStack()
-	const tracked = markWithRoot(<T>(cb: () => T) => withEffect(runEffect, cb), fn)
+	const tracked = markWithRoot(<T>(cb: () => T) => withEffect(runEffect, cb), fn, false)
 	const ascend = <T>(cb: () => T) => withEffectStack(parentsForAscend, cb)
 	let effectStopped = false
 	let hasReacted = false
@@ -1249,7 +1258,7 @@ export function effect(
 		}
 	}
 	// Mark the runEffect callback with the original function as its root
-	markWithRoot(runEffect, fn)
+	markWithRoot(runEffect, fn, false)
 
 	// Register strict mode if enabled
 	if (effectOptions?.opaque) {
@@ -1309,6 +1318,22 @@ export function effect(
 		stopEffect()
 	}
 	children.add(subEffectCleanup)
+
+	Object.defineProperty(subEffectCleanup, stopped, {
+		get() {
+			return effectStopped
+		},
+	})
+	Object.defineProperty(subEffectCleanup, cleanupSymbol, {
+		value: () => {
+			if (cleanup) {
+				const prevCleanup = cleanup
+				cleanup = null
+				withEffect(undefined, () => prevCleanup())
+			}
+		},
+	})
+
 	return subEffectCleanup
 }
 

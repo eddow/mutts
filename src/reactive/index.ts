@@ -52,7 +52,7 @@ import { ReactiveMap, ReactiveWeakMap } from './map'
 import { nonReactiveObjects, registerNativeReactivity } from './non-reactive-state'
 import { objectToProxy, proxyToObject } from './proxy'
 import { ReactiveSet, ReactiveWeakSet } from './set'
-import { effectToReactiveObjects, watchers } from './tracking'
+import { effectToReactiveObjects, watchers } from './registry'
 
 // Register native collection types to use specialized reactive wrappers
 registerNativeReactivity(WeakMap, ReactiveWeakMap)

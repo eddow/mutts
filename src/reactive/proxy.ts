@@ -127,12 +127,12 @@ const reactiveHandlers = {
 			const receiverDesc = Object.getOwnPropertyDescriptor(unwrappedReceiver, prop)
 			const targetDesc = Object.getOwnPropertyDescriptor(unwrappedObj, prop)
 			const desc = receiverDesc || targetDesc
-			// If it's a getter-only accessor (has getter but no setter), read without tracking
-			// to avoid breaking memoization invalidation when the getter calls memoized functions
+			// We *need* to use `receiver` and not `unwrappedObj` here, otherwise we break
+			// the dependency tracking for memoized getters
 			if (desc?.get && !desc?.set) {
-				oldVal = withEffect(undefined, () => Reflect.get(unwrappedObj, prop, unwrappedReceiver))
+				oldVal = withEffect(undefined, () => Reflect.get(unwrappedObj, prop, receiver))
 			} else {
-				oldVal = Reflect.get(unwrappedObj, prop, unwrappedReceiver)
+				oldVal = withEffect(undefined, () => Reflect.get(unwrappedObj, prop, receiver))
 			}
 		}
 		if (objectsWithDeepWatchers.has(obj)) {

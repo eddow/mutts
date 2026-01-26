@@ -1277,4 +1277,36 @@ effect(() => {
 ```
 
 **Note:** Self-loops (an effect reading and writing the same property, like `obj.prop++`) are automatically ignored and do not create dependency relationships or cycles.
+### Memoization Discrepancy Detection
 
+A common issue in reactive systems is "missing dependencies": using a reactive value inside a `memoize` or `effect` but failing to track it properly (e.g. by wrapping it in `untracked` or just by mistake in complex logic).
+
+The `onMemoizationDiscrepancy` option allows you to catch these issues during development or testing.
+
+#### How it works
+
+When `reactiveOptions.onMemoizationDiscrepancy` is defined, every call to a `memoize` function will:
+1.  Check the cache.
+2.  If a cached value exists, the function is executed a **second time** in a completely **untracked** context.
+3.  The results are compared.
+4.  If they differ, `onMemoizationDiscrepancy` is called with both values.
+
+#### Usage
+
+In your test setup:
+
+```typescript
+import { reactiveOptions } from 'mutts'
+
+reactiveOptions.onMemoizationDiscrepancy = (cached, fresh, fn, args) => {
+    console.error(`Discrepancy in memoized function ${fn.name || 'anonymous'}!`, {
+        cached,
+        fresh,
+        args
+    })
+    throw new Error('Memoization discrepancy detected')
+}
+```
+
+> [!TIP]
+> **False Positives**: Identity-based comparisons (like checking if two new object instances are the same) will trigger the detector even if the data is identical. In environments like Pounce where re-rendering creates new DOM nodes, you should compare nodes by `outerHTML` or similar structural markers in your callback.
