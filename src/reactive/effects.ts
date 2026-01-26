@@ -1147,7 +1147,7 @@ export function effect(
 	let cleanup: (() => void) | null = null
 	// capture the parent effect at creation time for ascend
 	const parentsForAscend = captureEffectStack()
-	const tracked = markWithRoot(<T>(cb: () => T) => withEffect(runEffect, cb), fn, false)
+	const tracked = <T>(cb: () => T) => withEffect(runEffect, cb)
 	const ascend = <T>(cb: () => T) => withEffectStack(parentsForAscend, cb)
 	let effectStopped = false
 	let hasReacted = false
@@ -1258,7 +1258,7 @@ export function effect(
 		}
 	}
 	// Mark the runEffect callback with the original function as its root
-	markWithRoot(runEffect, fn, false)
+	markWithRoot(runEffect, fn)
 
 	// Register strict mode if enabled
 	if (effectOptions?.opaque) {
@@ -1291,8 +1291,25 @@ export function effect(
 		cleanupEffectFromGraph(runEffect)
 		fr.unregister(stopEffect)
 	}
+	function augmentedRv(rv: ScopedCallback): ScopedCallback {
+		Object.defineProperty(rv, stopped, {
+			get() {
+				return effectStopped
+			},
+		})
+		Object.defineProperty(rv, cleanupSymbol, {
+			value: () => {
+				if (cleanup) {
+					const prevCleanup = cleanup
+					cleanup = null
+					withEffect(undefined, () => prevCleanup())
+				}
+			},
+		})
+		return rv
+	}
 	if (isRootEffect) {
-		const callIfCollected = () => stopEffect()
+		const callIfCollected = augmentedRv(() => stopEffect())
 		fr.register(
 			callIfCollected,
 			() => {
@@ -1309,30 +1326,15 @@ export function effect(
 		children = new Set()
 		effectChildren.set(parent, children)
 	}
-	const subEffectCleanup = (): void => {
+	const subEffectCleanup = augmentedRv(() => {
 		children.delete(subEffectCleanup)
 		if (children.size === 0) {
 			effectChildren.delete(parent)
 		}
 		// Execute this child effect cleanup (which triggers its own mainCleanup)
 		stopEffect()
-	}
+	})
 	children.add(subEffectCleanup)
-
-	Object.defineProperty(subEffectCleanup, stopped, {
-		get() {
-			return effectStopped
-		},
-	})
-	Object.defineProperty(subEffectCleanup, cleanupSymbol, {
-		value: () => {
-			if (cleanup) {
-				const prevCleanup = cleanup
-				cleanup = null
-				withEffect(undefined, () => prevCleanup())
-			}
-		},
-	})
 
 	return subEffectCleanup
 }

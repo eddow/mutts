@@ -1,0 +1,174 @@
+  console.log
+    CHECK MISS verification, current isVerificationRun= false
+
+      at src/reactive/memoize.ts:93:12
+
+  console.warn
+    [deepCompare] value mismatch for key setName: { valA: [Function: setName], valB: [Function: setName] }
+
+      250 | 		}
+      251 | 		if (!deepCompare(a[key], b[key], cache)) {
+    > 252 | 			console.warn(`[deepCompare] value mismatch for key ${String(key)}:`, { valA: a[key], valB: b[key] })
+          | 			        ^
+      253 | 			return false
+      254 | 		}
+      255 | 	}
+
+      at deepCompare (src/utils.ts:252:12)
+      at src/reactive/memoize.ts:98:21
+      at tests/reactive/interface.test.ts:1508:42
+      at computedIndexedMapInputEffect (src/reactive/mapped.ts:90:20)
+      at src/reactive/effects.ts:1186:41
+      at withEffect (src/reactive/effect-context.ts:84:10)
+      at Array.runEffect (src/reactive/effects.ts:1186:23)
+      at batch (src/reactive/effects.ts:917:26)
+      at effect (src/reactive/effects.ts:1272:2)
+      at input (src/reactive/mapped.ts:89:16)
+      at computedMapNewElements (src/reactive/mapped.ts:106:63)
+      at withEffectStack (src/reactive/effect-context.ts:62:10)
+      at ascend (src/reactive/effects.ts:1151:52)
+      at computedMapLengthEffect (src/reactive/mapped.ts:105:4)
+      at src/reactive/effects.ts:1186:41
+      at withEffect (src/reactive/effect-context.ts:84:10)
+      at Array.runEffect (src/reactive/effects.ts:1186:23)
+      at batch (src/reactive/effects.ts:951:27)
+      at effect (src/reactive/effects.ts:1272:2)
+      at mapped (src/reactive/mapped.ts:94:30)
+      at Object.<anonymous> (tests/reactive/interface.test.ts:1508:23)
+
+  console.log
+    CHECK MISS verification, current isVerificationRun= false
+
+      at src/reactive/memoize.ts:93:12
+
+  console.log
+    CHECK MISS verification, current isVerificationRun= false
+
+      at src/reactive/memoize.ts:93:12
+
+  console.log
+    CHECK MISS verification, current isVerificationRun= false
+
+      at src/reactive/memoize.ts:93:12
+
+FAIL tests/reactive/interface.test.ts
+  watch
+    watch with value function
+      ✓ should watch a specific value and trigger on changes (3 ms)
+      ✓ should not trigger when watching non-reactive values
+      ✓ should handle multiple watchers on the same value (1 ms)
+      ✓ should stop watching when cleanup is called (1 ms)
+      ✓ should handle reactive values in watch (3 ms)
+      ✓ should watch properties that return new objects (simplified) (2 ms)
+    watch object properties
+      ✓ should watch any property change on a reactive object
+      ✓ should watch nested object property changes (1 ms)
+      ✓ should watch array changes when object contains arrays (1 ms)
+      ✓ should handle multiple watchers on the same object
+      ✓ should stop watching when cleanup is called
+      ✓ should handle non-reactive objects gracefully
+      ✓ should watch property additions and deletions (1 ms)
+      ✓ should watch reactive array mutations (currently fails)
+      ✓ should watch reactive array length changes (currently fails)
+      ✓ should watch nested object properties in arrays (simplified) (1 ms)
+      ✓ should watch properties that return new objects (1 ms)
+      ✓ should watch nested object properties in objects (not arrays)
+      ✓ should watch array property changes with direct access (not methods) (1 ms)
+      ✓ should watch array element access vs find method (hypothesis test) (1 ms)
+      ✓ should watch new added objects
+    watch edge cases
+      ✓ should handle undefined and null values (1 ms)
+      ✓ should handle circular references in object watching
+      ✓ should handle rapid successive changes
+      ✓ should handle watching during effect execution (1 ms)
+  deep watch via watch({ deep: true })
+    basic deep watching functionality
+      ✓ should watch nested object property changes
+      ✓ should watch array changes when object contains arrays (1 ms)
+      ✓ should handle object replacement correctly
+      ✓ should handle immediate option (1 ms)
+      ✓ should handle multiple deep watchers on the same object
+      ✓ should stop watching when cleanup is called (1 ms)
+      ✓ should handle circular references
+      ✓ should handle deeply nested objects
+    performance and edge cases
+      ✓ should handle large object graphs efficiently (5 ms)
+      ✓ should trigger deep watch when pushing objects to reactive array (1 ms)
+      ✓ should trigger deep watch when pushing nested objects to reactive array
+      ✓ should handle native operations (1 ms)
+      ✓ should follow native operations
+      ✓ should handle non-reactive objects gracefully
+    minimal deep watch failure example
+      ✓ MINIMAL: watch should detect array mutations (1 ms)
+      ✓ MINIMAL: deep watch should detect array mutations
+      ✓ COMPARISON: effect with length DOES detect array mutations
+      ✓ DEBUG: what happens with just array access
+    deep watching Sets and Maps
+      ✓ should detect Set mutations with deep watch
+      ✓ should detect Map mutations with deep watch
+      ✓ should detect Map value changes with deep watch
+      ✓ should detect nested Set/Map mutations with deep watch
+  mapped
+    ✓ maps values reactively (1 ms)
+    ✓ provides index and output array to the mapper
+    ✓ only recomputes changed indices (1 ms)
+    ✓ should empty mapped array when source array is emptied via pop (2 ms)
+    ✓ should empty mapped array when source array length is set to 0
+    ✓ should empty mapped array when source array length is set to 0 after multiple operations
+    ✓ should handle pop on array with single element (1 ms)
+    ✓ should handle setting length to 0 and then accessing mapped array
+    ✓ should handle shift operations that empty the array (1 ms)
+    ✓ establishes dependencies via effects on mapped result indices and length (1 ms)
+  mapped with memoize
+    ✕ reuses memoized entries across reorder operations (26 ms)
+  cleanup symbol
+    ✓ should add cleanup function to objects via cleanedBy
+    ✓ should expose cleanup function on mapped results (1 ms)
+    ✓ should expose cleanup function on mapped + memoize results (2 ms)
+    ✓ cleanup symbol should be unique and match exported symbol
+    ✓ cleanup should not conflict with object properties
+    ✓ cleanup should not be enumerable
+    ✓ cleanup should work with multiple cleanedBy calls (1 ms)
+
+  ● mapped with memoize › reuses memoized entries across reorder operations
+
+    Memoization discrepancy detected in anonymous during comparison!
+    Arguments: [{"name":"John"}]
+    Cached value: {"name":"JOHN"}
+    Fresh value:  {"name":"JOHN"}
+    This usually means a reactive dependency is missing in the memoized function.
+
+      30 | This usually means a reactive dependency is missing in the memoized function.`;
+      31 |
+    > 32 |     throw new Error(message);
+         |           ^
+      33 | };
+      34 |
+
+      at Object.types_1.options.onMemoizationDiscrepancy (tests/setup.ts:32:11)
+      at src/reactive/memoize.ts:99:14
+      at tests/reactive/interface.test.ts:1508:42
+      at computedIndexedMapInputEffect (src/reactive/mapped.ts:90:20)
+      at src/reactive/effects.ts:1186:41
+      at withEffect (src/reactive/effect-context.ts:84:10)
+      at Array.runEffect (src/reactive/effects.ts:1186:23)
+      at batch (src/reactive/effects.ts:917:26)
+      at effect (src/reactive/effects.ts:1272:2)
+      at input (src/reactive/mapped.ts:89:16)
+      at computedMapNewElements (src/reactive/mapped.ts:106:63)
+      at withEffectStack (src/reactive/effect-context.ts:62:10)
+      at ascend (src/reactive/effects.ts:1151:52)
+      at computedMapLengthEffect (src/reactive/mapped.ts:105:4)
+      at src/reactive/effects.ts:1186:41
+      at withEffect (src/reactive/effect-context.ts:84:10)
+      at Array.runEffect (src/reactive/effects.ts:1186:23)
+      at batch (src/reactive/effects.ts:951:27)
+      at effect (src/reactive/effects.ts:1272:2)
+      at mapped (src/reactive/mapped.ts:94:30)
+      at Object.<anonymous> (tests/reactive/interface.test.ts:1508:23)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 64 passed, 65 total
+Snapshots:   0 total
+Time:        0.832 s, estimated 7 s
+Ran all test suites matching tests/reactive/interface.test.ts.

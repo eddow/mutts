@@ -3,7 +3,10 @@
 		"moduleResolution": "Node",
 		"target": "ES2020",
 		"module": "ESNext",
-		"lib": ["ES2023", "DOM"],
+		"lib": [
+			"ES2023",
+			"DOM"
+		],
 		"declaration": false,
 		"declarationMap": false,
 		"sourceMap": true,
@@ -19,13 +22,30 @@
 		"forceConsistentCasingInFileNames": true,
 		"baseUrl": ".",
 		"paths": {
-			"mutts/*": ["../src/*"],
-			"mutts": ["../src/index.ts"],
-			"tslib": ["../node_modules/tslib/tslib.d.ts"],
-			"~/*": ["../packages/*"]
-		}
+			"mutts/*": [
+				"../src/*"
+			],
+			"mutts": [
+				"../src/index.ts"
+			],
+			"tslib": [
+				"../node_modules/tslib/tslib.d.ts"
+			],
+			"~/*": [
+				"../packages/*"
+			]
+		},
+		"resolveJsonModule": true,
+		"types": [
+			"node",
+			"jest"
+		]
 	},
-	"include": ["**/*.ts"],
-	"exclude": ["node_modules"]
+	"include": [
+		"**/*.ts",
+		"../package.json"
+	],
+	"exclude": [
+		"node_modules"
+	]
 }
-

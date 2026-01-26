@@ -320,6 +320,11 @@ export const options = {
 	 */
 	cycleHandling: 'throw' as 'throw' | 'warn' | 'break' | 'strict',
 	/**
+	 * Internal flag used by memoization discrepancy detector to avoid counting calls in tests
+	 * @warning Do not modify this flag manually, this flag is given by the engine
+	 */
+	isVerificationRun: false,
+	/**
 	 * Maximum depth for deep watching traversal
 	 * Used to prevent infinite recursion in circular references
 	 * @default 100

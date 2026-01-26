@@ -5,7 +5,7 @@ describe('Decorator System', () => {
 	describe('Method Decorators', () => {
 		it('should wrap method calls', () => {
 			const methodDecorator = decorator({
-				method(original, _name) {
+				method(original, _target, _name) {
 					return function (this: any, ...args: any[]) {
 						return `wrapped: ${original.apply(this, args)}`
 					}
@@ -25,7 +25,7 @@ describe('Decorator System', () => {
 
 		it('should work with multiple methods', () => {
 			const methodDecorator = decorator({
-				method(original, name) {
+				method(original, _target, name) {
 					return function (this: any, ...args: any[]) {
 						return `${String(name)}: ${original.apply(this, args)}`
 					}
@@ -92,7 +92,7 @@ describe('Decorator System', () => {
 	describe('Getter Decorators', () => {
 		it('should wrap getter calls', () => {
 			const getterDecorator = decorator({
-				getter(original, _name) {
+				getter(original, _target, _name) {
 					return function (this: any) {
 						return `wrapped: ${original.call(this)}`
 					}
@@ -114,7 +114,7 @@ describe('Decorator System', () => {
 
 		it('should work with multiple getters', () => {
 			const getterDecorator = decorator({
-				getter(original, name) {
+				getter(original, _target, name) {
 					return function (this: any) {
 						return `${String(name)}: ${original.call(this)}`
 					}
@@ -145,7 +145,7 @@ describe('Decorator System', () => {
 	describe('Setter Decorators', () => {
 		it('should wrap setter calls', () => {
 			const setterDecorator = decorator({
-				setter(original, _name) {
+				setter(original, _target, _name) {
 					return function (this: any, value: any) {
 						return original.call(this, `wrapped: ${value}`)
 					}
@@ -172,7 +172,7 @@ describe('Decorator System', () => {
 
 		it('should work with multiple setters', () => {
 			const setterDecorator = decorator({
-				setter(original, name) {
+				setter(original, _target, name) {
 					return function (this: any, value: any) {
 						return original.call(this, `${String(name)}: ${value}`)
 					}
@@ -217,7 +217,7 @@ describe('Decorator System', () => {
 					;(target as any).decorated = true
 					return target
 				},
-				method(original, _name) {
+				method(original, _target, _name) {
 					return function (this: any, ...args: any[]) {
 						return `method: ${original.apply(this, args)}`
 					}
@@ -239,12 +239,12 @@ describe('Decorator System', () => {
 
 		it('should work with getter and setter decorators on different properties', () => {
 			const myDecorator = decorator({
-				getter(original, _name) {
+				getter(original, _target, _name) {
 					return function (this: any) {
 						return `get: ${original.call(this)}`
 					}
 				},
-				setter(original, _name) {
+				setter(original, _target, _name) {
 					return function (this: any, value: any) {
 						return original.call(this, `set: ${value}`)
 					}
@@ -283,12 +283,12 @@ describe('Decorator System', () => {
 					;(target as any).decorated = true
 					return target
 				},
-				method(original, _name) {
+				method(original, _target, _name) {
 					return function (this: any, ...args: any[]) {
 						return `method: ${original.apply(this, args)}`
 					}
 				},
-				getter(original, _name) {
+				getter(original, _target, _name) {
 					return function (this: any) {
 						return `get: ${original.call(this)}`
 					}
@@ -341,15 +341,15 @@ describe('Decorator System', () => {
 					callLog.push('class decorator called')
 					return original // Return unchanged
 				},
-				method(original, name) {
+				method(original, _target, name) {
 					callLog.push(`method decorator called for ${String(name)}`)
 					return original // Return unchanged
 				},
-				getter(original, name) {
+				getter(original, _target, name) {
 					callLog.push(`getter decorator called for ${String(name)}`)
 					return original // Return unchanged
 				},
-				setter(original, name) {
+				setter(original, _target, name) {
 					callLog.push(`setter decorator called for ${String(name)}`)
 					return original // Return unchanged
 				},
@@ -395,7 +395,7 @@ describe('Decorator System', () => {
 			const callLog: string[] = []
 
 			const noOpDecorator = decorator({
-				setter(original, name) {
+				setter(original, _target, name) {
 					callLog.push(`setter decorator called for ${String(name)}`)
 					return original // Return unchanged
 				},
@@ -428,7 +428,7 @@ describe('Decorator System', () => {
 	describe('Error Handling', () => {
 		it('should throw error when decorator is applied to wrong target', () => {
 			const methodOnlyDecorator = decorator({
-				method(original, _name) {
+				method(original, _target, _name) {
 					return original
 				},
 			})
@@ -460,7 +460,7 @@ describe('Decorator System', () => {
 
 		it('should throw error when getter decorator is applied to method', () => {
 			const getterOnlyDecorator = decorator({
-				getter(original, _name) {
+				getter(original, _target, _name) {
 					return original
 				},
 			})
@@ -477,7 +477,7 @@ describe('Decorator System', () => {
 
 		it('should throw error when decorating a field', () => {
 			const anyDecorator = decorator({
-				method(original, _name) {
+				method(original, _target, _name) {
 					return original
 				},
 			})

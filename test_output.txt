@@ -1,0 +1,138 @@
+  console.error
+    GETTER called, isVerificationRun= false
+
+      102 | 					@memoize
+      103 | 					get computed() {
+    > 104 | 						console.error('GETTER called, isVerificationRun=', reactiveOptions.isVerificationRun)
+          | 						        ^
+      105 | 						if (!reactiveOptions.isVerificationRun) calls++
+      106 | 						return this.state.value * 2
+      107 | 					}
+
+      at Example.get computed (tests/reactive/memoize.test.ts:104:15)
+      at Function.computed (src/reactive/memoize.ts:120:24)
+      at opaque (src/reactive/memoize.ts:74:20)
+      at src/reactive/effects.ts:1186:41
+      at withEffect (src/reactive/effect-context.ts:84:10)
+      at Array.runEffect (src/reactive/effects.ts:1186:23)
+      at batch (src/reactive/effects.ts:951:27)
+      at effect (src/reactive/effects.ts:1272:2)
+      at src/reactive/memoize.ts:70:10
+      at src/reactive/effects.ts:1369:8
+      at withEffect (src/reactive/effect-context.ts:81:61)
+      at root (src/reactive/effects.ts:1368:12)
+      at src/reactive/memoize.ts:69:22
+      at Example.<anonymous> (src/reactive/memoize.ts:132:11)
+      at Object.<anonymous> (tests/reactive/memoize.test.ts:111:22)
+
+  console.log
+    CHECK MISS verification, current isVerificationRun= false
+
+      at src/reactive/memoize.ts:92:12
+
+  console.error
+    GETTER called, isVerificationRun= true
+
+      102 | 					@memoize
+      103 | 					get computed() {
+    > 104 | 						console.error('GETTER called, isVerificationRun=', reactiveOptions.isVerificationRun)
+          | 						        ^
+      105 | 						if (!reactiveOptions.isVerificationRun) calls++
+      106 | 						return this.state.value * 2
+      107 | 					}
+
+      at Example.get computed (tests/reactive/memoize.test.ts:104:15)
+      at Function.computed (src/reactive/memoize.ts:120:24)
+      at src/reactive/memoize.ts:96:35
+      at untracked (src/reactive/effects.ts:1354:10)
+      at src/reactive/memoize.ts:96:28
+      at Example.<anonymous> (src/reactive/memoize.ts:132:11)
+      at Object.<anonymous> (tests/reactive/memoize.test.ts:111:22)
+
+  console.error
+    GETTER called, isVerificationRun= false
+
+      102 | 					@memoize
+      103 | 					get computed() {
+    > 104 | 						console.error('GETTER called, isVerificationRun=', reactiveOptions.isVerificationRun)
+          | 						        ^
+      105 | 						if (!reactiveOptions.isVerificationRun) calls++
+      106 | 						return this.state.value * 2
+      107 | 					}
+
+      at Example.get computed (tests/reactive/memoize.test.ts:104:15)
+      at Function.computed (src/reactive/memoize.ts:120:24)
+      at opaque (src/reactive/memoize.ts:74:20)
+      at src/reactive/effects.ts:1186:41
+      at withEffect (src/reactive/effect-context.ts:84:10)
+      at Array.runEffect (src/reactive/effects.ts:1186:23)
+      at batch (src/reactive/effects.ts:951:27)
+      at effect (src/reactive/effects.ts:1272:2)
+      at src/reactive/memoize.ts:70:10
+      at src/reactive/effects.ts:1369:8
+      at withEffect (src/reactive/effect-context.ts:81:61)
+      at root (src/reactive/effects.ts:1368:12)
+      at src/reactive/memoize.ts:69:22
+      at Example.<anonymous> (src/reactive/memoize.ts:132:11)
+      at Object.<anonymous> (tests/reactive/memoize.test.ts:113:22)
+
+  console.log
+    CHECK MISS verification, current isVerificationRun= false
+
+      at src/reactive/memoize.ts:92:12
+
+  console.error
+    GETTER called, isVerificationRun= true
+
+      102 | 					@memoize
+      103 | 					get computed() {
+    > 104 | 						console.error('GETTER called, isVerificationRun=', reactiveOptions.isVerificationRun)
+          | 						        ^
+      105 | 						if (!reactiveOptions.isVerificationRun) calls++
+      106 | 						return this.state.value * 2
+      107 | 					}
+
+      at Example.get computed (tests/reactive/memoize.test.ts:104:15)
+      at Function.computed (src/reactive/memoize.ts:120:24)
+      at src/reactive/memoize.ts:96:35
+      at untracked (src/reactive/effects.ts:1354:10)
+      at src/reactive/memoize.ts:96:28
+      at Example.<anonymous> (src/reactive/memoize.ts:132:11)
+      at Object.<anonymous> (tests/reactive/memoize.test.ts:113:22)
+
+FAIL tests/reactive/memoize.test.ts
+  memoize
+    ○ skipped returns cached value and forwards same memoized function
+    ○ skipped invalidates cache when dependencies change and triggers reactive consumers
+    ○ skipped invalidates memoization when an array property is replaced by another array
+    ○ skipped throws when argument is not a non-null object
+    when used as a decorator
+      ✕ memoizes legacy getter descriptors (32 ms)
+      ○ skipped memoizes methods with multiple arguments
+    discrepancy detection
+      ○ skipped detects discrepancy when a non-reactive dependency changes
+      ○ skipped does NOT trigger discrepancy when result is structurally equal (deepCompare)
+      ○ skipped triggers on initial execution if there is an immediate discrepancy (unlikely but possible if side effects)
+
+  ● memoize › when used as a decorator › memoizes legacy getter descriptors
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 2
+
+      112 | 				expect(calls).toBe(1)
+      113 | 				expect(instance1.computed).toBe(2)
+    > 114 | 				expect(calls).toBe(1)
+          | 				              ^
+      115 |
+      116 | 				instance1.state.value = 2
+      117 | 				expect(instance1.computed).toBe(4)
+
+      at Object.<anonymous> (tests/reactive/memoize.test.ts:114:19)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 8 skipped, 9 total
+Snapshots:   0 total
+Time:        0.754 s, estimated 2 s
+Ran all test suites matching tests/reactive/memoize.test.ts with tests matching "memoizes legacy getter descriptors".

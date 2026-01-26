@@ -15,6 +15,7 @@ type MemoCacheTree<Result> = {
 }
 
 const memoizedRegistry = new WeakMap<any, Function>()
+const wrapperRegistry = new WeakMap<Function, Function>()
 
 function getBranch<Result>(tree: MemoCacheTree<Result>, key: Memoizable): MemoCacheTree<Result> {
 	tree.branches ??= new WeakMap()
@@ -48,9 +49,15 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 		dependant(node, 'memoize')
 		if ('result' in node) {
 			if (options.onMemoizationDiscrepancy) {
-				const fresh = untracked(() => fn(...localArgs))
-				if (!deepCompare(node.result, fresh)) {
-					options.onMemoizationDiscrepancy(node.result, fresh, fn, localArgs, "calculation")
+				const wasVerification = options.isVerificationRun
+				options.isVerificationRun = true
+				try {
+					const fresh = untracked(() => fn(...localArgs))
+					if (!deepCompare(node.result, fresh)) {
+						options.onMemoizationDiscrepancy(node.result, fresh, fn, localArgs, 'calculation')
+					}
+				} finally {
+					options.isVerificationRun = wasVerification
 				}
 			}
 			return node.result!
@@ -81,9 +88,15 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 		)
 
 		if (options.onMemoizationDiscrepancy) {
-			const fresh = untracked(() => fn(...localArgs))
-			if (!deepCompare(node.result, fresh)) {
-				options.onMemoizationDiscrepancy(node.result, fresh, fn, localArgs, "comparison")
+			const wasVerification = options.isVerificationRun
+			options.isVerificationRun = true
+			try {
+				const fresh = untracked(() => fn(...localArgs))
+				if (!deepCompare(node.result, fresh)) {
+					options.onMemoizationDiscrepancy(node.result, fresh, fn, localArgs, 'comparison')
+				}
+			} finally {
+				options.isVerificationRun = wasVerification
 			}
 		}
 
@@ -98,44 +111,41 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 export const memoize = decorator({
 	getter(original, target, propertyKey) {
 		return function (this: any) {
-			const memoized = memoizeFunction(
-				markWithRoot(
-					renamed(
-						(that: object) => {
-							return original.call(that)
-						},
-						`${String(target?.constructor?.name ?? target?.name ?? 'Object')}.${String(propertyKey)}`
-					),
+			let wrapper = wrapperRegistry.get(original)
+			if (!wrapper) {
+				wrapper = markWithRoot(
+					renamed((that: object) => {
+						return original.call(that)
+					}, `${String(target?.constructor?.name ?? target?.name ?? 'Object')}.${String(propertyKey)}`),
 					{
 						method: original,
 						propertyKey,
-						scope: this,
-						...(original[rootFunction] ? { [rootFunction]: original[rootFunction] } : {})
+						...(original[rootFunction] ? { [rootFunction]: original[rootFunction] } : {}),
 					}
 				)
-			)
+				wrapperRegistry.set(original, wrapper)
+			}
+			const memoized = memoizeFunction(wrapper as any)
 			return memoized(this)
 		}
 	},
 	method(original, target, name) {
 		return function (this: any, ...args: object[]) {
-			const memoized = memoizeFunction(
-				markWithRoot(
-					renamed(
-						(that: object, ...args: object[]) => {
-							return original.call(that, ...args)
-						},
-						`${String(target?.constructor?.name ?? target?.name ?? 'Object')}.${String(name)}`
-					),
+			let wrapper = wrapperRegistry.get(original)
+			if (!wrapper) {
+				wrapper = markWithRoot(
+					renamed((that: object, ...args: object[]) => {
+						return original.call(that, ...args)
+					}, `${String(target?.constructor?.name ?? target?.name ?? 'Object')}.${String(name)}`),
 					{
 						method: original,
 						propertyKey: name,
-						args,
-						scope: this,
-						...(original[rootFunction] ? { [rootFunction]: original[rootFunction] } : {})
+						...(original[rootFunction] ? { [rootFunction]: original[rootFunction] } : {}),
 					}
 				)
-			) as (...args: object[]) => unknown
+				wrapperRegistry.set(original, wrapper)
+			}
+			const memoized = memoizeFunction(wrapper as any) as (...args: object[]) => unknown
 			return memoized(this, ...args)
 		}
 	},

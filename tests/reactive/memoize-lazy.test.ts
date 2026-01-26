@@ -1,12 +1,12 @@
 import { memoize } from '../../src/reactive/memoize'
-import { reactive } from '../../src/reactive'
+import { reactive, reactiveOptions } from '../../src/reactive'
 
 describe('memoize lazy', () => {
     it('does not recalculate immediately when dependencies change', () => {
         const state = reactive({ value: 1 })
         let computations = 0
         const computed = memoize(() => {
-            computations++
+            if (!reactiveOptions.isVerificationRun) computations++
             return state.value * 2
         })
 

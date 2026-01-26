@@ -4,6 +4,7 @@ import typescript from 'rollup-plugin-typescript2'
 import pluginDts from 'rollup-plugin-dts'
 import { rm } from 'node:fs/promises'
 import terser from '@rollup/plugin-terser'
+import json from '@rollup/plugin-json'
 import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
@@ -26,6 +27,7 @@ const plugins = [
     sourceMap: true,
     exclude: ['**/*.test.ts', '**/*.spec.ts'],
   }),
+  json(),
 ]
 
 const umdPlugins = [
@@ -91,11 +93,11 @@ const config = [
           // Run after all bundles are closed to ensure rollup-plugin-dts has finished
           const indexPath = join('dist', 'index.d.ts')
           const augmentationContent = readFileSync('src/index.d.ts', 'utf8')
-          
+
           try {
             // Read the current content
             let currentContent = readFileSync(indexPath, 'utf8').trim()
-            
+
             // If the file is empty or only has export {}, rollup-plugin-dts didn't generate exports
             // In this case, we need to manually read the exports from the individual .d.ts files
             if (!currentContent || currentContent === 'export {};' || currentContent === 'export { };') {
@@ -104,13 +106,13 @@ const config = [
                 .split('\n')
                 .filter(line => line.trim().startsWith('export'))
                 .map(line => line.replace(/from ['"]\.\/([^'"]+)['"]/g, "from './$1.js'"))
-              
+
               currentContent = sourceExports.join('\n')
             } else {
               // Remove any trailing export { } statements
               currentContent = currentContent.replace(/\n\s*export\s*{\s*}\s*;?\s*$/m, '')
             }
-            
+
             // Append augmentation at the end
             const finalContent = currentContent.trim() + '\n\n' + augmentationContent
             writeFileSync(indexPath, finalContent, 'utf8')

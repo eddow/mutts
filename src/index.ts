@@ -8,7 +8,8 @@ export * from './reactive'
 export * from './std-decorators'
 export * from './utils'
 
-import { version } from '../package.json'
+import pkg from '../package.json'
+const { version } = pkg
 
 // Singleton verification
 const GLOBAL_MUTTS_KEY = '__MUTTS_INSTANCE__'
@@ -18,8 +19,8 @@ const globalScope =
 	(typeof global !== 'undefined' ? global : false))) as any
 if(globalScope) {
 	const currentSourceInfo = {
-		version: version,
-		source: (typeof import.meta !== 'undefined' && import.meta.url) ? import.meta.url : 'unknown',
+		version,
+		source: __filename,
 		timestamp: Date.now()
 	}
 

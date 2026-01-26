@@ -90,11 +90,11 @@ function watchObject(
 	const myParentEffect = getActiveEffect()
 	if (deep) return deepWatch(value, changed, { immediate })!
 	return effect(
-		markWithRoot(function watchObjectEffect() {
+		function watchObjectEffect() {
 			dependant(value)
 			if (immediate) withEffect(myParentEffect, () => changed(value))
 			immediate = true
-		}, changed)
+		}
 	)
 }
 
@@ -112,7 +112,7 @@ function watchCallBack<T>(
 			if (oldValue !== newValue)
 				withEffect(
 					myParentEffect,
-					markWithRoot(() => {
+					() => {
 						if (oldValue === unsetYet) {
 							if (immediate) changed(newValue)
 						} else changed(newValue, oldValue)
@@ -121,10 +121,10 @@ function watchCallBack<T>(
 							if (deepCleanup) deepCleanup()
 							deepCleanup = deepWatch(
 								newValue as object,
-								markWithRoot((value) => changed(value as T, value as T), changed)
+								(value) => changed(value as T, value as T)
 							)
 						}
-					}, changed)
+					}
 				)
 		}, value)
 	)
@@ -215,9 +215,9 @@ export function derived<T>(compute: (dep: DependencyAccess) => T): {
 		rv,
 		untracked(() =>
 			effect(
-				markWithRoot(function derivedEffect(access) {
+				function derivedEffect(access) {
 					rv.value = compute(access)
-				}, compute)
+				}
 			)
 		)
 	)

@@ -67,7 +67,7 @@ describe('Reactivity Analysis: allProps & deepTouch', () => {
             
             @memoize
             get computed() {
-                this.count++
+                if (!reactiveOptions.isVerificationRun) this.count++
                 return Object.keys(this.data)
             }
 

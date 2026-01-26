@@ -3,6 +3,7 @@ export default {
   testEnvironment: 'node',
   roots: ['<rootDir>/src', '<rootDir>/tests'],
   testMatch: ['**/?(*.)+(spec|test).ts'],
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   // Exclude profiling tests from normal runs (can be overridden via CLI)
   testPathIgnorePatterns: process.env.RUN_PROFILING ? [] : ['/tests/profiling/'],
   transform: {

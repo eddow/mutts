@@ -1,4 +1,4 @@
-import { cleanup, effect, mapped, memoize, reactive, unwrap, watch } from 'mutts/reactive'
+import { cleanup, effect, mapped, memoize, reactive, reactiveOptions, watch } from 'mutts/reactive'
 
 describe('watch', () => {
 	describe('watch with value function', () => {
@@ -1489,20 +1489,21 @@ describe('mapped with memoize', () => {
 		const inputs = reactive([{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }])
 		let computeCount = 0
 
-		const createCard = memoize((user: { name: string }) => {
-			computeCount++
-
-			const view: { name?: string; setName(next: string): void } = {
-				setName(next) {
-					user.name = next
-				},
+		class Card {
+			name?: string
+			constructor(private user: { name: string }) {
+				effect(() => {
+					this.name = this.user.name.toUpperCase()
+				})
 			}
+			setName(next: string) {
+				this.user.name = next
+			}
+		}
 
-			effect(() => {
-				view.name = user.name.toUpperCase()
-			})
-
-			return view
+		const createCard = memoize((user: { name: string }) => {
+			if (!reactiveOptions.isVerificationRun) computeCount++
+			return new Card(user)
 		})
 
 		const cards = mapped(inputs, (user) => createCard(user))

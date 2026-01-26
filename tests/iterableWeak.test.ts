@@ -4,7 +4,11 @@ function tick(ms: number = 0) {
 	return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-const gc = global.gc
+interface GlobalWithGC {
+	gc?: () => void
+}
+
+const gc = (globalThis as unknown as GlobalWithGC).gc
 
 async function collectGarbages() {
 	await tick()

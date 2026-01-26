@@ -20,24 +20,21 @@ const reverseRoots = new WeakMap<any, WeakRef<Function>>()
  * Enforces strict unicity: A root function can only identify ONE function.
  * @param fn - The function to mark
  * @param root - The root function
- * @param checkUnicity - If true, throws if the root is already used. Default true.
  * @returns The marked function
  */
-export function markWithRoot<T extends Function>(fn: T, root: any, checkUnicity = true): T {	
-	if (checkUnicity) {
-		// Check for collision
-		const existingRef = reverseRoots.get(root)
-		const existing = existingRef?.deref()
+export function markWithRoot<T extends Function>(fn: T, root: any): T {	
+	// Check for collision
+	const existingRef = reverseRoots.get(root)
+	const existing = existingRef?.deref()
 		
-		if (existing && existing !== fn) {
-			const rootName = root.name || 'anonymous'
-			const existingName = existing.name || 'anonymous'
-			const fnName = fn.name || 'anonymous'
-			throw new Error(
-				`[reactive] Abusive Shared Root detected: Root '${rootName}' is already identifying function '${existingName}'. ` +
-				`Cannot reuse it for '${fnName}'. Shared roots cause lost updates and broken identity logic.`
-			)
-		}
+	if (existing && existing !== fn) {
+		const rootName = root.name || 'anonymous'
+		const existingName = existing.name || 'anonymous'
+		const fnName = fn.name || 'anonymous'
+		throw new Error(
+			`[reactive] Abusive Shared Root detected: Root '${rootName}' is already identifying function '${existingName}'. ` +
+			`Cannot reuse it for '${fnName}'. Shared roots cause lost updates and broken identity logic.`
+		)
 	}
 	
 	// Always update the map so subsequent checks find this one
