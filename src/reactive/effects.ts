@@ -301,6 +301,7 @@ function addGraphEdge(callerRoot: Function, targetRoot: Function) {
  * @param end - Target node
  * @param exclude - Node to exclude from the path
  * @returns true if a path exists without going through the excluded node
+ * @todo Can be REALLY costly - optimise or make optional or ...
  */
 function hasPathExcluding(start: Function, end: Function, exclude: Function): boolean {
 	if (start === end) return true

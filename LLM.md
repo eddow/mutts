@@ -80,16 +80,7 @@ In `mutts`, you define **what things are**, not **when things happen**.
 
 ## Debugging Reactivity
 
-### 1. Memoization Discrepancy Detector
-To catch non-reactive dependencies (data used in `memoize` but not tracked), use `reactiveOptions.onMemoizationDiscrepancy`.
-When set, computations run twice: once normally and once untracked. A mismatch indicates a missing dependency.
+Tools are built-in in order to catch common reactivity-related issues.
 
-```ts
-import { reactiveOptions } from 'mutts';
-reactiveOptions.onMemoizationDiscrepancy = (cached, fresh, fn) => {
-    console.error(`Discrepancy in ${fn.name}`);
-};
-```
+**Full Documentation**: [docs/reactive/debugging.md](file:///home/fmdm/dev/reactive/debugging.md)
 
-### 2. High-Frequency Rebuilds
-Use `pounceOptions.maxRebuildsPerWindow` (in `pounce-ts`) to detect components that rebuild too often, often indicating unstable dependencies or reactive loops.

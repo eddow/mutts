@@ -20,9 +20,10 @@ The Mutts Reactive System documentation has been split into focused sections for
 *   **[Memoization](./reactive/advanced.md#memoization)**: Caching strategies
 *   **[Debugging](./reactive/advanced.md#debugging-and-development)**: Cycle detection and troubleshooting
 
-## Debugging tools
+## [Debugging and Troubleshooting](./reactive/debugging.md)
+*   **[Reactive Options](./reactive/debugging.md#the-reactiveoptions-reference)**: Global debug hooks and configuration
+*   **[Cycle Detection](./reactive/debugging.md#cycle-detection)**: Configuration and troubleshooting circular dependencies
+*   **[Memoization Discrepancy](./reactive/debugging.md#memoization-discrepancy-detection)**: Identifying missing dependencies
+*   **[Introspection API](./reactive/debugging.md#introspection-api)**: Programmatic analysis and dependency graphs
 
-The reactive system is currently in a gamma state. The interface is quite fixed, the debugging tools are in place but :
-- still unfinished
-- not deactivatable
-- harming the performances of the application
+*   **[Performance](./reactive/debugging.md#performance-cost)**: Understanding the cost of debugging tools

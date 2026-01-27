@@ -18,9 +18,20 @@ const globalScope =
 	(typeof window !== 'undefined' ? window : 
 	(typeof global !== 'undefined' ? global : false))) as any
 if(globalScope) {
+	// Detect the source of this instance safely across different environments
+	let source = 'mutts/index'
+	try {
+		// @ts-ignore
+		if (typeof __filename !== 'undefined') source = __filename
+		// @ts-ignore
+		else if (typeof import.meta !== 'undefined' && import.meta.url) source = import.meta.url
+	} catch (e) {
+		// Fallback for environments where neither is available or accessible
+	}
+
 	const currentSourceInfo = {
 		version,
-		source: __filename,
+		source,
 		timestamp: Date.now()
 	}
 

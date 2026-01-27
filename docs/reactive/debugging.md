@@ -1,0 +1,158 @@
+# Debugging Tools
+
+The `mutts` reactive system provides several built-in tools to help track down synchronization issues, dependency leaks, and infinite loops. These tools are primarily exposed through the `reactiveOptions` object.
+
+> [!WARNING]
+> **Performance Cost**: Most debugging tools incur a significant performance overhead. They should be enabled only during development or within test environments. Re-running computations for discrepancy detection, in particular, effectively doubles the cost of reactive updates.
+
+## The `reactiveOptions` Reference
+
+The `reactiveOptions` object (exported from `mutts/reactive`) allows you to hook into the reactive system's internals.
+
+```typescript
+import { reactiveOptions } from 'mutts/reactive';
+```
+
+### Lifecycle Hooks
+
+These hooks are called during the execution of effects and computed values.
+
+- **`enter(effect: Function)`**: Called when an effect or memoized function starts executing.
+- **`leave(effect: Function)`**: Called when an effect or memoized function finishes.
+- **`touched(obj: any, evolution: Evolution)`**: Called whenever a reactive object is "touched" (accessed or modified). This is the lowest-level hook for observing system activity.
+
+### Effect Chaining & Batching
+
+- **`beginChain(targets: Function[]) / endChain()`**: Called when a batch of effects starts and ends its execution.
+- **`maxEffectChain`**: (Default: `100`) Limits the depth of synchronous effect triggering to prevent stack overflows.
+- **`maxTriggerPerBatch`**: (Default: `10`) Limits how many times a single effect can be triggered within the same batch. Useful for detecting aggressive re-computation.
+
+## Cycle Detection
+
+`mutts` automatically detects circular dependencies (e.g., Effect A updates State X, which triggers Effect B, which updates State Y, which triggers Effect A).
+
+### Configuration
+
+You can control how cycles are handled via `reactiveOptions.cycleHandling`:
+
+- **`'throw'`** (Default): Throws a `ReactiveError` with a detailed path.
+- **`'warn'`**: Logs a warning but breaks the cycle to allow the application to continue.
+- **`'break'`**: Silently breaks the cycle.
+- **`'strict'`**: Performs a graph check *before* execution to prevent cycles from even starting. This has the highest overhead.
+
+## Memoization Discrepancy Detection
+
+The most powerful debugging tool in `mutts` is the **Discrepancy Detector**. It helps identify "missing dependencies"—reactive values used inside a computation that the system isn't tracking.
+
+### How it Works
+
+When `reactiveOptions.onMemoizationDiscrepancy` is set:
+1. Every time a `memoize()` function is called, it checks its cache.
+2. If a cached value exists, the function is immediately **executed a second time** in a completely untracked context.
+3. If the results differ, your callback is triggered.
+
+### Usage
+
+```typescript
+reactiveOptions.onMemoizationDiscrepancy = (cached, fresh, fn, args, cause) => {
+    console.error(`Discrepancy in ${fn.name || 'anonymous'}!`, {
+        cached,
+        fresh,
+        cause // 'calculation' or 'comparison'
+    });
+    throw new Error('Memoization discrepancy detected');
+};
+```
+
+If the cause is 'comparison', it means that, at first computation, calling the function twice gives different results.
+
+If the cause is 'calculation', it means that, when asked the value while the cache was still valid, the function returned a different result.
+
+### `isVerificationRun`
+
+During the "second run" of a discrepancy check, `reactiveOptions.isVerificationRun` is set to `true`. You can use this flag in your own code to avoid side effects (like incrementing counters) that should only happen once during the primary execution.
+
+> [!IMPORTANT]
+> Do not modify `isVerificationRun` manually; it is managed by the engine.
+
+## Introspection API
+
+For programmatic analysis of the reactive system, `mutts` provides a dedicated introspection module. This is particularly useful for AI agents and developer tools.
+
+```typescript
+import { enableIntrospection, getDependencyGraph, getMutationHistory, snapshot } from 'mutts/introspection';
+```
+
+### Enabling Introspection
+
+Introspection features (like history tracking) are memory-intensive and disabled by default.
+
+```typescript
+// Enable history tracking (default size: 50)
+enableIntrospection({ historySize: 100 });
+```
+
+### Dependency Graph
+
+You can retrieve the full dependency graph to understand how objects and effects are linked.
+
+```typescript
+const graph = getDependencyGraph();
+// Returns: { nodes: Array<EffectNode | ObjectNode>, edges: Array<GraphEdge> }
+```
+
+### Mutation History
+
+If `enableHistory` is on, you can inspect the sequence of mutations that have occurred.
+
+```typescript
+const history = getMutationHistory();
+// Each record contains type, property, old/new values, and causal source.
+```
+
+## Structured Error Handling
+
+When the reactive system encounters a critical failure (like a cycle or max depth exceeded), it throws a `ReactiveError` containing rich diagnostic information.
+
+### `ReactiveErrorCode`
+
+Always check `error.debugInfo.code` to identify the failure type:
+- `CYCLE_DETECTED`: A circular dependency was found.
+- `MAX_DEPTH_EXCEEDED`: The synchronous effect chain reached `maxEffectChain`.
+- `MAX_REACTION_EXCEEDED`: An effect was triggered too many times in a single batch.
+- `WRITE_IN_COMPUTED`: An attempt was made to modify reactive state inside a `memoize` or `derived` function.
+
+### Rich Debug Info
+
+The `debugInfo` property on `ReactiveError` includes:
+- **`causalChain`**: A string array describing the logical path of modifications leading to the error.
+- **`creationStack`**: The stack trace of where the effect was originally created, helping you locate the source in your code.
+- **`cycle`**: (For `CYCLE_DETECTED`) The names of the effects that form the loop.
+
+## Best Practices for Debugging
+
+### Naming Effects
+
+Always provide a name for your effects to make debug logs and error messages readable:
+
+```typescript
+effect(() => {
+    // ...
+}, { name: 'UpdateSidebarCounter' });
+```
+
+### Activation & Deactivation
+
+Since these are runtime options, you can toggle them based on your environment:
+
+```typescript
+if (process.env.NODE_ENV === 'development') {
+    reactiveOptions.cycleHandling = 'throw';
+    reactiveOptions.onMemoizationDiscrepancy = myHandler;
+    enableIntrospection();
+} else {
+    // Ensure they are off in production for performance
+    reactiveOptions.onMemoizationDiscrepancy = undefined;
+    reactiveOptions.cycleHandling = 'break';
+}
+```
