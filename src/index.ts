@@ -24,7 +24,11 @@ if(globalScope) {
 		// @ts-ignore
 		if (typeof __filename !== 'undefined') source = __filename
 		// @ts-ignore
-		else if (typeof import.meta !== 'undefined' && import.meta.url) source = import.meta.url
+		else {
+			// Using eval to avoid SyntaxError in CJS environments where import.meta is not allowed
+			const meta = eval('import.meta')
+			if (meta && meta.url) source = meta.url
+		}
 	} catch (e) {
 		// Fallback for environments where neither is available or accessible
 	}

@@ -125,7 +125,7 @@ export function Destroyable<
 		static destroy(obj: Destroyable) {
 			const destructor = Destroyable.destructors.get(obj)
 			if (!destructor) return false
-			fr.unregister(obj)
+			fr.unregister(obj[allocatedValues])
 			Destroyable.destructors.delete(obj)
 			Object.setPrototypeOf(obj, new Proxy({}, destroyedHandler))
 			// Clear all own properties
@@ -154,7 +154,7 @@ export function Destroyable<
 				myDestructor(allocated)
 			}
 			Destroyable.destructors.set(this, destruction)
-			fr.register(this, destruction, this)
+			fr.register(this, destruction, allocated)
 		}
 	}
 }
@@ -165,7 +165,7 @@ const forwardProperties = Symbol('forwardProperties')
  * Use with accessor properties or explicit get/set pairs
  */
 export const allocated = decorator({
-	setter(original, target, propertyKey) {
+	setter(original, _target, propertyKey) {
 		return function (value) {
 			this[allocatedValues][propertyKey] = value
 			return original.call(this, value)

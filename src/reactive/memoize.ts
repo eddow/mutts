@@ -120,7 +120,7 @@ export const memoize = decorator({
 					{
 						method: original,
 						propertyKey,
-						...(original[rootFunction] ? { [rootFunction]: original[rootFunction] } : {}),
+						...((original as any)[rootFunction] ? { [rootFunction]: (original as any)[rootFunction] } : {}),
 					}
 				)
 				wrapperRegistry.set(original, wrapper)
@@ -140,7 +140,7 @@ export const memoize = decorator({
 					{
 						method: original,
 						propertyKey: name,
-						...(original[rootFunction] ? { [rootFunction]: original[rootFunction] } : {}),
+						...((original as any)[rootFunction] ? { [rootFunction]: (original as any)[rootFunction] } : {}),
 					}
 				)
 				wrapperRegistry.set(original, wrapper)
