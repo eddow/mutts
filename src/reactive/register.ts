@@ -2,7 +2,7 @@ import { ArrayReadForward, forwardArray, getAt, Indexable, setAt } from '../inde
 import { effect } from './effects'
 import { unreactive } from './interface'
 import { reactive } from './proxy'
-import { type DependencyFunction, prototypeForwarding, type ScopedCallback } from './types'
+import { type DependencyFunction, type ScopedCallback } from './types'
 
 // TODO: use register in a real-world crud situation, have "events" for add, delete, update
 
@@ -36,7 +36,7 @@ function getRegisterBase<T>() {
 interface RegisterInstance<T> extends ArrayReadForward<T> {
 	[index: number]: T
 }
-
+// TODO: What to do with prototype forwarding ?
 @unreactive
 class RegisterClass<T, K extends PropertyKey = PropertyKey>
 	extends getRegisterBase<any>()
@@ -65,9 +65,6 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 		this.#keyFn = keyFn
 		this.#keys = reactive([] as K[])
 		this.#values = reactive(new Map<K, T>())
-		Object.defineProperties(this, {
-			[prototypeForwarding]: { value: this.#keys },
-		})
 		if (initial) this.push(...initial)
 	}
 

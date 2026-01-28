@@ -25,7 +25,6 @@ import {
 	nativeReactive,
 	nonReactiveMark,
 	options,
-	prototypeForwarding,
 	ReactiveError,
 	ReactiveErrorCode,
 	unreactiveProperties,
@@ -39,7 +38,10 @@ const reactiveHandlers = {
 	get(obj: any, prop: PropertyKey, receiver: any) {
 		if(obj && typeof obj === 'object' && !Object.hasOwn(obj, prop)) {
 			const metaProto = metaProtos.get(obj.constructor)
-			if (metaProto && prop in metaProto) return (...args) => metaProto[prop].apply(obj, args)
+			if (metaProto && prop in metaProto) {
+				const desc = Object.getOwnPropertyDescriptor(metaProto, prop)!
+				return desc.get ? desc.get.call(obj) : (...args) => desc.value.apply(obj, args)
+			}
 		}
 		if (prop === nonReactiveMark) return false
 		const unwrappedObj = unwrap(obj)
@@ -170,15 +172,6 @@ const reactiveHandlers = {
 			bubbleUpChange(obj, { type: 'del', prop })
 		}
 
-		return true
-	},
-	getPrototypeOf(obj: any): object | null {
-		if (prototypeForwarding in obj) return obj[prototypeForwarding]
-		return Object.getPrototypeOf(obj)
-	},
-	setPrototypeOf(obj: any, proto: object | null): boolean {
-		if (prototypeForwarding in obj) return false
-		Object.setPrototypeOf(obj, proto)
 		return true
 	},
 	ownKeys(obj: any): (string | symbol)[] {

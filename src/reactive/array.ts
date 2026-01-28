@@ -5,58 +5,100 @@ import { unwrap } from './proxy-state'
 import { dependant } from './tracking'
 
 
+function* index(i: number, { length = true } = {}): IterableIterator<number | 'length'> {
+	if (length) yield 'length'
+	yield i
+}
 
-export abstract class ReactiveBaseArray extends Array {
+function* range(
+	a: number,
+	b: number,
+	{ length = false } = {}
+): IterableIterator<number | 'length'> {
+	const start = Math.min(a, b)
+	const end = Math.max(a, b)
+	if (length) yield 'length'
+	for (let i = start; i <= end; i++) yield i
+}
+export abstract class Indexer extends Array {
+	get(i: number): any {
+		dependant(this, i)
+		return reactive(this[i])
+	}
+	set(i: number, value: any) {
+		const added = i >= this.length
+		this[i] = value
+		touched(this, { type: 'set', prop: i }, index(i, { length: added }))
+	}
+	getLength() {
+		dependant(this, 'length')
+		return this.length
+	}
+	setLength(value: number) {
+		const oldLength = this.length
+		try {
+			this.length = value
+		} finally {
+			touched(this, { type: 'set', prop: 'length' }, range(oldLength, value, { length: true }))
+		}
+	}
+}
+
+export abstract class ReactiveArray extends Array {
+
+	get [Symbol.toStringTag]() {
+		return 'ReactiveArray'
+	}
 	// Safe array access with negative indices
 	at(index: number): any {
-		const actualIndex = index < 0 ? unwrap(this).length + index : index
+		const actualIndex = index < 0 ? this.length + index : index
 		dependant(this, actualIndex)
-		if (actualIndex < 0 || actualIndex >= unwrap(this).length) return undefined
-		return reactive(unwrap(this)[actualIndex])
+		if (actualIndex < 0 || actualIndex >= this.length) return undefined
+		return reactive(this[actualIndex])
 	}
 
 	// Immutable versions of mutator methods
 	toReversed(): any[] {
 		dependant(this)
-		return reactive(unwrap(this).toReversed())
+		return reactive(this.toReversed())
 	}
 
 	toSorted(compareFn?: (a: any, b: any) => number): any[] {
 		dependant(this)
-		return reactive(unwrap(this).toSorted(compareFn))
+		return reactive(this.toSorted(compareFn))
 	}
 
 	toSpliced(start: number, deleteCount?: number, ...items: any[]): any[] {
 		dependant(this)
 		return deleteCount === undefined
-			? unwrap(this).toSpliced(start)
-			: unwrap(this).toSpliced(start, deleteCount, ...items)
+			? this.toSpliced(start)
+			: this.toSpliced(start, deleteCount, ...items)
 	}
 
 	with(index: number, value: any): any[] {
 		dependant(this)
-		return reactive(unwrap(this).with(index, value))
+		return reactive(this.with(index, value))
 	}
 
 	// Iterator methods with reactivity tracking
 	entries() {
 		dependant(this)
-		return makeReactiveEntriesIterator(unwrap(this).entries())
+		return makeReactiveEntriesIterator(this.entries())
 	}
 
 	keys() {
 		dependant(this, 'length')
-		return unwrap(this).keys()
+		return this.keys()
 	}
 
 	values() {
 		dependant(this)
-		return makeReactiveIterator(unwrap(this).values())
+		return makeReactiveIterator(this.values())
 	}
 
 	[Symbol.iterator](): ArrayIterator<any> {
 		dependant(this)
-		const nativeIterator = unwrap(this)[Symbol.iterator]()
+		const nativeIterator = this[Symbol.iterator]()
 		return {
 			next() {
 				const result = nativeIterator.next()
@@ -76,20 +118,20 @@ export abstract class ReactiveBaseArray extends Array {
 		dependant(this)
 		const unwrappedSearch = unwrap(searchElement)
 		// Check both wrapped and unwrapped versions since array may contain either
-		const index = unwrap(this).indexOf(unwrappedSearch, fromIndex)
+		const index = this.indexOf(unwrappedSearch, fromIndex)
 		if (index !== -1) return index
 		// If not found with unwrapped, try with wrapped (in case array contains wrapped version)
-		return unwrap(this).indexOf(searchElement, fromIndex)
+		return this.indexOf(searchElement, fromIndex)
 	}
 
 	lastIndexOf(searchElement: any, fromIndex?: number): number {
 		dependant(this)
 		const unwrappedSearch = unwrap(searchElement)
 		// Check both wrapped and unwrapped versions since array may contain either
-		const index = unwrap(this).lastIndexOf(unwrappedSearch, fromIndex)
+		const index = this.lastIndexOf(unwrappedSearch, fromIndex)
 		if (index !== -1) return index
 		// If not found with unwrapped, try with wrapped (in case array contains wrapped version)
-		return unwrap(this).lastIndexOf(searchElement, fromIndex)
+		return this.lastIndexOf(searchElement, fromIndex)
 	}
 
 	includes(searchElement: any, fromIndex?: number): boolean {
@@ -97,8 +139,8 @@ export abstract class ReactiveBaseArray extends Array {
 		const unwrappedSearch = unwrap(searchElement)
 		// Check both wrapped and unwrapped versions since array may contain either
 		return (
-			unwrap(this).includes(unwrappedSearch, fromIndex) ||
-			unwrap(this).includes(searchElement, fromIndex)
+			this.includes(unwrappedSearch, fromIndex) ||
+			this.includes(searchElement, fromIndex)
 		)
 	}
 
@@ -114,16 +156,16 @@ export abstract class ReactiveBaseArray extends Array {
 				obj: any[]
 			) => boolean
 			return reactive(
-				unwrap(this).find(
+				this.find(
 					(value, index, array) => predicate.call(thisArg, reactive(value), index, array),
 					thisArg
 				)
 			)
 		}
 		const fromIndex = typeof thisArg === 'number' ? thisArg : undefined
-		const index = unwrap(this).indexOf(predicateOrElement, fromIndex)
+		const index = this.indexOf(predicateOrElement, fromIndex)
 		if (index === -1) return undefined
-		return reactive(unwrap(this)[index])
+		return reactive(this[index])
 	}
 
 	findIndex(
@@ -140,18 +182,18 @@ export abstract class ReactiveBaseArray extends Array {
 				index: number,
 				obj: any[]
 			) => boolean
-			return unwrap(this).findIndex(
+			return this.findIndex(
 				(value, index, array) => predicate.call(thisArg, reactive(value), index, array),
 				thisArg
 			)
 		}
 		const fromIndex = typeof thisArg === 'number' ? thisArg : undefined
-		return unwrap(this).indexOf(predicateOrElement, fromIndex)
+		return this.indexOf(predicateOrElement, fromIndex)
 	}
 
 	flat(depth?: number): any[] {
 		dependant(this)
-		return reactive(depth === undefined ? unwrap(this).flat() : unwrap(this).flat(depth))
+		return reactive(depth === undefined ? this.flat() : this.flat(depth))
 	}
 
 	flatMap(
@@ -160,7 +202,7 @@ export abstract class ReactiveBaseArray extends Array {
 	): any[] {
 		dependant(this)
 		return reactive(
-			unwrap(this).flatMap(
+			this.flatMap(
 				(item, index, array) => callbackfn.call(thisArg, reactive(item), index, array),
 				thisArg
 			)
@@ -170,14 +212,14 @@ export abstract class ReactiveBaseArray extends Array {
 	filter(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): any[] {
 		dependant(this)
 		return reactive(
-			unwrap(this).filter((item, index, array) => callbackfn(reactive(item), index, array), thisArg)
+			this.filter((item, index, array) => callbackfn(reactive(item), index, array), thisArg)
 		)
 	}
 
 	map(callbackfn: (value: any, index: number, array: any[]) => any, thisArg?: any): any[] {
 		dependant(this)
 		return reactive(
-			unwrap(this).map((item, index, array) => callbackfn(reactive(item), index, array), thisArg)
+			this.map((item, index, array) => callbackfn(reactive(item), index, array), thisArg)
 		)
 	}
 
@@ -188,8 +230,8 @@ export abstract class ReactiveBaseArray extends Array {
 		dependant(this)
 		const result =
 			initialValue === undefined
-				? unwrap(this).reduce(callbackfn as any)
-				: unwrap(this).reduce(callbackfn as any, initialValue)
+				? this.reduce(callbackfn as any)
+				: this.reduce(callbackfn as any, initialValue)
 		return reactive(result)
 	}
 
@@ -200,33 +242,33 @@ export abstract class ReactiveBaseArray extends Array {
 		dependant(this)
 		const result =
 			initialValue !== undefined
-				? unwrap(this).reduceRight(callbackfn as any, initialValue)
-				: (unwrap(this) as any).reduceRight(callbackfn as any)
+				? this.reduceRight(callbackfn as any, initialValue)
+				: (this as any).reduceRight(callbackfn as any)
 		return reactive(result)
 	}
 
 	slice(start?: number, end?: number): any[] {
-		for (const i of range(start || 0, end || unwrap(this).length - 1)) dependant(this, i)
+		for (const i of range(start || 0, end || this.length - 1)) dependant(this, i)
 		return start === undefined
-			? unwrap(this).slice()
+			? this.slice()
 			: end === undefined
-				? unwrap(this).slice(start)
-				: unwrap(this).slice(start, end)
+				? this.slice(start)
+				: this.slice(start, end)
 	}
 
 	concat(...items: any[]): any[] {
 		dependant(this)
-		return reactive(unwrap(this).concat(...items))
+		return reactive(this.concat(...items))
 	}
 
 	join(separator?: string): string {
 		dependant(this)
-		return unwrap(this).join(separator as any)
+		return this.join(separator as any)
 	}
 
 	forEach(callbackfn: (value: any, index: number, array: any[]) => void, thisArg?: any): void {
 		dependant(this)
-		unwrap(this).forEach((value, index, array) => {
+		this.forEach((value, index, array) => {
 			callbackfn.call(thisArg, reactive(value), index, array)
 		})
 	}
@@ -240,67 +282,23 @@ export abstract class ReactiveBaseArray extends Array {
 	every(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): boolean
 	every(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): boolean {
 		dependant(this)
-		return unwrap(this).every(
+		return this.every(
 			(value, index, array) => callbackfn.call(thisArg, reactive(value), index, array),
 			thisArg
 		)
 	}
 	some(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): boolean {
 		dependant(this)
-		return unwrap(this).some(
+		return this.some(
 			(value, index, array) => callbackfn.call(thisArg, reactive(value), index, array),
 			thisArg
 		)
 	}
-}
-function* index(i: number, { length = true } = {}): IterableIterator<number | 'length'> {
-	if (length) yield 'length'
-	yield i
-}
-
-function* range(
-	a: number,
-	b: number,
-	{ length = false } = {}
-): IterableIterator<number | 'length'> {
-	const start = Math.min(a, b)
-	const end = Math.max(a, b)
-	if (length) yield 'length'
-	for (let i = start; i <= end; i++) yield i
-}
-export abstract class Indexer extends Array {
-	get(i: number): any {
-		dependant(this, i)
-		return reactive(unwrap(this)[i])
-	}
-	set(i: number, value: any) {
-		const added = i >= unwrap(this).length
-		unwrap(this)[i] = value
-		touched(this, { type: 'set', prop: i }, index(i, { length: added }))
-	}
-	getLength() {
-		dependant(this, 'length')
-		return unwrap(this).length
-	}
-	setLength(value: number) {
-		const oldLength = unwrap(this).length
-		try {
-			unwrap(this).length = value
-		} finally {
-			touched(this, { type: 'set', prop: 'length' }, range(oldLength, value, { length: true }))
-		}
-	}
-}
-
-/**
- * Reactive wrapper around JavaScript's Array class with full array method support
- * Tracks length changes, individual index operations, and collection-wide operations
- */
-export abstract class ReactiveArray extends ReactiveBaseArray {
+	// Side-effectful
 	push(...items: any[]) {
-		const oldLength = unwrap(this).length
+		const oldLength = this.length
 		try {
-			return unwrap(this).push(...items)
+			return this.push(...items)
 		} finally {
 			touched(
 				this,
@@ -311,45 +309,45 @@ export abstract class ReactiveArray extends ReactiveBaseArray {
 	}
 
 	pop() {
-		if (unwrap(this).length === 0) return undefined
+		if (this.length === 0) return undefined
 		try {
-			return reactive(unwrap(this).pop())
+			return reactive(this.pop())
 		} finally {
-			touched(this, { type: 'bunch', method: 'pop' }, index(unwrap(this).length))
+			touched(this, { type: 'bunch', method: 'pop' }, index(this.length))
 		}
 	}
 
 	shift() {
-		if (unwrap(this).length === 0) return undefined
+		if (this.length === 0) return undefined
 		try {
-			return reactive(unwrap(this).shift())
+			return reactive(this.shift())
 		} finally {
 			touched(
 				this,
 				{ type: 'bunch', method: 'shift' },
-				range(0, unwrap(this).length + 1, { length: true })
+				range(0, this.length + 1, { length: true })
 			)
 		}
 	}
 
 	unshift(...items: any[]) {
 		try {
-			return unwrap(this).unshift(...items)
+			return this.unshift(...items)
 		} finally {
 			touched(
 				this,
 				{ type: 'bunch', method: 'unshift' },
-				range(0, unwrap(this).length - items.length, { length: true })
+				range(0, this.length - items.length, { length: true })
 			)
 		}
 	}
 
 	splice(start: number, deleteCount?: number, ...items: any[]) {
-		const oldLength = unwrap(this).length
+		const oldLength = this.length
 		if (deleteCount === undefined) deleteCount = oldLength - start
 		try {
-			if (deleteCount === undefined) return reactive(unwrap(this).splice(start))
-			return reactive(unwrap(this).splice(start, deleteCount, ...items))
+			if (deleteCount === undefined) return reactive(this.splice(start))
+			return reactive(this.splice(start, deleteCount, ...items))
 		} finally {
 			touched(
 				this,
@@ -366,41 +364,41 @@ export abstract class ReactiveArray extends ReactiveBaseArray {
 
 	reverse() {
 		try {
-			return unwrap(this).reverse()
+			return this.reverse()
 		} finally {
-			touched(this, { type: 'bunch', method: 'reverse' }, range(0, unwrap(this).length - 1))
+			touched(this, { type: 'bunch', method: 'reverse' }, range(0, this.length - 1))
 		}
 	}
 
 	sort(compareFn?: (a: any, b: any) => number) {
 		compareFn = compareFn || ((a, b) => a.toString().localeCompare(b.toString()))
 		try {
-			return unwrap(this).sort((a, b) => compareFn(reactive(a), reactive(b))) as any
+			return this.sort((a, b) => compareFn(reactive(a), reactive(b))) as any
 		} finally {
-			touched(this, { type: 'bunch', method: 'sort' }, range(0, unwrap(this).length - 1))
+			touched(this, { type: 'bunch', method: 'sort' }, range(0, this.length - 1))
 		}
 	}
 
 	fill(value: any, start?: number, end?: number) {
 		try {
-			if (start === undefined) return unwrap(this).fill(value) as any
-			if (end === undefined) return unwrap(this).fill(value, start) as any
-			return unwrap(this).fill(value, start, end) as any
+			if (start === undefined) return this.fill(value) as any
+			if (end === undefined) return this.fill(value, start) as any
+			return this.fill(value, start, end) as any
 		} finally {
-			touched(this, { type: 'bunch', method: 'fill' }, range(0, unwrap(this).length - 1))
+			touched(this, { type: 'bunch', method: 'fill' }, range(0, this.length - 1))
 		}
 	}
 
 	copyWithin(target: number, start: number, end?: number) {
 		try {
-			if (end === undefined) return unwrap(this).copyWithin(target, start) as any
-			return unwrap(this).copyWithin(target, start, end) as any
+			if (end === undefined) return this.copyWithin(target, start) as any
+			return this.copyWithin(target, start, end) as any
 		} finally {
 			touched(
 				this,
 				{ type: 'bunch', method: 'copyWithin' },
 				// TODO: calculate the range properly
-				range(0, unwrap(this).length - 1)
+				range(0, this.length - 1)
 			)
 		}
 		// Touch all affected indices with a single allProps call

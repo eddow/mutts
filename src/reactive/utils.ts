@@ -18,3 +18,9 @@ export function ReflectISet(obj: any, prop: any, value: any, receiver: any) {
 	}
 	return ReflectSet(obj, prop, value, receiver)
 }
+
+const contentRefs = new WeakMap<object, any>()
+export function bunch(content: object) {
+	if(!contentRefs.has(content)) contentRefs.set(content, { contentOf: content })
+	return contentRefs.get(content)
+}

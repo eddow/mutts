@@ -54,12 +54,11 @@ import { ReactiveSet, ReactiveWeakSet } from './set'
 import { effectToReactiveObjects, watchers } from './registry'
 
 // Register native collection types to use specialized reactive wrappers
-registerNativeReactivity(WeakMap, ReactiveWeakMap)
-registerNativeReactivity(Map, ReactiveMap)
-registerNativeReactivity(WeakSet, ReactiveWeakSet)
-registerNativeReactivity(Set, ReactiveSet)
-//registerNativeReactivity(Array, ReactiveArray)
 metaProtos.set(Array, ReactiveArray.prototype)
+metaProtos.set(Set, ReactiveSet.prototype)
+metaProtos.set(WeakSet, ReactiveWeakSet.prototype)
+metaProtos.set(Map, ReactiveMap.prototype)
+metaProtos.set(WeakMap, ReactiveWeakMap.prototype)
 
 /**
  * Object containing internal reactive system state for debugging and profiling

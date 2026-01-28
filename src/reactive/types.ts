@@ -131,10 +131,6 @@ export const nonReactiveMark = Symbol('non-reactive')
  * Symbol to mark class properties as non-reactive
  */
 export const unreactiveProperties = Symbol('unreactive-properties')
-/**
- * Symbol for prototype forwarding in reactive objects
- */
-export const prototypeForwarding: unique symbol = Symbol('prototype-forwarding')
 
 /**
  * Symbol representing all properties in reactive tracking
