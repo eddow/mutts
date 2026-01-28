@@ -105,7 +105,7 @@ const result = memoized(user)
 **5. Map over arrays:**
 ```typescript
 const source = reactive([1, 2, 3])
-const doubled = mapped(source, x => x * 2)
+const doubled = project(source, ({ value }) => value * 2)
 // [2, 4, 6]
 
 source.push(4)  // doubled automatically becomes [2, 4, 6, 8]

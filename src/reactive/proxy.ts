@@ -10,7 +10,6 @@ import {
 	objectsWithDeepWatchers,
 	removeBackReference,
 } from './deep-watch-state'
-import { withEffect } from './effect-context'
 import { untracked } from './effects'
 import { absent, isNonReactive } from './non-reactive-state'
 import {
@@ -31,34 +30,23 @@ import {
 	ReactiveErrorCode,
 	unreactiveProperties,
 } from './types'
+import { ReflectIGet, ReflectISet } from './utils'
 export const metaProtos = new WeakMap()
 
 const hasReentry: any[] = []
 const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
-		if(!obj.hasOwnProperty(prop)) {
-			const metaProto = metaProtos.get(obj)
-			if (metaProto && metaProto.has(prop)) return metaProto.get(prop)
+		if(obj && typeof obj === 'object' && !Object.hasOwn(obj, prop)) {
+			const metaProto = metaProtos.get(obj.constructor)
+			if (metaProto && prop in metaProto) return (...args) => metaProto[prop].apply(obj, args)
 		}
 		if (prop === nonReactiveMark) return false
 		const unwrappedObj = unwrap(obj)
 		// Check if this property is marked as unreactive
 		if (unwrappedObj[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
-			return ReflectGet(obj, prop, receiver)
+			return ReflectIGet(obj, prop, receiver)
 
-		// Special-case: array wrappers use prototype forwarding + numeric accessors.
-		// With options.instanceMembers=true, inherited reads are normally not tracked, which breaks
-		// reactivity for array indices/length (they appear inherited on the proxy).
-		const isArrayCase =
-			prototypeForwarding in obj &&
-			// biome-ignore lint/suspicious/useIsArray: This is the whole point here
-			obj[prototypeForwarding] instanceof Array &&
-			typeof prop === 'string' &&
-			(prop === 'length' || !Number.isNaN(Number(prop)))
-		if (isArrayCase) {
-			dependant(obj, prop === 'length' ? 'length' : Number(prop))
-		}
 		// Check if property exists and if it's an own property (cached for later use)
 		const hasProp = Reflect.has(receiver, prop)
 		const isOwnProp = hasProp && Object.hasOwn(receiver, prop)
@@ -92,7 +80,7 @@ const reactiveHandlers = {
 				current = next
 			}
 		}
-		const value = ReflectGet(obj, prop, receiver)
+		const value = ReflectIGet(obj, prop, receiver)
 		if (typeof value === 'object' && value !== null) {
 			const reactiveValue = reactiveObject(value)
 
@@ -112,19 +100,8 @@ const reactiveHandlers = {
 
 		// Check if this property is marked as unreactive
 		if (unwrappedObj[unreactiveProperties]?.has(prop) || unwrappedObj !== unwrappedReceiver)
-			return ReflectSet(obj, prop, value, receiver)
-		// Really specific case for when Array is forwarder, in order to let it manage the reactivity
-		const isArrayCase =
-			prototypeForwarding in obj &&
-			// biome-ignore lint/suspicious/useIsArray: This is the whole point here
-			obj[prototypeForwarding] instanceof Array &&
-			(!Number.isNaN(Number(prop)) || prop === 'length')
+			return ReflectISet(obj, prop, value, receiver)
 		const newValue = unwrap(value)
-
-		if (isArrayCase) {
-			;(obj as any)[prop] = newValue
-			return true
-		}
 		// Read old value, using withEffect(undefined, ...) for getter-only accessors to avoid
 		// breaking memoization dependency tracking during SET operations
 		let oldVal = absent
@@ -154,7 +131,7 @@ const reactiveHandlers = {
 		if (oldVal !== newValue) {
 			// For getter-only accessors, Reflect.set() may fail, but we still return true
 			// to avoid throwing errors. Only proceed with change notifications if set succeeded.
-			if (ReflectSet(obj, prop, newValue, receiver)) {
+			if (ReflectISet(obj, prop, newValue, receiver)) {
 				notifyPropertyChange(obj, prop, oldVal, newValue, oldVal !== absent)
 			}
 		}

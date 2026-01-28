@@ -1161,10 +1161,6 @@ class Example {
 }
 ```
 
-### Working with `mapped()`
-
-Pair `memoize()` with [`mapped()`](#mapped) to keep derived array elements stable across reorders (see [Identity-preserving mapped arrays](#identity-preserving-mapped-arrays)). Memoizing the mapper ensures each input object is processed at most once and its derived state persists while the input reference lives.
-
 ## Debugging and Development
 
 The `mutts` reactive system includes built-in tools for troubleshooting complex dependency graphs and identifying performance bottlenecks.

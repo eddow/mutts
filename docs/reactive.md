@@ -11,7 +11,7 @@ The Mutts Reactive System documentation has been split into focused sections for
 *   **[Reactive Collections](./reactive/collections.md#collections)**: Map, Set, WeakMap, WeakSet
 *   **[Reactive Arrays](./reactive/collections.md#reactivearray)**: Full array method support
 *   **[Register](./reactive/collections.md#register)**: ID-keyed ordered collections
-*   **[Projections](./reactive/collections.md#projection)**: `project`, `mapped`, `organized`
+*   **[Projections](./reactive/collections.md#projection)**: `project`, `organized`
 
 ## [Advanced Topics](./reactive/advanced.md)
 *   **[Atomic Operations](./reactive/advanced.md#atomic-operations)**: Batching and Bidirectional binding

@@ -6,6 +6,7 @@ import { cleanedBy, cleanup } from './interface'
 import { reactive } from './proxy'
 import { Register } from './register'
 import { type ProjectionContext, projectionInfo, type ScopedCallback } from './types'
+import { ReflectIGet, ReflectISet } from './utils'
 
 /**
  * Maps projection effects (item effects) to their projection context
@@ -42,17 +43,13 @@ export type ProjectAccess<SourceValue, Key, SourceType, Target> = {
 	value: SourceValue
 }
 
-type BivariantProjectCallback<Args extends any[], Return> = {
-	bivarianceHack(...args: Args): Return
-}['bivarianceHack']
-
 export type ProjectCallback<
 	SourceValue,
 	Key,
 	Target extends object,
 	SourceType,
 	Result,
-> = BivariantProjectCallback<[ProjectAccess<SourceValue, Key, SourceType, Target>, Target], Result>
+> = (access: ProjectAccess<SourceValue, Key, SourceType, Target>, target: Target) => Result
 
 export type ProjectResult<Target extends object> = Target & { [cleanup]: ScopedCallback }
 
@@ -97,7 +94,7 @@ function projectArray<SourceValue, ResultValue>(
 	const indexEffects = new Map<number, ScopedCallback>()
 
 	function normalizeTargetLength(length: number) {
-		ReflectSet(target as unknown as object, 'length', length, target)
+		ReflectISet(target as unknown as object, 'length', length, target)
 	}
 
 	function disposeIndex(index: number) {
@@ -125,9 +122,9 @@ function projectArray<SourceValue, ResultValue>(
 					const accessBase = {
 						key: index,
 						source: observedSource,
-						get: () => ReflectGet(observedSource as any, index, observedSource),
+						get: () => ReflectIGet(observedSource as any, index, observedSource),
 						set: (value: SourceValue) =>
-							ReflectSet(observedSource as any, index, value, observedSource),
+							ReflectISet(observedSource as any, index, value, observedSource),
 						old: previous,
 					} as ProjectAccess<SourceValue, number, readonly SourceValue[], ResultValue[]>
 					defineAccessValue(accessBase)
@@ -274,9 +271,9 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 					const accessBase = {
 						key: sourceKey,
 						source: observedSource,
-						get: () => ReflectGet(observedSource, sourceKey, observedSource),
+						get: () => ReflectIGet(observedSource, sourceKey, observedSource),
 						set: (value: Source[typeof sourceKey]) =>
-							ReflectSet(observedSource, sourceKey, value, observedSource),
+							ReflectISet(observedSource, sourceKey, value, observedSource),
 						old: previous,
 					} as ProjectAccess<
 						Source[typeof sourceKey],

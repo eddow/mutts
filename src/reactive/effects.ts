@@ -1374,7 +1374,7 @@ export function untracked<T>(fn: () => T): T {
  */
 export function root<T>(fn: () => T): T {
 	let rv!: T
-	untracked(() => {
+	withEffect(undefined, () => {
 		rv = fn()
 	})
 	return rv

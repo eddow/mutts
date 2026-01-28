@@ -352,123 +352,12 @@ Notes:
 - Assigning to an index (`list[i] = value`) uses the key function to bind that slot to `value`’s key.
 
 ## Class Reactivity
-## Array Mapping
-
-### `mapped()`
-
-Creates a reactive array by mapping over an input array. The mapper receives the current item value, its index, and the previous mapped value for that index.
-
-```typescript
-import { mapped, reactive } from 'mutts/reactive'
-
-const input = reactive([1, 2, 3])
-const doubles = mapped(input, (value, index, oldValue) => value * 2)
-
-console.log(doubles) // [2, 4, 6]
-
-// When input changes, the mapped output updates in place
-input.push(4)
-console.log(doubles) // [2, 4, 6, 8]
-```
-
-**Mapper signature:**
-
-```typescript
-(value: T, index: number, oldValue?: U) => U
-```
-
-- **value**: current element from the input array
-- **index**: current element index
-- **oldValue**: previously computed value at the same index (useful for incremental updates)
-
-**Key features:**
-
-- **Live reactivity**: Output array updates when the input array changes (push/pop/splice/assignments).
-- **Granular recompute**: Only indices that change are recomputed; `oldValue` enables incremental updates.
-- **Simple contract**: Mapper works directly with `(value, index, oldValue)` and can freely return reactive objects.
-
-**Performance characteristics:**
-
-```typescript
-const users = reactive([
-  { name: 'John', age: 30 },
-  { name: 'Jane', age: 25 }
-])
-
-let computeCount = 0
-const processedUsers = mapped(users, (user) => {
-  computeCount++
-  return `${user.name} (${user.age})`
-})
-
-console.log(computeCount) // 2 (initial computation)
-
-// Modify one user - only that index recomputes
-users[0].age = 31
-console.log(processedUsers[0]) // "John (31)"
-console.log(computeCount) // 3
-```
-
-**Advanced usage:**
-
-```typescript
-const orders = reactive([
-  { items: [{ price: 10 }, { price: 20 }] },
-  { items: [{ price: 15 }] }
-])
-
-const orderTotals = mapped(orders, (order) => (
-  order.items.reduce((sum, item) => sum + item.price, 0)
-))
-```
-
-### Identity-preserving mapped arrays
-
-Combine `mapped()` with [`memoize()`](#memoize) when you need to reuse mapped results for the same input identity. The memoized mapper runs at most once per input object, even when the source array is reordered, and it can host additional reactive state that should survive reordering.
-
-```typescript
-import { effect, mapped, memoize, reactive } from 'mutts/reactive'
-
-const inputs = reactive([{ name: 'John' }, { name: 'Jane' }])
-
-const memoizedCard = memoize((user: { name: string }) => {
-  const view: { name?: string; setName(next: string): void } = {
-    setName(next) {
-      user.name = next
-    },
-  }
-
-  effect(() => {
-    view.name = user.name.toUpperCase()
-  })
-
-  return view
-})
-
-const cards = mapped(inputs, (user) => memoizedCard(user))
-
-cards[0].setName('Johnny')
-console.log(cards[0].name) // 'JOHNNY'
-
-// Reorder: cached output follows the original object
-const first = inputs.shift()!
-inputs.push(first)
-console.log(cards[1].name) // still 'JOHNNY'
-```
-
-Use this pattern when:
-
-- You are mapping an array of reactive objects and want to keep derived objects stable across reorders.
-- The mapper returns objects with internal state or nested effects that should survive reordering.
-- You prefer to share memoized helpers across multiple mapped arrays.
 
 ## Projection
 
 ### `project()`
 
 `project()` provides a unified API for transforming reactive collections (arrays, records, and maps) into new reactive collections. Each source entry gets its own reactive effect that recomputes only when that specific entry changes, enabling granular updates perfect for rendering pipelines.
-
-**Note:** `project()` is the modern replacement for `mapped()`. It offers the same per-entry reactivity benefits but works across all collection types with a consistent API.
 
 #### Basic Usage
 
@@ -617,22 +506,9 @@ result[cleanup]() // Stops all effects and cleans up
 - **Data Transformation**: Convert between collection types while maintaining reactivity
 - **Performance Optimization**: Avoid full recomputation when only a few entries change
 
-#### Comparison with `mapped()`
-
-`project()` is designed to eventually replace `mapped()`. Key differences:
-
-- **Unified API**: Works with arrays, records, and maps (vs. `mapped()` only for arrays)
-- **Access Pattern**: Uses an access object with `get()`/`set()` instead of direct value/index parameters
-- **Automatic Target Creation**: Creates its own reactive target container (no need to provide a base target)
-- **Consistent Behavior**: Same per-entry reactivity model across all collection types
-
-For new code, prefer `project()` over `mapped()`. Existing `mapped()` code will continue to work, but consider migrating for better consistency and future features.
-
 ## Record Organization
 
 ### `organized()`
-
-`organized()` is the record companion to [`mapped()`](#mapped). Instead of iterating over numeric indices, it reacts to property additions, updates, and deletions on any `Record<PropertyKey, T>` (plain objects, dictionaries, even reactive proxies) and lets you build **whatever target structure you need**—a new record, nested buckets, a `Map`, or a more elaborate object with metadata.
 
 ```typescript
 import { cleanup, organized, reactive } from 'mutts/reactive'
@@ -677,7 +553,6 @@ function organized<
 
 Under the hood there is:
 
-- One effect watching `Reflect.ownKeys(source)` (similar to how `mapped()` tracks `length`)
 - A child effect per key that re-runs whenever that key’s value changes, automatically reusing and replacing the cleanup you returned.
 - Automatic disposal when keys disappear or when `target[cleanup]()` is invoked.
 

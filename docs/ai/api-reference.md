@@ -68,8 +68,6 @@ export interface Register<T, K extends PropertyKey = PropertyKey> extends Iterab
 }
 
 export declare function register<T, K extends PropertyKey = PropertyKey>(keyFn: (item: T) => K, initial?: Iterable<T>): Register<T, K>;
-export declare function mapped<T, U>(inputs: readonly T[], compute: (input: T, index: number, output: U[]) => U): readonly U[];
-export declare function reduced<T, U, R extends object = any>(inputs: readonly T[], compute: (input: T, factor: R) => readonly U[]): readonly U[];
 export declare function project<S, R>(source: S, apply: (access: any, target: any) => any): R;
 export declare function organized<S, T>(source: S, apply: (access: any, target: T) => any, baseTarget?: T): T;
 

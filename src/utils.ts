@@ -1,4 +1,3 @@
-import { prototypeForwarding } from './reactive/types'
 
 type ElementTypes<T extends readonly unknown[]> = {
 	[K in keyof T]: T[K] extends readonly (infer U)[] ? U : T[K]
@@ -128,13 +127,6 @@ export function isOwnAccessor(obj: any, prop: any) {
  * @returns True if values are deeply equal
  */
 export function deepCompare(a: any, b: any, cache = new Map<object, Set<object>>()): boolean {
-	// Unwrap mutts proxies if present
-	while (a && typeof a === 'object' && prototypeForwarding in a) {
-		a = (a as any)[prototypeForwarding]
-	}
-	while (b && typeof b === 'object' && prototypeForwarding in b) {
-		b = (b as any)[prototypeForwarding]
-	}
 
 	if (a === b) return true
 

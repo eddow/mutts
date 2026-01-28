@@ -24,7 +24,6 @@ export {
 	untracked,
 } from './effects'
 export { cleanedBy, cleanup, derived, unreactive, watch } from './interface'
-export { mapped, ReadOnlyError, reduced } from './mapped'
 export { type Memoizable, memoize } from './memoize'
 export { immutables, isNonReactive, registerNativeReactivity } from './non-reactive'
 export { getActiveProjection, project } from './project'
@@ -50,7 +49,7 @@ import {
 } from './deep-watch'
 import { ReactiveMap, ReactiveWeakMap } from './map'
 import { nonReactiveObjects, registerNativeReactivity } from './non-reactive-state'
-import { objectToProxy, proxyToObject } from './proxy'
+import { metaProtos, objectToProxy, proxyToObject } from './proxy'
 import { ReactiveSet, ReactiveWeakSet } from './set'
 import { effectToReactiveObjects, watchers } from './registry'
 
@@ -59,7 +58,8 @@ registerNativeReactivity(WeakMap, ReactiveWeakMap)
 registerNativeReactivity(Map, ReactiveMap)
 registerNativeReactivity(WeakSet, ReactiveWeakSet)
 registerNativeReactivity(Set, ReactiveSet)
-registerNativeReactivity(Array, ReactiveArray)
+//registerNativeReactivity(Array, ReactiveArray)
+metaProtos.set(Array, ReactiveArray.prototype)
 
 /**
  * Object containing internal reactive system state for debugging and profiling

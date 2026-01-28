@@ -1,6 +1,6 @@
-import { options } from '../src/reactive/types';
+import { options as reactiveOptions } from '../src/reactive/types';
 
-options.onMemoizationDiscrepancy = (cached, fresh, fn, args, cause) => {
+reactiveOptions.onMemoizationDiscrepancy = (cached, fresh, fn, args, cause) => {
     const fnName = (fn as any).name || 'anonymous';
     let argsStr = 'unknown';
     try {

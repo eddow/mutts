@@ -154,6 +154,7 @@ function deepNonReactive<T>(obj: T): T {
 		})
 	} catch {}
 	if (!(nonReactiveMark in (obj as object))) nonReactiveObjects.add(obj as object)
+	// Finally, not deep
 	//for (const key in obj) deepNonReactive(obj[key])
 	return obj
 }
