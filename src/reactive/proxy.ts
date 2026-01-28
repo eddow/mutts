@@ -11,6 +11,7 @@ import {
 	removeBackReference,
 } from './deep-watch-state'
 import { withEffect } from './effect-context'
+import { untracked } from './effects'
 import { absent, isNonReactive } from './non-reactive-state'
 import {
 	getExistingProxy,
@@ -30,11 +31,16 @@ import {
 	ReactiveErrorCode,
 	unreactiveProperties,
 } from './types'
+export const metaProtos = new WeakMap()
 
 const hasReentry: any[] = []
 const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
+		if(!obj.hasOwnProperty(prop)) {
+			const metaProto = metaProtos.get(obj)
+			if (metaProto && metaProto.has(prop)) return metaProto.get(prop)
+		}
 		if (prop === nonReactiveMark) return false
 		const unwrappedObj = unwrap(obj)
 		// Check if this property is marked as unreactive
@@ -130,9 +136,9 @@ const reactiveHandlers = {
 			// We *need* to use `receiver` and not `unwrappedObj` here, otherwise we break
 			// the dependency tracking for memoized getters
 			if (desc?.get && !desc?.set) {
-				oldVal = withEffect(undefined, () => Reflect.get(unwrappedObj, prop, receiver))
+				oldVal = untracked(() => Reflect.get(unwrappedObj, prop, receiver))
 			} else {
-				oldVal = withEffect(undefined, () => Reflect.get(unwrappedObj, prop, receiver))
+				oldVal = untracked(() => Reflect.get(unwrappedObj, prop, receiver))
 			}
 		}
 		if (objectsWithDeepWatchers.has(obj)) {

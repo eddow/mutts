@@ -1164,7 +1164,7 @@ export function effect(
 		if (cleanup) {
 			const prevCleanup = cleanup
 			cleanup = null
-			withEffect(undefined, () => prevCleanup())
+			untracked(() => prevCleanup())
 		}
 
 		// Handle async modes when effect is retriggered
@@ -1308,7 +1308,7 @@ export function effect(
 					if (cleanup) {
 						const prevCleanup = cleanup
 						cleanup = null
-						withEffect(undefined, () => prevCleanup())
+						untracked(() => prevCleanup())
 					}
 				},
 			},
@@ -1374,7 +1374,7 @@ export function untracked<T>(fn: () => T): T {
  */
 export function root<T>(fn: () => T): T {
 	let rv!: T
-	withEffect(undefined, () => {
+	untracked(() => {
 		rv = fn()
 	})
 	return rv
