@@ -46,10 +46,6 @@ export function dependant(obj: any, prop: any = allProps) {
 	)
 		return
 
-	registerDependency(obj, prop, currentActiveEffect)
-}
-
-function registerDependency(obj: any, prop: any, currentActiveEffect: ScopedCallback) {
 	let objectWatchers = watchers.get(obj)
 	if (!objectWatchers) {
 		objectWatchers = new Map<PropertyKey, Set<ScopedCallback>>()

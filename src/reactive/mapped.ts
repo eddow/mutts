@@ -29,6 +29,9 @@ class ReactiveReadOnlyArrayClass extends Indexable(ReactiveBaseArray, {
 		throw new ReadOnlyError(`Setting length to ${value} on a read-only array`)
 	},
 }) {
+	static get [Symbol.species]() {
+		return Array // Force methods to return regular Arrays
+	}
 	constructor(original: any[]) {
 		super()
 		Object.defineProperties(this, {
@@ -38,39 +41,39 @@ class ReactiveReadOnlyArrayClass extends Indexable(ReactiveBaseArray, {
 		})
 	}
 
-	push(..._items: any[]) {
+	push(..._items: any[]): number {
 		throw new ReadOnlyError(`Pushing items to a read-only array`)
 	}
 
-	pop() {
+	pop(): any {
 		throw new ReadOnlyError(`Popping from a read-only array`)
 	}
 
-	shift() {
+	shift(): any {
 		throw new ReadOnlyError(`Shifting from a read-only array`)
 	}
 
-	unshift(..._items: any[]) {
+	unshift(..._items: any[]): number {
 		throw new ReadOnlyError(`Unshifting items to a read-only array`)
 	}
 
-	splice(_start: number, _deleteCount?: number, ..._items: any[]) {
+	splice(start: number, deleteCount?: number, ...items: any[]): any[] {
 		throw new ReadOnlyError(`Splice from a read-only array`)
 	}
 
-	reverse() {
+	reverse(): any[] {
 		throw new ReadOnlyError(`Reversing a read-only array`)
 	}
 
-	sort(_compareFn?: (a: any, b: any) => number) {
+	sort(compareFn?: (a: any, b: any) => number): this {
 		throw new ReadOnlyError(`Sorting a read-only array`)
 	}
 
-	fill(_value: any, _start?: number, _end?: number) {
+	fill(value: any, start?: number, end?: number): this {
 		throw new ReadOnlyError(`Filling a read-only array`)
 	}
 
-	copyWithin(_target: number, _start: number, _end?: number) {
+	copyWithin(target: number, start: number, end?: number): this {
 		throw new ReadOnlyError(`Copying within a read-only array`)
 	}
 }

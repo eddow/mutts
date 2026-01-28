@@ -60,6 +60,7 @@ function formatRoots(roots: Function[], limit = 20): string {
 }
 
 import { ensureZoneHooked } from './zone'
+import { unwrap } from './proxy-state'
 
 type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
 
@@ -1130,7 +1131,10 @@ export function effect(
 	//biome-ignore lint/suspicious/noConfusingVoidType: We have to
 	fn: (access: DependencyAccess) => ScopedCallback | undefined | void | Promise<any>,
 	effectOptions?: EffectOptions
-): ScopedCallback {
+): ScopedCallback & {
+	[stopped]: boolean
+	[cleanupSymbol]: () => void
+} {
 	// Ensure zone is hooked if asyncZone option is enabled (lazy initialization)
 	// Inject batch function to allow atomic game loops in requestAnimationFrame
 	ensureZoneHooked(batch)
@@ -1292,22 +1296,26 @@ export function effect(
 		cleanupEffectFromGraph(runEffect)
 		fr.unregister(stopEffect)
 	}
-	function augmentedRv(rv: ScopedCallback): ScopedCallback {
-		Object.defineProperty(rv, stopped, {
-			get() {
-				return effectStopped
+	function augmentedRv(rv: ScopedCallback) {
+		return Object.defineProperties(rv, {
+			[stopped]: {
+				get() {
+					return effectStopped
+				},
 			},
-		})
-		Object.defineProperty(rv, cleanupSymbol, {
-			value: () => {
-				if (cleanup) {
-					const prevCleanup = cleanup
-					cleanup = null
-					withEffect(undefined, () => prevCleanup())
-				}
+			[cleanupSymbol]: {
+				value: () => {
+					if (cleanup) {
+						const prevCleanup = cleanup
+						cleanup = null
+						withEffect(undefined, () => prevCleanup())
+					}
+				},
 			},
-		})
-		return rv
+		}) as ScopedCallback & {
+			[stopped]: boolean
+			[cleanupSymbol]: () => void
+		}
 	}
 	if (isRootEffect) {
 		const callIfCollected = augmentedRv(() => stopEffect())
@@ -1425,18 +1433,16 @@ export function biDi<T>(
 		set = get.set
 		get = get.get
 	}
-	const root = getRoot(received)
+	let programatticallySetValue: any = Symbol()
 	effect(
 		markWithRoot(() => {
-			received(get())
-		}, root)
+			const newValue = get()
+			if(unwrap(newValue) !== programatticallySetValue)
+				received(newValue)
+		}, received)
 	)
-	return atomic((value: T) => {
-		set!(value)
-		if (batchQueue?.all.has(root)) {
-			// Remove the effect from the batch queue so it doesn't execute
-			// This prevents circular updates in bidirectional bindings
-			batchQueue.all.delete(root)
-		}
-	})
+	return set ? atomic((value: T) => {
+		programatticallySetValue = unwrap(value)
+		set(value)
+	}) : () => {}
 }

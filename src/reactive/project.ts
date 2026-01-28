@@ -415,6 +415,34 @@ type ProjectOverload = {
 	map: typeof projectMap
 }
 
+function projectCore<SourceValue, ResultValue>(
+	source: readonly SourceValue[],
+	apply: ProjectCallback<SourceValue, number, ResultValue[], readonly SourceValue[], ResultValue>
+): ProjectResult<ResultValue[]>
+function projectCore<Key extends PropertyKey, SourceValue, ResultValue>(
+	source: Register<SourceValue, Key>,
+	apply: ProjectCallback<
+		SourceValue,
+		Key,
+		Map<Key, ResultValue>,
+		Register<SourceValue, Key>,
+		ResultValue
+	>
+): ProjectResult<Map<Key, ResultValue>>
+function projectCore<Source extends Record<PropertyKey, any>, ResultValue>(
+	source: Source,
+	apply: ProjectCallback<
+		Source[keyof Source],
+		keyof Source,
+		Record<keyof Source, ResultValue>,
+		Source,
+		ResultValue
+	>
+): ProjectResult<Record<keyof Source, ResultValue>>
+function projectCore<Key, Value, ResultValue>(
+	source: Map<Key, Value>,
+	apply: ProjectCallback<Value, Key, Map<Key, ResultValue>, Map<Key, Value>, ResultValue>
+): ProjectResult<Map<Key, ResultValue>>
 function projectCore(source: any, apply: any): ProjectResult<any> {
 	if (Array.isArray(source)) return projectArray(source, apply)
 	if (source instanceof Map) return projectMap(source, apply)

@@ -132,7 +132,23 @@ describe('ReactiveArray', () => {
 			expect(reactiveArray.length).toBe(2)
 		})
 	})
-
+	describe('array mimicry', () => {
+		it('should return an array', () => {
+			const array = [1, 2, 3]
+			const reactiveArray = reactive(array)
+			expect(Array.isArray(reactiveArray)).toBe(true)
+		})
+		it('should flatmap', () => {
+			const array = reactive([1, 2, 3])
+			const reactiveArray = array.flatMap((x) => [x, x + 1])
+			expect(unwrap(reactiveArray)).toEqual([1, 2, 2, 3, 3, 4])
+		})
+		it('should be flatmapped', () => {
+			const array = reactive([1, 2, 3])
+			const reactiveArray = [array].flatMap((x) => x)
+			expect(reactiveArray).toEqual([1, 2, 3])
+		})
+	})
 	describe('push and pop methods', () => {
 		it('should handle push with reactivity', () => {
 			const array = [1, 2, 3]

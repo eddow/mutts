@@ -140,6 +140,46 @@ export function Indexable<Items, Base extends abstract new (...args: any[]) => a
 				})
 				return true
 			},
+			has(target, prop) {
+				if (prop in target) return true
+				if (typeof prop === 'string') {
+					if (prop === 'length' && accessor.getLength) return true
+					const numProp = Number(prop)
+					if (!Number.isNaN(numProp)) return true
+				}
+				return false
+			},
+			ownKeys(target) {
+				const keys = Reflect.ownKeys(target)
+				if (accessor.getLength) {
+					keys.push('length')
+					const len = accessor.getLength.call(this as any)
+					for (let i = 0; i < len; i++) keys.push(String(i))
+				}
+				return keys
+			},
+			getOwnPropertyDescriptor(target, prop) {
+				if (prop in target) return Object.getOwnPropertyDescriptor(target, prop)
+				if (typeof prop === 'string') {
+					if (prop === 'length' && accessor.getLength) {
+						return {
+							enumerable: false,
+							configurable: true,
+							get: () => accessor.getLength!.call(this as any),
+						}
+					}
+					const numProp = Number(prop)
+					if (!Number.isNaN(numProp)) {
+						return {
+							enumerable: true,
+							configurable: true,
+							get: () => accessor.get!.call(this as any, numProp),
+							set: accessor.set ? (v: any) => accessor.set!.call(this as any, numProp, v) : undefined,
+						}
+					}
+				}
+				return undefined
+			},
 		})
 	)
 	return Indexable

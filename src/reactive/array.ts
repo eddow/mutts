@@ -16,7 +16,14 @@ Array.isArray = ((value: any) =>
 		Array.isArray(value[prototypeForwarding]))) as any
 export class ReactiveBaseArray {
 	readonly [native]!: any[]
+	toJSON() {
+		return this[native]
+	}
 
+	// Make it spreadable/flattenable
+	get [Symbol.isConcatSpreadable]() {
+		return true
+	}
 	// Safe array access with negative indices
 	at(index: number): any {
 		const actualIndex = index < 0 ? this[native].length + index : index
@@ -64,7 +71,7 @@ export class ReactiveBaseArray {
 		return makeReactiveIterator(this[native].values())
 	}
 
-	[Symbol.iterator]() {
+	[Symbol.iterator](): ArrayIterator<any> {
 		dependant(this)
 		const nativeIterator = this[native][Symbol.iterator]()
 		return {
@@ -75,7 +82,11 @@ export class ReactiveBaseArray {
 				}
 				return { value: reactive(result.value), done: false }
 			},
-		}
+			[Symbol.iterator]() {
+				return this
+			},
+			[Symbol.dispose]() {},
+		} as any
 	}
 
 	indexOf(searchElement: any, fromIndex?: number): number {
@@ -155,9 +166,9 @@ export class ReactiveBaseArray {
 		return this[native].indexOf(predicateOrElement, fromIndex)
 	}
 
-	flat(): any[] {
+	flat(depth?: number): any[] {
 		dependant(this)
-		return reactive(this[native].flat())
+		return reactive(depth === undefined ? this[native].flat() : this[native].flat(depth))
 	}
 
 	flatMap(
@@ -165,7 +176,12 @@ export class ReactiveBaseArray {
 		thisArg?: any
 	): any[] {
 		dependant(this)
-		return reactive(this[native].flatMap(callbackfn, thisArg))
+		return reactive(
+			this[native].flatMap(
+				(item, index, array) => callbackfn.call(thisArg, reactive(item), index, array),
+				thisArg
+			)
+		)
 	}
 
 	filter(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): any[] {
@@ -234,6 +250,11 @@ export class ReactiveBaseArray {
 
 	// TODO: re-implement for fun dependencies? (eg - every only check the first ones until it find some),
 	// no need to make it dependant on indexes after the found one
+	every<S extends any>(
+		predicate: (value: any, index: number, array: any[]) => value is S,
+		thisArg?: any
+	): this is S[]
+	every(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): boolean
 	every(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): boolean {
 		dependant(this)
 		return this[native].every(
@@ -241,7 +262,6 @@ export class ReactiveBaseArray {
 			thisArg
 		)
 	}
-
 	some(callbackfn: (value: any, index: number, array: any[]) => boolean, thisArg?: any): boolean {
 		dependant(this)
 		return this[native].some(
@@ -292,6 +312,9 @@ export class ReactiveArray extends Indexable(ReactiveBaseArray, {
 		}
 	},
 }) {
+	static get [Symbol.species]() {
+		return Array // Force methods to return regular Arrays
+	}
 	constructor(original: any[]) {
 		super()
 		Object.defineProperties(this, {

@@ -1,3 +1,4 @@
+TODO: redo the doc here
 # Standard decorators
 
 A TypeScript library that provides standard decorators that should stop being re-implemented for the 50th time
