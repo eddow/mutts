@@ -212,6 +212,7 @@ function getOrCreateClosure(
  * @param targetRoot - Root function of the effect being triggered
  */
 function addGraphEdge(callerRoot: Function, targetRoot: Function) {
+	if (options.cycleHandling === 'none') return
 	// Skip if edge already exists
 	const triggers = effectTriggers.get(callerRoot)
 	if (triggers?.has(targetRoot)) {
@@ -337,6 +338,7 @@ function hasPathExcluding(start: Function, end: Function, exclude: Function): bo
  * @param effect - The effect being cleaned up
  */
 function cleanupEffectFromGraph(effect: ScopedCallback) {
+	if (options.cycleHandling === 'none') return
 	const root = getRoot(effect)
 
 	// Get closures before removing direct edges (needed for propagation)
@@ -459,6 +461,7 @@ const batchCleanups = new Set<ScopedCallback>()
  * Called once when batch starts or when new effects are added
  */
 function computeAllInDegrees(batch: BatchQueue): void {
+	if (options.cycleHandling === 'none') return
 	const activeEffect = getActiveEffect()
 	const activeRoot = activeEffect ? getRoot(activeEffect) : null
 
@@ -598,6 +601,10 @@ function getCyclePathForEdge(callerRoot: Function, targetRoot: Function): Functi
  * Checks if adding an edge would create a cycle
  * Uses causesClosure to check if callerRoot is already a cause of targetRoot
  * Self-loops (callerRoot === targetRoot) are explicitly ignored and return false
+ * 
+ * **Note**: This is the primary optimization benefit of the transitive closure system. 
+ * It allows detecting cycles in O(1) time before they are executed.
+ * 
  * @param callerRoot - Root of the effect that triggers
  * @param targetRoot - Root of the effect being triggered
  * @returns true if adding this edge would create a cycle
@@ -637,11 +644,16 @@ function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?:
 	const root = getRoot(effect)
 
 	// 1. Add to batch first (needed for cycle detection)
+	if (options.cycleHandling === 'none' && batchQueue.all.has(root)) {
+		// If already present in flat mode, remove it so that the next set puts it at the end
+		batchQueue.all.delete(root)
+	}
+
 	batchQueue.all.set(root, effect)
 
 	// 2. Add to global graph (if caller exists and not immediate) - USE ROOTS ONLY
 	// When immediate is true, don't create edges - the effect is not considered as a consequence
-	if (caller && !immediate) {
+	if (caller && !immediate && options.cycleHandling !== 'none') {
 		const callerRoot = getRoot(caller)
 
 		// Check for cycle BEFORE adding edge
@@ -808,14 +820,22 @@ function executeNext(effectuatedRoots: Function[]): any {
 	let nextEffect: ScopedCallback | null = null
 	let nextRoot: Function | null = null
 
-	// Find an effect with in-degree 0 (no dependencies in batch that still need execution)
-	// Using cached in-degrees for O(n) lookup instead of O(n²)
-	for (const [root, effect] of batchQueue!.all) {
-		const inDegree = batchQueue!.inDegrees.get(root) ?? 0
-		if (inDegree === 0) {
-			nextEffect = effect
-			nextRoot = root
-			break
+	if (options.cycleHandling === 'none') {
+		// In flat mode, we just take the first effect in the queue (FIFO)
+		const first = batchQueue!.all.entries().next().value
+		if (first) {
+			[nextRoot, nextEffect] = first
+		}
+	} else {
+		// Find an effect with in-degree 0 (no dependencies in batch that still need execution)
+		// Using cached in-degrees for O(n) lookup instead of O(n²)
+		for (const [root, effect] of batchQueue!.all) {
+			const inDegree = batchQueue!.inDegrees.get(root) ?? 0
+			if (inDegree === 0) {
+				nextEffect = effect
+				nextRoot = root
+				break
+			}
 		}
 	}
 

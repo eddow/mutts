@@ -1169,7 +1169,8 @@ For a full guide on debugging, including cycle detection and memoization discrep
 
 ### Quick Summary
 
-- **Cycle Detection**: Automatically catch circular dependencies via `reactiveOptions.cycleHandling`.
+- **Cycle Detection**: Automatically catch circular dependencies via `reactiveOptions.cycleHandling`. Note: Instant mathematical detection requires choosing a mode other than `'none'`.
+- **Flat Mode**: The default `reactiveOptions.cycleHandling = 'none'` provides maximum performance in high-frequency update scenarios by disabling graph maintenance.
 - **Memoization Discrepancy**: Detect "missing dependencies" by running computations twice during development using `reactiveOptions.onMemoizationDiscrepancy`.
 - **Global Hooks**: Use `reactiveOptions.touched`, `enter`, and `leave` to observe system activity.
 

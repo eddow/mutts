@@ -1,6 +1,12 @@
-import { effect, reactive, untracked } from 'mutts/reactive'
+import { effect, reactive, untracked, reactiveOptions as options } from 'mutts/reactive'
 
-describe('effect', () => {
+describe.each([
+	{ mode: 'throw' as const, name: 'topological' },
+	{ mode: 'none' as const, name: 'flat' },
+])('effect ($name mode)', ({ mode }) => {
+	beforeAll(() => {
+		options.cycleHandling = mode
+	})
 	describe('basic effect functionality', () => {
 		it('should run effect immediately', () => {
 			let count = 0

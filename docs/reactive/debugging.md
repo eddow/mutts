@@ -25,7 +25,7 @@ These hooks are called during the execution of effects and computed values.
 
 - **`beginChain(targets: Function[]) / endChain()`**: Called when a batch of effects starts and ends its execution.
 - **`maxEffectChain`**: (Default: `100`) Limits the depth of synchronous effect triggering to prevent stack overflows.
-- **`maxTriggerPerBatch`**: (Default: `10`) Limits how many times a single effect can be triggered within the same batch. Useful for detecting aggressive re-computation.
+- **`maxTriggerPerBatch`**: (Default: `10`) Limits how many times a single effect can be triggered within the same batch. Useful for detecting aggressive re-computation or infinite cycles in `cycleHandling: 'none'` mode.
 
 ## Cycle Detection
 
@@ -35,10 +35,20 @@ These hooks are called during the execution of effects and computed values.
 
 You can control how cycles are handled via `reactiveOptions.cycleHandling`:
 
-- **`'throw'`** (Default): Throws a `ReactiveError` with a detailed path.
+- **`'none'`** (Default): High-performance FIFO mode. Disables the dependency graph and topological sorting.
+- **`'throw'`**: Throws a `ReactiveError` with a detailed path.
 - **`'warn'`**: Logs a warning but breaks the cycle to allow the application to continue.
 - **`'break'`**: Silently breaks the cycle.
 - **`'strict'`**: Performs a graph check *before* execution to prevent cycles from even starting. This has the highest overhead.
+
+### Topological vs. Flat Mode Detection
+
+| Mode | `cycleHandling` | Detection Method | Error Code |
+| :--- | :--- | :--- | :--- |
+| **Topological** | `'throw'` (or other) | **Mathematical**: Analyzes the dependency graph. | `CYCLE_DETECTED` |
+| **Flat Mode** | `'none'` (Default) | **Heuristic**: Counts executions per batch. | `MAX_REACTION_EXCEEDED` |
+
+In **Topological mode**, the system maintains a transitive closure of all effects, allowing it to know instantly if an effect is its own cause. In **Flat mode**, the system is "blind" to the graph and relies on the execution threshold (`maxTriggerPerBatch`) to interrupt infinite loops.
 
 ## Memoization Discrepancy Detection
 

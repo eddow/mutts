@@ -1,6 +1,13 @@
 import { effect, reactive, reactiveOptions as options } from 'mutts/reactive'
 
 describe('effect cycle detection and ordering', () => {
+	const originalCycleHandling = options.cycleHandling
+	beforeEach(() => {
+		options.cycleHandling = 'throw'
+	})
+	afterEach(() => {
+		options.cycleHandling = originalCycleHandling
+	})
 	describe('cycle detection', () => {
 		it('should throw error when cycle is detected (default)', () => {
 			const state = reactive({ a: 0, b: 0 })

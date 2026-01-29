@@ -307,14 +307,22 @@ export const options = {
 		| ((cached: any, fresh: any, fn: Function, args: any[], cause: "calculation" | "comparison") => void)
 		| undefined,
 	/**
-	 * How to handle cycles detected in effect batches
-	 * - 'throw': Throw an error with cycle information (default, recommended for development)
-	 * - 'warn': Log a warning and break the cycle by executing one effect
-	 * - 'break': Silently break the cycle by executing one effect (recommended for production)
-	 * - 'strict': Prevent cycle creation by checking graph before execution (throws error)
-	 * @default 'throw'
+	 * How to handle cycles detected in effect batches.
+	 * 
+	 * - `'none'` (Default): High-performance mode. Disables dependency graph maintenance and 
+	 *   Topological Sorting in favor of a simple FIFO queue. Use this for trustworthy, acyclic UI code.
+	 *   Cycle detection is heuristic (uses execution counts).
+	 * 
+	 * - `'throw'`: Traditional Topological Sorting. Guarantees dependency order and catches 
+	 *   circular dependencies mathematically before execution.
+	 * 
+	 * - `'warn'`: Topological sorting, but logs a warning instead of throwing on cycles.
+	 * - `'break'`: Topological sorting, but silently breaks cycles.
+	 * - `'strict'`: Prevents cycle creation by checking the graph *during* dependency discovery.
+	 * 
+	 * @default 'none'
 	 */
-	cycleHandling: 'throw' as 'throw' | 'warn' | 'break' | 'strict',
+	cycleHandling: 'none' as 'none' | 'throw' | 'warn' | 'break' | 'strict',
 	/**
 	 * Internal flag used by memoization discrepancy detector to avoid counting calls in tests
 	 * @warning Do not modify this flag manually, this flag is given by the engine
