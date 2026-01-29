@@ -163,7 +163,7 @@ A comprehensive resource management system that provides automatic cleanup for o
 A comprehensive reactivity system. See the **[Introduction](./docs/reactive/core.md)** or browse the **[Table of Contents](./docs/reactive.md)**.
 
 **Key Features:**
-- **Core Reactivity**: Proxy-based property access tracking with `reactive()`, `effect()`, and `memoize()`
+- **Core Reactivity**: Proxy-based property access tracking with `reactive()`, `effect()`, `memoize()`, `project()`, and `scan()`
 - **Deep Watching**: Automatic tracking of nested object changes with `deepWatch()`
 - **Reactive Collections**: Specialized reactive versions of Array, Map, Set, WeakMap, and WeakSet
 - **Class Reactivity**: `@reactive` decorator and `ReactiveBase` for class-based reactivity

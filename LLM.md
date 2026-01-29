@@ -11,6 +11,8 @@
     *   `reactive(obj)`: Creates a reactive proxy.
     *   `effect(() => { ... })`: Runs side effects when dependencies change.
     *   `memoize(() => ...)`: Computed values.
+    *   `project(array, itemEffect)`: Efficient array-to-collection mapping. (reactive .map)
+    *   `scan(array, callback, initialValue)`: Reactive scan/accumulation (optimized for moves).
     *   **Opaque Effects**: `effect(fn, { opaque: true })` bypasses deep-touch optimizations to strict identity tracking.
 
 ### 2. Decorators (`mutts/decorator`)

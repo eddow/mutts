@@ -951,29 +951,30 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 			inDegrees: new Map(),
 		}
 
-		// Add initial effects
 		const caller = getActiveEffect()
-		for (let i = 0; i < effect.length; i++)
-			addToBatch(effect[i], caller, immediate === 'immediate')
-
 		const effectuatedRoots: ScopedCallback[] = []
-		computeAllInDegrees(batchQueue)
-		if (immediate) {
-			// Execute immediately (before batch returns)
-			const firstReturn: { value?: any } = {}
-			try {
+		const firstReturn: { value?: any } = {}
+
+		try {
+			if (immediate) {
+				// Execute initial effects in providing order
 				for (let i = 0; i < effect.length; i++) {
 					try {
 						const rv = effect[i]()
 						if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
 					} finally {
-						const root = getRoot(effect[i])
-						batchQueue.all.delete(root)
+						batchQueue.all.delete(getRoot(effect[i]))
 					}
 				}
-				// After immediate execution, execute any effects that were triggered during execution
-				// This is important for @atomic decorator - effects triggered inside should still run
-				while (batchQueue.all.size > 0) {
+			} else {
+				// Add initial effects to batch and compute dependencies
+				for (let i = 0; i < effect.length; i++) addToBatch(effect[i], caller, false)
+				computeAllInDegrees(batchQueue)
+			}
+
+			// Processing loop for all triggered effects and cleanups
+			while (batchQueue.all.size > 0 || batchCleanups.size > 0) {
+				if (batchQueue.all.size > 0) {
 					if (effectuatedRoots.length > options.maxEffectChain) {
 						const cycle = findCycleInChain(effectuatedRoots as any)
 						const trace = formatRoots(effectuatedRoots as any)
@@ -1013,98 +1014,27 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 								break
 						}
 					}
-					if (!batchQueue || batchQueue.all.size === 0) break
 					const rv = executeNext(effectuatedRoots)
-					// If executeNext() returned null but batch is not empty, it means a cycle was detected
-					// and an error was thrown, so we won't reach here
 					if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
-				}
-				const cleanups = Array.from(batchCleanups)
-				batchCleanups.clear()
-				for (const cleanup of cleanups) cleanup()
-				return firstReturn.value
-			} catch (error) {
-				throw error instanceof ReactiveError
-					? error
-					: new ReactiveError('Effects are broken', { code: ReactiveErrorCode.BrokenEffects, cause: error })
-			} finally {
-				activationRegistry = undefined
-				batchQueue = undefined
-				options.endChain()
-			}
-		} else {
-			// Execute in dependency order
-			const firstReturn: { value?: any } = {}
-			try {
-				// Outer loop: continue while there are effects OR cleanups pending.
-				// This ensures effects triggered by cleanups are not lost.
-				while (batchQueue.all.size > 0 || batchCleanups.size > 0) {
-					// Inner loop: execute all pending effects
-					while (batchQueue.all.size > 0) {
-						if (effectuatedRoots.length > options.maxEffectChain) {
-							const cycle = findCycleInChain(effectuatedRoots as any)
-							const trace = formatRoots(effectuatedRoots as any)
-							const message = cycle
-								? `Max effect chain reached (cycle detected: ${formatRoots(cycle)})`
-								: `Max effect chain reached (trace: ${trace})`
+				} else {
+					// Process cleanups. If they trigger more effects, they will be caught in the next iteration.
+					const cleanups = Array.from(batchCleanups)
+					batchCleanups.clear()
+					for (const cleanup of cleanups) cleanup()
 
-							const queuedRoots = batchQueue ? Array.from(batchQueue.all.keys()) : []
-							const queued = queuedRoots.map((r) => r.name || '<anonymous>')
-							const debugInfo = {
-								code: ReactiveErrorCode.MaxDepthExceeded,
-								effectuatedRoots,
-								cycle,
-								trace,
-								maxEffectChain: options.maxEffectChain,
-								queued: queued.slice(0, 50),
-								queuedCount: queued.length,
-								// Try to get causation for the last effect
-								causalChain:
-									effectuatedRoots.length > 0
-										? getTriggerChain(
-												batchQueue.all.get(effectuatedRoots[effectuatedRoots.length - 1])!
-											)
-										: [],
-							}
-							switch (options.maxEffectReaction) {
-								case 'throw':
-									throw new ReactiveError(`[reactive] ${message}`, debugInfo)
-								case 'debug':
-									// biome-ignore lint/suspicious/noDebugger: This is the whole point here
-									debugger
-									throw new ReactiveError(`[reactive] ${message}`, debugInfo)
-								case 'warn':
-									options.warn(
-										`[reactive] ${message} (queued: ${queued.slice(0, 10).join(', ')}${queued.length > 10 ? ', …' : ''})`
-									)
-									break
-							}
-						}
-						const rv = executeNext(effectuatedRoots)
-						// executeNext() returns null when batch is complete or cycle detected (throws error)
-						// But functions can legitimately return null, so we check batchQueue.all.size instead
-						if (batchQueue.all.size === 0) {
-							// Batch complete
-							break
-						}
-						// If executeNext() returned null but batch is not empty, it means a cycle was detected
-						// and an error was thrown, so we won't reach here
-						if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
-						// Note: executeNext() already removed it from batchQueue, so we track by count
-					}
-					// Process cleanups. If they trigger new effects, the outer loop will catch them.
-					if (batchCleanups.size > 0) {
-						const cleanups = Array.from(batchCleanups)
-						batchCleanups.clear()
-						for (const cleanup of cleanups) cleanup()
-					}
+					// In immediate mode, we traditionally don't process recursive effects from cleanups.
+					// If we want to keep that behavior: if (immediate) break
 				}
-				return firstReturn.value
-			} finally {
-				activationRegistry = undefined
-				batchQueue = undefined
-				options.endChain()
 			}
+			return firstReturn.value
+		} catch (error) {
+			throw error instanceof ReactiveError
+				? error
+				: new ReactiveError('Effects are broken', { code: ReactiveErrorCode.BrokenEffects, cause: error })
+		} finally {
+			activationRegistry = undefined
+			batchQueue = undefined
+			options.endChain()
 		}
 	}
 }

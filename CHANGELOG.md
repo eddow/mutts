@@ -8,6 +8,7 @@
 
 - prototype forwarding -> metaProtos
 - ReflectGet/ReflectSet -> FoolProof.get/set
+- removed old mapped/reduced, rewrote `scan`
 
 ## Bugfixes
 

@@ -85,7 +85,7 @@ function projectArray<SourceValue, ResultValue>(
 	source: readonly SourceValue[],
 	apply: ProjectCallback<SourceValue, number, ResultValue[], readonly SourceValue[], ResultValue>
 ): ProjectResult<ResultValue[]> {
-	const observedSource = reactive(source) as readonly SourceValue[]
+	source = reactive(source)
 	const target = reactive([] as ResultValue[])
 	const indexEffects = new Map<number, ScopedCallback>()
 
@@ -106,7 +106,7 @@ function projectArray<SourceValue, ResultValue>(
 	const depth = parent ? parent.depth + 1 : 0
 
 	const cleanupLength = effect(function projectArrayLengthEffect({ ascend }) {
-		const length = observedSource.length
+		const length = source.length
 		normalizeTargetLength(length)
 		const existing = Array.from(indexEffects.keys())
 		for (let i = 0; i < length; i++) {
@@ -117,10 +117,10 @@ function projectArray<SourceValue, ResultValue>(
 					const previous = untracked(() => target[index])
 					const accessBase = {
 						key: index,
-						source: observedSource,
-						get: () => FoolProof.get(observedSource as any, index, observedSource),
+						source,
+						get: () => FoolProof.get(source as any, index, source),
 						set: (value: SourceValue) =>
-							FoolProof.set(observedSource as any, index, value, observedSource),
+							FoolProof.set(source as any, index, value, source),
 						old: previous,
 					} as ProjectAccess<SourceValue, number, readonly SourceValue[], ResultValue[]>
 					defineAccessValue(accessBase)
@@ -129,7 +129,7 @@ function projectArray<SourceValue, ResultValue>(
 				})
 				setEffectName(stop, `project[${depth}]:${index}`)
 				effectProjectionMetadata.set(stop, {
-					source: observedSource,
+					source,
 					key: index,
 					target,
 					depth,
@@ -142,7 +142,7 @@ function projectArray<SourceValue, ResultValue>(
 	})
 
 	return makeCleanup(target, indexEffects, () => cleanupLength(), {
-		source: observedSource,
+		source,
 		target,
 		apply,
 		depth,
