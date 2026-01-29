@@ -4,8 +4,8 @@ import { withEffect } from './effect-context'
 import { effect, getActiveEffect, untracked } from './effects'
 import { isNonReactive, nonReactiveClass, nonReactiveObjects } from './non-reactive-state'
 import { unwrap } from './proxy-state'
-import { dependant } from './tracking'
 import { markWithRoot } from './registry'
+import { dependant } from './tracking'
 import {
 	type DependencyAccess,
 	nonReactiveMark,
@@ -89,13 +89,11 @@ function watchObject(
 ): ScopedCallback {
 	const myParentEffect = getActiveEffect()
 	if (deep) return deepWatch(value, changed, { immediate })!
-	return effect(
-		function watchObjectEffect() {
-			dependant(value)
-			if (immediate) withEffect(myParentEffect, () => changed(value))
-			immediate = true
-		}
-	)
+	return effect(function watchObjectEffect() {
+		dependant(value)
+		if (immediate) withEffect(myParentEffect, () => changed(value))
+		immediate = true
+	})
 }
 
 function watchCallBack<T>(
@@ -110,22 +108,16 @@ function watchCallBack<T>(
 		markWithRoot(function watchCallBackEffect(access) {
 			const newValue = value(access)
 			if (oldValue !== newValue)
-				withEffect(
-					myParentEffect,
-					() => {
-						if (oldValue === unsetYet) {
-							if (immediate) changed(newValue)
-						} else changed(newValue, oldValue)
-						oldValue = newValue
-						if (deep) {
-							if (deepCleanup) deepCleanup()
-							deepCleanup = deepWatch(
-								newValue as object,
-								(value) => changed(value as T, value as T)
-							)
-						}
+				withEffect(myParentEffect, () => {
+					if (oldValue === unsetYet) {
+						if (immediate) changed(newValue)
+					} else changed(newValue, oldValue)
+					oldValue = newValue
+					if (deep) {
+						if (deepCleanup) deepCleanup()
+						deepCleanup = deepWatch(newValue as object, (value) => changed(value as T, value as T))
 					}
-				)
+				})
 		}, value)
 	)
 	return () => {
@@ -215,11 +207,9 @@ export function derived<T>(compute: (dep: DependencyAccess) => T): {
 	return cleanedBy(
 		rv,
 		untracked(() =>
-			effect(
-				function derivedEffect(access) {
-					rv.value = compute(access)
-				}
-			)
+			effect(function derivedEffect(access) {
+				rv.value = compute(access)
+			})
 		)
 	)
 }

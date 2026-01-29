@@ -22,21 +22,21 @@ const reverseRoots = new WeakMap<any, WeakRef<Function>>()
  * @param root - The root function
  * @returns The marked function
  */
-export function markWithRoot<T extends Function>(fn: T, root: any): T {	
+export function markWithRoot<T extends Function>(fn: T, root: any): T {
 	// Check for collision
 	const existingRef = reverseRoots.get(root)
 	const existing = existingRef?.deref()
-		
+
 	if (existing && existing !== fn) {
 		const rootName = root.name || 'anonymous'
 		const existingName = existing.name || 'anonymous'
 		const fnName = fn.name || 'anonymous'
 		throw new Error(
 			`[reactive] Abusive Shared Root detected: Root '${rootName}' is already identifying function '${existingName}'. ` +
-			`Cannot reuse it for '${fnName}'. Shared roots cause lost updates and broken identity logic.`
+				`Cannot reuse it for '${fnName}'. Shared roots cause lost updates and broken identity logic.`
 		)
 	}
-	
+
 	// Always update the map so subsequent checks find this one
 	// (Last writer wins for the check)
 	reverseRoots.set(root, new WeakRef(fn))
@@ -44,9 +44,9 @@ export function markWithRoot<T extends Function>(fn: T, root: any): T {
 	// Mark fn with the new root
 	return Object.defineProperty(fn, rootFunction, {
 		value: getRoot(root),
-			writable: false,
-		})
-	}
+		writable: false,
+	})
+}
 
 /**
  * Gets the root function of a function for effect tracking
@@ -54,7 +54,7 @@ export function markWithRoot<T extends Function>(fn: T, root: any): T {
  * @returns The root function
  */
 export function getRoot<T extends Function | undefined>(fn: T): T {
-	while(fn && rootFunction in fn) fn = fn[rootFunction] as T
+	while (fn && rootFunction in fn) fn = fn[rootFunction] as T
 	return fn
 }
 

@@ -1,9 +1,9 @@
+import { FoolProof } from '../utils'
 import { touched } from './change'
 import { makeReactiveEntriesIterator, makeReactiveIterator } from './non-reactive'
 import { reactive } from './proxy'
 import { unwrap } from './proxy-state'
 import { dependant } from './tracking'
-
 
 function* index(i: number, { length = true } = {}): IterableIterator<number | 'length'> {
 	if (length) yield 'length'
@@ -43,9 +43,30 @@ export abstract class Indexer extends Array {
 		}
 	}
 }
+const indexLess = { get: FoolProof.get, set: FoolProof.set }
+Object.assign(FoolProof, {
+	get(obj: any, prop: any, receiver: any) {
+		if (obj instanceof Array && typeof prop === 'string') {
+			if (prop === 'length') return Indexer.prototype.getLength.call(obj)
+			const index = parseInt(prop)
+			if (!Number.isNaN(index)) return Indexer.prototype.get.call(obj, index)
+		}
+		return indexLess.get(obj, prop, receiver)
+	},
+	set(obj: any, prop: any, value: any, receiver: any) {
+		if (obj instanceof Array && typeof prop === 'string') {
+			if (prop === 'length') return Indexer.prototype.setLength.call(obj, value)
+			const index = parseInt(prop)
+			if (!Number.isNaN(index)) return Indexer.prototype.set.call(obj, index, value)
+		}
+		return indexLess.set(obj, prop, value, receiver)
+	},
+})
 
 export abstract class ReactiveArray extends Array {
-
+	toJSON() {
+		return this
+	}
 	get [Symbol.toStringTag]() {
 		return 'ReactiveArray'
 	}
@@ -138,10 +159,7 @@ export abstract class ReactiveArray extends Array {
 		dependant(this)
 		const unwrappedSearch = unwrap(searchElement)
 		// Check both wrapped and unwrapped versions since array may contain either
-		return (
-			this.includes(unwrappedSearch, fromIndex) ||
-			this.includes(searchElement, fromIndex)
-		)
+		return this.includes(unwrappedSearch, fromIndex) || this.includes(searchElement, fromIndex)
 	}
 
 	find(predicate: (this: any, value: any, index: number, obj: any[]) => boolean, thisArg?: any): any
@@ -275,7 +293,7 @@ export abstract class ReactiveArray extends Array {
 
 	// TODO: re-implement for fun dependencies? (eg - every only check the first ones until it find some),
 	// no need to make it dependant on indexes after the found one
-	every<S extends any>(
+	every<S>(
 		predicate: (value: any, index: number, array: any[]) => value is S,
 		thisArg?: any
 	): this is S[]
@@ -322,11 +340,7 @@ export abstract class ReactiveArray extends Array {
 		try {
 			return reactive(this.shift())
 		} finally {
-			touched(
-				this,
-				{ type: 'bunch', method: 'shift' },
-				range(0, this.length + 1, { length: true })
-			)
+			touched(this, { type: 'bunch', method: 'shift' }, range(0, this.length + 1, { length: true }))
 		}
 	}
 
@@ -356,8 +370,8 @@ export abstract class ReactiveArray extends Array {
 				deleteCount === items.length
 					? range(start, start + deleteCount)
 					: range(start, oldLength + Math.max(items.length - deleteCount, 0), {
-						length: true,
-					})
+							length: true,
+						})
 			)
 		}
 	}

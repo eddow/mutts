@@ -175,6 +175,7 @@ export enum ReactiveErrorCode {
 	MaxReactionExceeded = 'MAX_REACTION_EXCEEDED',
 	WriteInComputed = 'WRITE_IN_COMPUTED',
 	TrackingError = 'TRACKING_ERROR',
+	BrokenEffects = 'BROKEN_EFFECTS',
 }
 
 export type CycleDebugInfo = {
@@ -195,6 +196,11 @@ export type MaxReactionDebugInfo = {
 	effect: string
 }
 
+export type BrokenEffectsDebugInfo = {
+	code: ReactiveErrorCode.BrokenEffects
+	cause: any
+}
+
 export type GenericDebugInfo = {
 	code: ReactiveErrorCode
 	causalChain?: string[]
@@ -206,6 +212,7 @@ export type ReactiveDebugInfo =
 	| CycleDebugInfo
 	| MaxDepthDebugInfo
 	| MaxReactionDebugInfo
+	| BrokenEffectsDebugInfo
 	| GenericDebugInfo
 
 /**
@@ -218,6 +225,14 @@ export class ReactiveError extends Error {
 	) {
 		super(message)
 		this.name = 'ReactiveError'
+	}
+
+	get code(): ReactiveErrorCode | undefined {
+		return this.debugInfo?.code
+	}
+
+	get cause(): any {
+		return (this.debugInfo as any)?.cause
 	}
 }
 
@@ -288,14 +303,14 @@ export const options = {
 	 * Callback called when a memoization discrepancy is detected (debug only)
 	 * When defined, memoized functions will run a second time (untracked) to verify consistency.
 	 * If the untracked run returns a different value than the cached one, this callback is triggered.
-	 * 
+	 *
 	 * This is the primary tool for detecting missing reactive dependencies in computed values.
-	 * 
+	 *
 	 * @param cached - The value currently in the memoization cache
 	 * @param fresh - The value obtained by re-running the function untracked
 	 * @param fn - The memoized function itself
 	 * @param args - Arguments passed to the function
-	 * 
+	 *
 	 * @example
 	 * ```typescript
 	 * reactiveOptions.onMemoizationDiscrepancy = (cached, fresh, fn, args) => {
@@ -304,22 +319,28 @@ export const options = {
 	 * ```
 	 */
 	onMemoizationDiscrepancy: undefined as
-		| ((cached: any, fresh: any, fn: Function, args: any[], cause: "calculation" | "comparison") => void)
+		| ((
+				cached: any,
+				fresh: any,
+				fn: Function,
+				args: any[],
+				cause: 'calculation' | 'comparison'
+		  ) => void)
 		| undefined,
 	/**
 	 * How to handle cycles detected in effect batches.
-	 * 
-	 * - `'none'` (Default): High-performance mode. Disables dependency graph maintenance and 
+	 *
+	 * - `'none'` (Default): High-performance mode. Disables dependency graph maintenance and
 	 *   Topological Sorting in favor of a simple FIFO queue. Use this for trustworthy, acyclic UI code.
 	 *   Cycle detection is heuristic (uses execution counts).
-	 * 
-	 * - `'throw'`: Traditional Topological Sorting. Guarantees dependency order and catches 
+	 *
+	 * - `'throw'`: Traditional Topological Sorting. Guarantees dependency order and catches
 	 *   circular dependencies mathematically before execution.
-	 * 
+	 *
 	 * - `'warn'`: Topological sorting, but logs a warning instead of throwing on cycles.
 	 * - `'break'`: Topological sorting, but silently breaks cycles.
 	 * - `'strict'`: Prevents cycle creation by checking the graph *during* dependency discovery.
-	 * 
+	 *
 	 * @default 'none'
 	 */
 	cycleHandling: 'none' as 'none' | 'throw' | 'warn' | 'break' | 'strict',

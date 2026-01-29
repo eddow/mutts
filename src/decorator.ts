@@ -62,7 +62,11 @@ type DDMethod<T> = (
 	name: PropertyKey
 ) => ((this: T, ...args: any[]) => any) | void
 
-type DDGetter<T> = (original: (this: T) => any, target: any, name: PropertyKey) => ((this: T) => any) | void
+type DDGetter<T> = (
+	original: (this: T) => any,
+	target: any,
+	name: PropertyKey
+) => ((this: T) => any) | void
 
 type DDSetter<T> = (
 	original: (this: T, value: any) => void,

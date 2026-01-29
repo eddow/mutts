@@ -1,4 +1,5 @@
 import { getActiveEffect } from './effect-context'
+import { unwrap } from './proxy-state'
 import {
 	effectToReactiveObjects,
 	getRoot,
@@ -7,7 +8,6 @@ import {
 	trackingDisabledEffects,
 	watchers,
 } from './registry'
-import { unwrap } from './proxy-state'
 import { allProps, type ScopedCallback } from './types'
 
 export function getTrackingDisabled(): boolean {
@@ -26,8 +26,6 @@ export function setTrackingDisabled(value: boolean): void {
 	if (value) trackingDisabledEffects.add(root)
 	else trackingDisabledEffects.delete(root)
 }
-
-
 
 /**
  * Marks a property as a dependency of the current effect

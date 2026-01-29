@@ -1,4 +1,4 @@
-import { atomic, effect, reactive } from 'mutts/reactive'
+import { atomic, effect, reactive, ReactiveErrorCode } from 'mutts/reactive'
 
 describe('@atomic decorator', () => {
 	describe('basic functionality', () => {
@@ -375,10 +375,15 @@ describe('@atomic decorator', () => {
 
 			expect(effectCount).toBe(1)
 
-			// First method should throw error
-			expect(() => {
+			// First method should throw BrokenEffects error wrapping the original error
+			try {
 				instance.updateWithError()
-			}).toThrow('Test error')
+				fail('Should have thrown')
+			} catch (e: any) {
+				expect(e.message).toBe('Effects are broken')
+				expect(e.debugInfo.code).toBe(ReactiveErrorCode.BrokenEffects)
+				expect(e.debugInfo.cause.message).toBe('Test error')
+			}
 
 			// Effects don't run when atomic method throws an error
 			expect(effectCount).toBe(1)
@@ -387,7 +392,7 @@ describe('@atomic decorator', () => {
 
 			// Second method should work normally
 			instance.updateNormal()
-			expect(effectCount).toBe(2) // Effects run after successful atomic method
+			expect(effectCount).toBe(1) // Reactivity is broken for this effect because it was in the failing batch
 			expect(state.b).toBe(3)
 		})
 
@@ -424,7 +429,14 @@ describe('@atomic decorator', () => {
 
 			expect(effectCount).toBe(1)
 
-			expect(() => instance.outerUpdate()).toThrow('Nested error')
+			try {
+				instance.outerUpdate()
+				fail('Should have thrown')
+			} catch (e: any) {
+				expect(e.message).toBe('Effects are broken')
+				expect(e.code).toBe(ReactiveErrorCode.BrokenEffects)
+				expect(e.cause.message).toBe('Nested error')
+			}
 			// Only changes before error should be applied
 			expect(state.a).toBe(1)
 			expect(state.b).toBe(2)

@@ -9,10 +9,6 @@ import {
 	withEffectStack,
 } from './effect-context'
 import {
-	getTrackingDisabled,
-	setTrackingDisabled,
-} from './tracking'
-import {
 	effectChildren,
 	effectParent,
 	effectToReactiveObjects,
@@ -20,7 +16,9 @@ import {
 	markWithRoot,
 	watchers,
 } from './registry'
+import { getTrackingDisabled, setTrackingDisabled } from './tracking'
 import {
+	cleanup as cleanupSymbol,
 	type DependencyAccess,
 	type EffectOptions,
 	type Evolution,
@@ -29,7 +27,6 @@ import {
 	ReactiveErrorCode,
 	// type AsyncExecutionMode,
 	type ScopedCallback,
-	cleanup as cleanupSymbol,
 	stopped,
 } from './types'
 
@@ -59,8 +56,8 @@ function formatRoots(roots: Function[], limit = 20): string {
 	return `${start.join(' → ')} ... (${names.length - 15} more) ... ${end.join(' → ')}`
 }
 
-import { ensureZoneHooked } from './zone'
 import { unwrap } from './proxy-state'
+import { ensureZoneHooked } from './zone'
 
 type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
 
@@ -601,10 +598,10 @@ function getCyclePathForEdge(callerRoot: Function, targetRoot: Function): Functi
  * Checks if adding an edge would create a cycle
  * Uses causesClosure to check if callerRoot is already a cause of targetRoot
  * Self-loops (callerRoot === targetRoot) are explicitly ignored and return false
- * 
- * **Note**: This is the primary optimization benefit of the transitive closure system. 
+ *
+ * **Note**: This is the primary optimization benefit of the transitive closure system.
  * It allows detecting cycles in O(1) time before they are executed.
- * 
+ *
  * @param callerRoot - Root of the effect that triggers
  * @param targetRoot - Root of the effect being triggered
  * @returns true if adding this edge would create a cycle
@@ -634,8 +631,7 @@ function wouldCreateCycle(callerRoot: Function, targetRoot: Function): boolean {
  * @param immediate - If true, don't create edges in the dependency graph
  */
 function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?: boolean) {
-	const cleanupFn = (effect as any)[cleanupSymbol]
-	if (cleanupFn) cleanupFn()
+	(effect as any)[cleanupSymbol]?.()
 	// If the effect was stopped during cleanup (e.g. lazy memoization), don't add it to the batch
 	if ((effect as any)[stopped]) return
 
@@ -824,7 +820,7 @@ function executeNext(effectuatedRoots: Function[]): any {
 		// In flat mode, we just take the first effect in the queue (FIFO)
 		const first = batchQueue!.all.entries().next().value
 		if (first) {
-			[nextRoot, nextEffect] = first
+			;[nextRoot, nextEffect] = first
 		}
 	} else {
 		// Find an effect with in-degree 0 (no dependencies in batch that still need execution)
@@ -928,9 +924,8 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 		// Nested batch - add to existing
 		options?.chain(roots, getRoot(getActiveEffect()))
 		const caller = getActiveEffect()
-		for (let i = 0; i < effect.length; i++) {
+		for (let i = 0; i < effect.length; i++)
 			addToBatch(effect[i], caller, immediate === 'immediate')
-		}
 		if (immediate) {
 			const firstReturn: { value?: any } = {}
 			// Execute immediately (before batch returns)
@@ -958,9 +953,8 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 
 		// Add initial effects
 		const caller = getActiveEffect()
-		for (let i = 0; i < effect.length; i++) {
+		for (let i = 0; i < effect.length; i++)
 			addToBatch(effect[i], caller, immediate === 'immediate')
-		}
 
 		const effectuatedRoots: ScopedCallback[] = []
 		computeAllInDegrees(batchQueue)
@@ -1029,6 +1023,10 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 				batchCleanups.clear()
 				for (const cleanup of cleanups) cleanup()
 				return firstReturn.value
+			} catch (error) {
+				throw error instanceof ReactiveError
+					? error
+					: new ReactiveError('Effects are broken', { code: ReactiveErrorCode.BrokenEffects, cause: error })
 			} finally {
 				activationRegistry = undefined
 				batchQueue = undefined
@@ -1284,6 +1282,28 @@ export function effect(
 	}
 	// Mark the runEffect callback with the original function as its root
 	markWithRoot(runEffect, fn)
+	function augmentedRv(rv: ScopedCallback) {
+		return Object.defineProperties(rv, {
+			[stopped]: {
+				get() {
+					return effectStopped
+				},
+			},
+			[cleanupSymbol]: {
+				value: () => {
+					if (cleanup) {
+						const prevCleanup = cleanup
+						cleanup = null
+						untracked(() => prevCleanup())
+					}
+				},
+			},
+		}) as ScopedCallback & {
+			[stopped]: boolean
+			[cleanupSymbol]: () => void
+		}
+	}
+	augmentedRv(runEffect)
 
 	// Register strict mode if enabled
 	if (effectOptions?.opaque) {
@@ -1315,27 +1335,6 @@ export function effect(
 		// Clean up dependency graph edges
 		cleanupEffectFromGraph(runEffect)
 		fr.unregister(stopEffect)
-	}
-	function augmentedRv(rv: ScopedCallback) {
-		return Object.defineProperties(rv, {
-			[stopped]: {
-				get() {
-					return effectStopped
-				},
-			},
-			[cleanupSymbol]: {
-				value: () => {
-					if (cleanup) {
-						const prevCleanup = cleanup
-						cleanup = null
-						untracked(() => prevCleanup())
-					}
-				},
-			},
-		}) as ScopedCallback & {
-			[stopped]: boolean
-			[cleanupSymbol]: () => void
-		}
 	}
 	if (isRootEffect) {
 		const callIfCollected = augmentedRv(() => stopEffect())
@@ -1457,12 +1456,13 @@ export function biDi<T>(
 	effect(
 		markWithRoot(() => {
 			const newValue = get()
-			if(unwrap(newValue) !== programatticallySetValue)
-				received(newValue)
+			if (unwrap(newValue) !== programatticallySetValue) received(newValue)
 		}, received)
 	)
-	return set ? atomic((value: T) => {
-		programatticallySetValue = unwrap(value)
-		set(value)
-	}) : () => {}
+	return set
+		? atomic((value: T) => {
+				programatticallySetValue = unwrap(value)
+				set(value)
+			})
+		: () => {}
 }

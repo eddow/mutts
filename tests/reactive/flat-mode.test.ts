@@ -1,15 +1,15 @@
-import { effect, reactive, reactiveOptions as options } from 'mutts/reactive'
+import { effect, reactive, reactiveOptions as options, atomic, project } from 'mutts/reactive'
 
 describe('flat reactivity mode', () => {
-	let beforeReactivity: any
-	beforeAll(() => {
-		beforeReactivity = options.cycleHandling
-		options.cycleHandling = 'none'
-	})
+    let originalCycleHandling = options.cycleHandling
 
-	afterAll(() => {
-		options.cycleHandling = beforeReactivity
-	})
+    beforeEach(() => {
+        options.cycleHandling = 'none'
+    })
+
+    afterEach(() => {
+        options.cycleHandling = originalCycleHandling
+    })
 
 	it('should push already present effects to the end of the batch (FIFO)', () => {
 		const state = reactive({ a: 0, b: 0 })
@@ -73,14 +73,6 @@ describe('flat reactivity mode', () => {
 		})
 
 		sequence.length = 0
-
-		// We want to trigger a batch manually to control the order if possible, 
-		// but touched() handles it.
-		// If we change 'a' and 'b' in the same batch (e.g. via atomic)
-		const action = () => {
-			state.a++
-			state.b++
-		}
 		
 		// In creation order: E1, E2, E3.
 		// state.a++ triggers E1, E2. Queue: [E1, E2]
@@ -122,5 +114,30 @@ describe('flat reactivity mode', () => {
 		
 		state.trigger++
 		expect(sequence).toEqual(['E1', 'E2'])
+	})
+
+	it('should NOT update items that are being removed during truncation (simultaneous change)', () => {
+		const source = reactive([{ val: 1 }, { val: 2 }, { val: 3 }, { val: 4 }, { val: 5 }])
+		const updates: number[] = []
+
+		const projection = project(source, ({ key, get }) => {
+			const item = get()
+			const val = item.val // watch item.val
+			updates.push(key)
+			return `val-${val}`
+		})
+
+		// Initial projection runs for all 5 items
+		expect(updates).toEqual([0, 1, 2, 3, 4])
+		atomic(() => {
+			source.length = 0
+			source.push({ val: 42 })
+		})()
+
+		// If projectArrayIndexEffect(3) runs before projectArrayLengthEffect, 
+		// it will record 3 in 'updates'.
+		expect(updates).toEqual([0, 1, 2, 3, 4, 0])
+		expect([...projection]).toEqual(["val-42"])
+		expect(projection.length).toBe(1)
 	})
 })

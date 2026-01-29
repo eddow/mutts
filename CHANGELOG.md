@@ -7,6 +7,7 @@
 ## Refactoring
 
 - prototype forwarding -> metaProtos
+- ReflectGet/ReflectSet -> FoolProof.get/set
 
 ## Bugfixes
 

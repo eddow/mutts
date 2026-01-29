@@ -1,11 +1,9 @@
+import { contentRef } from '../utils'
 import { touched, touched1 } from './change'
 import { notifyPropertyChange } from './deep-touch'
 import { makeReactiveEntriesIterator, makeReactiveIterator } from './non-reactive'
 import { reactive } from './proxy'
 import { dependant } from './tracking'
-import { bunch } from './utils'
-
-const native = Symbol('native')
 
 /**
  * Reactive wrapper around JavaScript's WeakMap class
@@ -21,18 +19,18 @@ export abstract class ReactiveWeakMap<K extends object, V> extends WeakMap<K, V>
 		const hadKey = this.has(key)
 		const result = this.delete(key)
 
-		if (hadKey) touched1(bunch(this), { type: 'del', prop: key }, key)
+		if (hadKey) touched1(contentRef(this), { type: 'del', prop: key }, key)
 
 		return result
 	}
 
 	get(key: K): V | undefined {
-		dependant(bunch(this), key)
+		dependant(contentRef(this), key)
 		return reactive(this.get(key))
 	}
 
 	has(key: K): boolean {
-		dependant(bunch(this), key)
+		dependant(contentRef(this), key)
 		return this.has(key)
 	}
 
@@ -43,7 +41,7 @@ export abstract class ReactiveWeakMap<K extends object, V> extends WeakMap<K, V>
 		this.set(key, reactiveValue)
 
 		if (!hadKey || oldValue !== reactiveValue) {
-			notifyPropertyChange(bunch(this), key, oldValue, reactiveValue, hadKey)
+			notifyPropertyChange(contentRef(this), key, oldValue, reactiveValue, hadKey)
 		}
 
 		return this
@@ -73,32 +71,32 @@ export abstract class ReactiveMap<K, V> extends Map<K, V> {
 			const evolution = { type: 'bunch', method: 'clear' } as const
 			// Clear triggers all effects since all keys are affected
 			touched1(this, evolution, 'size')
-			touched(bunch(this), evolution)
+			touched(contentRef(this), evolution)
 		}
 	}
 
 	entries(): Generator<[K, V]> {
-		dependant(bunch(this))
+		dependant(contentRef(this))
 		return makeReactiveEntriesIterator(this.entries())
 	}
 
 	forEach(callbackfn: (value: V, key: K, map: Map<K, V>) => void, thisArg?: any): void {
-		dependant(bunch(this))
+		dependant(contentRef(this))
 		this.forEach(callbackfn, thisArg)
 	}
 
 	keys(): MapIterator<K> {
-		dependant(bunch(this))
+		dependant(contentRef(this))
 		return this.keys()
 	}
 
 	values(): Generator<V> {
-		dependant(bunch(this))
+		dependant(contentRef(this))
 		return makeReactiveIterator(this.values())
 	}
 
 	[Symbol.iterator](): MapIterator<[K, V]> {
-		dependant(bunch(this))
+		dependant(contentRef(this))
 		const nativeIterator = this[Symbol.iterator]()
 		return {
 			next() {
@@ -125,7 +123,7 @@ export abstract class ReactiveMap<K, V> extends Map<K, V> {
 
 		if (hadKey) {
 			const evolution = { type: 'del', prop: key } as const
-			touched1(bunch(this), evolution, key)
+			touched1(contentRef(this), evolution, key)
 			touched1(this, evolution, 'size')
 		}
 
@@ -133,12 +131,12 @@ export abstract class ReactiveMap<K, V> extends Map<K, V> {
 	}
 
 	get(key: K): V | undefined {
-		dependant(bunch(this), key)
+		dependant(contentRef(this), key)
 		return reactive(this.get(key))
 	}
 
 	has(key: K): boolean {
-		dependant(bunch(this), key)
+		dependant(contentRef(this), key)
 		return this.has(key)
 	}
 
@@ -149,7 +147,7 @@ export abstract class ReactiveMap<K, V> extends Map<K, V> {
 		this.set(key, reactiveValue)
 
 		if (!hadKey || oldValue !== reactiveValue) {
-			notifyPropertyChange(bunch(this), key, oldValue, reactiveValue, hadKey)
+			notifyPropertyChange(contentRef(this), key, oldValue, reactiveValue, hadKey)
 			// Also notify size change for Map (WeakMap doesn't track size)
 			const evolution = { type: hadKey ? 'set' : 'add', prop: key } as const
 			touched1(this, evolution, 'size')

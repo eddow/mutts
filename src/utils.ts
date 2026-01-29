@@ -1,4 +1,3 @@
-
 type ElementTypes<T extends readonly unknown[]> = {
 	[K in keyof T]: T[K] extends readonly (infer U)[] ? U : T[K]
 }
@@ -87,29 +86,29 @@ export function renamed<F extends Function>(fct: F, name: string): F {
 		},
 	})
 }
-
-export function ReflectGet(obj: any, prop: any, receiver: any) {
-	// Check if Node is available and obj is an instance of Node
-	if (typeof Node !== 'undefined' && obj instanceof Node) return (obj as any)[prop]
-	return Reflect.get(obj, prop, receiver)
-}
-
-export function ReflectSet(obj: any, prop: any, value: any, receiver: any) {
-	// Check if Node is available and obj is an instance of Node
-	if (typeof Node !== 'undefined' && obj instanceof Node) {
-		;(obj as any)[prop] = value
-		return true
-	}
-	if (!(obj instanceof Object) && !Reflect.has(obj, prop)) {
-		Object.defineProperty(obj, prop, {
-			value,
-			configurable: true,
-			writable: true,
-			enumerable: true,
-		})
-		return true
-	}
-	return Reflect.set(obj, prop, value, receiver)
+export const FoolProof = {
+	get(obj: any, prop: any, receiver: any) {
+		// Check if Node is available and obj is an instance of Node
+		if (typeof Node !== 'undefined' && obj instanceof Node) return (obj as any)[prop]
+		return Reflect.get(obj, prop, receiver)
+	},
+	set(obj: any, prop: any, value: any, receiver: any) {
+		// Check if Node is available and obj is an instance of Node
+		if (typeof Node !== 'undefined' && obj instanceof Node) {
+			;(obj as any)[prop] = value
+			return true
+		}
+		if (!(obj instanceof Object) && !Reflect.has(obj, prop)) {
+			Object.defineProperty(obj, prop, {
+				value,
+				configurable: true,
+				writable: true,
+				enumerable: true,
+			})
+			return true
+		}
+		return Reflect.set(obj, prop, value, receiver)
+	},
 }
 
 export function isOwnAccessor(obj: any, prop: any) {
@@ -127,7 +126,6 @@ export function isOwnAccessor(obj: any, prop: any) {
  * @returns True if values are deeply equal
  */
 export function deepCompare(a: any, b: any, cache = new Map<object, Set<object>>()): boolean {
-
 	if (a === b) return true
 
 	if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) {
@@ -138,7 +136,10 @@ export function deepCompare(a: any, b: any, cache = new Map<object, Set<object>>
 	const protoA = Object.getPrototypeOf(a)
 	const protoB = Object.getPrototypeOf(b)
 	if (protoA !== protoB) {
-		console.warn(`[deepCompare] prototype mismatch:`, { nameA: a?.constructor?.name, nameB: b?.constructor?.name })
+		console.warn(`[deepCompare] prototype mismatch:`, {
+			nameA: a?.constructor?.name,
+			nameB: b?.constructor?.name,
+		})
 		return false
 	}
 	// Circular reference protection
@@ -231,20 +232,45 @@ export function deepCompare(a: any, b: any, cache = new Map<object, Set<object>>
 	const keysA = Object.keys(a)
 	const keysB = Object.keys(b)
 	if (keysA.length !== keysB.length) {
-		console.warn(`[deepCompare] keys length mismatch:`, { lenA: keysA.length, lenB: keysB.length, keysA, keysB, a, b })
+		console.warn(`[deepCompare] keys length mismatch:`, {
+			lenA: keysA.length,
+			lenB: keysB.length,
+			keysA,
+			keysB,
+			a,
+			b,
+		})
 		return false
 	}
 
 	for (const key of keysA) {
-		if (!Object.prototype.hasOwnProperty.call(b, key)) {
+		if (!Object.hasOwn(b, key)) {
 			console.warn(`[deepCompare] missing key ${String(key)} in B`)
 			return false
 		}
 		if (!deepCompare(a[key], b[key], cache)) {
-			console.warn(`[deepCompare] value mismatch for key ${String(key)}:`, { valA: a[key], valB: b[key] })
+			console.warn(`[deepCompare] value mismatch for key ${String(key)}:`, {
+				valA: a[key],
+				valB: b[key],
+			})
 			return false
 		}
 	}
 
 	return true
+}
+
+
+const contentRefs = new WeakMap<object, any>()
+export function contentRef(container: object) {
+	if (!contentRefs.has(container))
+		contentRefs.set(
+			container,
+			Object.seal(
+				Object.create(null, {
+					contentOf: { value: container, writable: false, configurable: false },
+				})
+			)
+		)
+	return contentRefs.get(container)
 }

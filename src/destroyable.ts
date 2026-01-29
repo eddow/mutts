@@ -117,7 +117,7 @@ export function Destroyable<
 		base = undefined
 	}
 	if (!base) {
-		base = class { } as T
+		base = class {} as T
 	}
 
 	return class Destroyable extends (base as T) {

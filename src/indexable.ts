@@ -174,7 +174,9 @@ export function Indexable<Items, Base extends abstract new (...args: any[]) => a
 							enumerable: true,
 							configurable: true,
 							get: () => accessor.get!.call(this as any, numProp),
-							set: accessor.set ? (v: any) => accessor.set!.call(this as any, numProp, v) : undefined,
+							set: accessor.set
+								? (v: any) => accessor.set!.call(this as any, numProp, v)
+								: undefined,
 						}
 					}
 				}

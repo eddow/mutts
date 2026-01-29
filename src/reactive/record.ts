@@ -1,10 +1,9 @@
-import { ReflectGet, ReflectSet } from '../utils'
+import { FoolProof } from '../utils'
 import { touched1 } from './change'
 import { effect } from './effects'
 import { cleanedBy, cleanup } from './interface'
 import { reactive } from './proxy'
 import { type ScopedCallback } from './types'
-import { ReflectIGet, ReflectISet } from './utils'
 
 /**
  * Provides type-safe access to a source object's property within the organized callback.
@@ -148,9 +147,9 @@ export function organized<
 					const sourceKey = key as keyof Source
 					const accessBase = {
 						key: sourceKey,
-						get: () => ReflectIGet(observedSource, sourceKey, observedSource),
+						get: () => FoolProof.get(observedSource, sourceKey, observedSource),
 						set: (value: Source[typeof sourceKey]) =>
-							ReflectISet(observedSource, sourceKey, value, observedSource),
+							FoolProof.set(observedSource, sourceKey, value, observedSource),
 					}
 					Object.defineProperty(accessBase, 'value', {
 						get: accessBase.get,

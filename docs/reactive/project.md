@@ -12,7 +12,7 @@
 
 - `memoize` caches results but invalidates on `Map.set`, so large effects still re-run.
 - `organized` (designed for `Record` sources) creates per-key effects so downstream work reruns only for the touched key; this matches the desired behaviour.
-- **Gap:** `organized` operates on plain objects: key enumeration relies on property iteration and `ReflectGet/Set`. Registers and other keyed collections (`Map`, `Register`, custom stores) need the same per-entry orchestration without converting to records.
+- **Gap:** `organized` operates on plain objects: key enumeration relies on property iteration and `FoolProof.get/set`. Registers and other keyed collections (`Map`, `Register`, custom stores) need the same per-entry orchestration without converting to records.
 
 ### Completed Evolution: `project` Implementation
 

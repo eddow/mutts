@@ -2,8 +2,8 @@ import { decorator } from '../decorator'
 import { deepCompare, renamed } from '../utils'
 import { touched1 } from './change'
 import { effect, root, untracked } from './effects'
-import { dependant } from './tracking'
 import { getRoot, markWithRoot } from './registry'
+import { dependant } from './tracking'
 import { options, rootFunction } from './types'
 
 export type Memoizable = object | any[] | symbol | ((...args: any[]) => any)
@@ -114,13 +114,18 @@ export const memoize = decorator({
 			let wrapper = wrapperRegistry.get(original)
 			if (!wrapper) {
 				wrapper = markWithRoot(
-					renamed((that: object) => {
-						return original.call(that)
-					}, `${String(target?.constructor?.name ?? target?.name ?? 'Object')}.${String(propertyKey)}`),
+					renamed(
+						(that: object) => {
+							return original.call(that)
+						},
+						`${String(target?.constructor?.name ?? target?.name ?? 'Object')}.${String(propertyKey)}`
+					),
 					{
 						method: original,
 						propertyKey,
-						...((original as any)[rootFunction] ? { [rootFunction]: (original as any)[rootFunction] } : {}),
+						...((original as any)[rootFunction]
+							? { [rootFunction]: (original as any)[rootFunction] }
+							: {}),
 					}
 				)
 				wrapperRegistry.set(original, wrapper)
@@ -134,13 +139,18 @@ export const memoize = decorator({
 			let wrapper = wrapperRegistry.get(original)
 			if (!wrapper) {
 				wrapper = markWithRoot(
-					renamed((that: object, ...args: object[]) => {
-						return original.call(that, ...args)
-					}, `${String(target?.constructor?.name ?? target?.name ?? 'Object')}.${String(name)}`),
+					renamed(
+						(that: object, ...args: object[]) => {
+							return original.call(that, ...args)
+						},
+						`${String(target?.constructor?.name ?? target?.name ?? 'Object')}.${String(name)}`
+					),
 					{
 						method: original,
 						propertyKey: name,
-						...((original as any)[rootFunction] ? { [rootFunction]: (original as any)[rootFunction] } : {}),
+						...((original as any)[rootFunction]
+							? { [rootFunction]: (original as any)[rootFunction] }
+							: {}),
 					}
 				)
 				wrapperRegistry.set(original, wrapper)

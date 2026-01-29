@@ -36,6 +36,7 @@ export {
 	type Evolution,
 	options as reactiveOptions,
 	ReactiveError,
+	ReactiveErrorCode,
 	type ScopedCallback,
 } from './types'
 export { isZoneEnabled, setZoneEnabled } from './zone'
@@ -48,10 +49,10 @@ import {
 	objectsWithDeepWatchers,
 } from './deep-watch'
 import { ReactiveMap, ReactiveWeakMap } from './map'
-import { nonReactiveObjects, registerNativeReactivity } from './non-reactive-state'
+import { nonReactiveObjects } from './non-reactive-state'
 import { metaProtos, objectToProxy, proxyToObject } from './proxy'
-import { ReactiveSet, ReactiveWeakSet } from './set'
 import { effectToReactiveObjects, watchers } from './registry'
+import { ReactiveSet, ReactiveWeakSet } from './set'
 
 // Register native collection types to use specialized reactive wrappers
 metaProtos.set(Array, ReactiveArray.prototype)

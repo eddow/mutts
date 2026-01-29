@@ -1,6 +1,6 @@
 import { decorator } from '../decorator'
 import { mixin } from '../mixins'
-import { isOwnAccessor, ReflectGet, ReflectSet } from '../utils'
+import { FoolProof, isOwnAccessor } from '../utils'
 import { touched1 } from './change'
 import { notifyPropertyChange } from './deep-touch'
 import {
@@ -29,14 +29,13 @@ import {
 	ReactiveErrorCode,
 	unreactiveProperties,
 } from './types'
-import { ReflectIGet, ReflectISet } from './utils'
 export const metaProtos = new WeakMap()
 
 const hasReentry: any[] = []
 const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
-		if(obj && typeof obj === 'object' && !Object.hasOwn(obj, prop)) {
+		if (obj && typeof obj === 'object' && !Object.hasOwn(obj, prop)) {
 			const metaProto = metaProtos.get(obj.constructor)
 			if (metaProto && prop in metaProto) {
 				const desc = Object.getOwnPropertyDescriptor(metaProto, prop)!
@@ -47,7 +46,7 @@ const reactiveHandlers = {
 		const unwrappedObj = unwrap(obj)
 		// Check if this property is marked as unreactive
 		if (unwrappedObj[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
-			return ReflectIGet(obj, prop, receiver)
+			return FoolProof.get(obj, prop, receiver)
 
 		// Check if property exists and if it's an own property (cached for later use)
 		const hasProp = Reflect.has(receiver, prop)
@@ -82,7 +81,7 @@ const reactiveHandlers = {
 				current = next
 			}
 		}
-		const value = ReflectIGet(obj, prop, receiver)
+		const value = FoolProof.get(obj, prop, receiver)
 		if (typeof value === 'object' && value !== null) {
 			const reactiveValue = reactiveObject(value)
 
@@ -102,7 +101,7 @@ const reactiveHandlers = {
 
 		// Check if this property is marked as unreactive
 		if (unwrappedObj[unreactiveProperties]?.has(prop) || unwrappedObj !== unwrappedReceiver)
-			return ReflectISet(obj, prop, value, receiver)
+			return FoolProof.set(obj, prop, value, receiver)
 		const newValue = unwrap(value)
 		// Read old value, using withEffect(undefined, ...) for getter-only accessors to avoid
 		// breaking memoization dependency tracking during SET operations
@@ -133,7 +132,7 @@ const reactiveHandlers = {
 		if (oldVal !== newValue) {
 			// For getter-only accessors, Reflect.set() may fail, but we still return true
 			// to avoid throwing errors. Only proceed with change notifications if set succeeded.
-			if (ReflectISet(obj, prop, newValue, receiver)) {
+			if (FoolProof.set(obj, prop, newValue, receiver)) {
 				notifyPropertyChange(obj, prop, oldVal, newValue, oldVal !== absent)
 			}
 		}
