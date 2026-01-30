@@ -1,4 +1,4 @@
-import { chainPromise } from 'mutts/promiseChain'
+import { chainPromise } from 'mutts'
 
 describe('chain', () => {
 	describe('basic functionality', () => {

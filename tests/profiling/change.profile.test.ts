@@ -3,8 +3,7 @@
  * Measures the overhead of touched(), effect collection, and batching
  * Run with: npm run test:profile
  */
-import { effect } from 'mutts/reactive/effects'
-import { reactive } from 'mutts/reactive/proxy'
+import { atomic, effect, reactive } from 'mutts'
 import { profileSync } from './helpers'
 
 describe('Change Detection Performance', () => {
@@ -115,7 +114,6 @@ describe('Change Detection Performance', () => {
 			callCount = 0
 
 			// Batched changes (using atomic)
-			const { atomic } = require('mutts/reactive/effects')
 			const batchedFn = atomic(() => {
 				for (let i = 0; i < 10; i++) {
 					obj.count++

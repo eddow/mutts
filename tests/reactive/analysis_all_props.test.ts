@@ -1,5 +1,5 @@
-import { reactive, effect, reactiveOptions } from '../../src/reactive/index'
-import { memoize } from '../../src/reactive/memoize'
+import { reactive, effect, reactiveOptions } from 'mutts'
+import { memoize } from 'mutts'
 
 describe('Reactivity Analysis: allProps & deepTouch', () => {
     

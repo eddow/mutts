@@ -1,4 +1,4 @@
-import { effect, reactive } from 'mutts/reactive'
+import { effect, reactive } from 'mutts'
 
 describe('integration tests', () => {
 	it('should work with complex nested structures', () => {

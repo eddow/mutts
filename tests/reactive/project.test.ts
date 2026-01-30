@@ -1,4 +1,4 @@
-import { cleanup, project, reactive } from 'mutts/reactive'
+import { cleanup, project, reactive } from 'mutts'
 
 describe('project', () => {
 	it('projects arrays with per-index reactivity', () => {

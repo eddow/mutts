@@ -3,8 +3,8 @@
  * Measures memory overhead of various reactive operations
  * Run with: npm run test:profile
  */
-import { effect } from 'mutts/reactive/effects'
-import { reactive } from 'mutts/reactive/proxy'
+import { effect } from 'mutts'
+import { reactive } from 'mutts'
 import { profileMemory, formatMemoryProfile } from './helpers'
 
 describe('Memory Performance Profiling', () => {

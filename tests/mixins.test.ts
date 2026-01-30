@@ -1,4 +1,4 @@
-import { mixin } from 'mutts/mixins'
+import { mixin } from 'mutts'
 
 describe('Mixins', () => {
 	describe('mixin', () => {

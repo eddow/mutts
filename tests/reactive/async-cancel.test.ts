@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals'
-import { effect, reactive, ReactiveError } from '../../src/reactive/index'
+import { effect, reactive, ReactiveError } from 'mutts'
 
 describe('Effect async cancellation', () => {
 	it('should cancel previous async execution when effect is retriggered', async () => {

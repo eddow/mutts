@@ -10,7 +10,7 @@
  * - When finalProps.count is assigned, it breaks memoization invalidation
  */
 
-import { reactive, memoize, effect, unwrap } from 'mutts/reactive'
+import { reactive, memoize, effect, unwrap } from 'mutts'
 
 // Simulate the defaulted function from pounce-ts
 function defaulted<T extends Record<PropertyKey, any>, D extends Record<PropertyKey, any>>(

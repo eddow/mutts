@@ -2,18 +2,50 @@
   "name": "mutts",
   "description": "Modern UTility TS: A collection of TypeScript utilities",
   "version": "1.0.7",
-  "main": "src/index.ts",
-  "module": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "dist/browser.js",
+  "module": "dist/browser.esm.js",
+  "types": "dist/browser.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "source": "./src/index.ts",
-      "import": "./dist/index.esm.js",
-      "require": "./dist/index.js",
-      "script": "./dist/mutts.umd.min.js"
+      "node": {
+        "types": "./dist/node.d.ts",
+        "import": "./dist/node.esm.js",
+        "require": "./dist/node.js"
+      },
+      "default": {
+        "types": "./dist/browser.d.ts",
+        "import": "./dist/browser.esm.js",
+        "require": "./dist/browser.js"
+      }
     },
-    "./src/*": "./src/*"
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.esm.js",
+      "require": "./dist/browser.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.esm.js",
+      "require": "./dist/node.js"
+    },
+    "./src": {
+      "node": {
+        "types": "./src/async/node.ts",
+        "import": "./src/async/node.ts"
+      },
+      "default": {
+        "types": "./src/async/browser.ts",
+        "import": "./src/async/browser.ts"
+      }
+    },
+    "./src/browser": {
+      "types": "./src/async/browser.ts",
+      "import": "./src/async/browser.ts"
+    },
+    "./src/node": {
+      "types": "./src/async/node.ts",
+      "import": "./src/async/node.ts"
+    }
   },
   "files": [
     "dist",

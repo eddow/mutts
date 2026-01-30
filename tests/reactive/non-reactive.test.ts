@@ -1,4 +1,4 @@
-import { effect, isNonReactive, isReactive, reactive, unreactive } from 'mutts/reactive'
+import { effect, isNonReactive, isReactive, reactive, unreactive } from 'mutts'
 
 describe('non-reactive functionality', () => {
 	describe('markNonReactive', () => {

@@ -1,4 +1,4 @@
-import { effect, reactive, unreactive } from 'mutts/reactive'
+import { effect, reactive, unreactive } from 'mutts'
 
 describe('@unreactive decorator', () => {
 	describe('class-level decorator syntax', () => {

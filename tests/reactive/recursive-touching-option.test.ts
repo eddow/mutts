@@ -1,4 +1,4 @@
-import { effect, reactive, reactiveOptions } from 'mutts/reactive'
+import { effect, reactive, reactiveOptions } from 'mutts'
 
 describe('recursive touching option', () => {
 	const originalRecursiveTouching = reactiveOptions.recursiveTouching

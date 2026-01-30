@@ -3,8 +3,8 @@
  * Measures the overhead of deep watch traversal and back-reference management
  * Run with: npm run test:profile
  */
-import { deepWatch } from 'mutts/reactive/deep-watch'
-import { reactive } from 'mutts/reactive/proxy'
+import { deepWatch } from 'mutts'
+import { reactive } from 'mutts'
 import { profileSync, profileMemory, formatMemoryProfile } from './helpers'
 
 describe('Deep Watch Performance', () => {

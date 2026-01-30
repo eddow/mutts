@@ -1,4 +1,4 @@
-import { effect, reactive } from 'mutts/reactive'
+import { effect, reactive } from 'mutts'
 
 describe('ReactiveWeakSet', () => {
 	describe('reactive operations', () => {

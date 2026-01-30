@@ -3,7 +3,7 @@
  * These tests measure the performance overhead of reactive proxy operations
  * Run with: npm run test:profile
  */
-import { reactive } from 'mutts/reactive/proxy'
+import { reactive } from 'mutts'
 import {
 	compareProfiles,
 	formatComparison,

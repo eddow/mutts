@@ -1,5 +1,5 @@
-import { atomic, effect, reactive, reactiveOptions, unwrap } from 'mutts/reactive'
-import { memoize } from 'mutts/reactive/memoize'
+import { atomic, effect, reactive, reactiveOptions, unwrap } from 'mutts'
+import { memoize } from 'mutts'
 
 describe('memoize', () => {
 	it('returns cached value and forwards same memoized function', () => {

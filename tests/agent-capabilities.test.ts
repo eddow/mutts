@@ -1,7 +1,5 @@
-
-import { reactive, effect } from '../src/index'
-import { enableIntrospection, getDependencyGraph, getMutationHistory, snapshot, ReactiveErrorCode } from '../src/introspection'
-import { ReactiveError } from '../src/reactive/types'
+import { ReactiveError, ReactiveErrorCode, effect, reactive } from 'mutts'
+import { enableIntrospection, getDependencyGraph, getMutationHistory, snapshot } from '../src/introspection'
 
 describe('Introspection API', () => {
     beforeEach(() => {

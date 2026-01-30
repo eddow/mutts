@@ -1,4 +1,4 @@
-import { effect, register, reactive } from 'mutts/reactive'
+import { effect, register, reactive } from 'mutts'
 
 describe('Register', () => {
 	it('behaves like an array with indexable access and core mutations', () => {

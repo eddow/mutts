@@ -1,4 +1,4 @@
-import { effect, ReactiveBase, reactive, reactiveOptions } from 'mutts/reactive'
+import { effect, ReactiveBase, reactive, reactiveOptions } from 'mutts'
 
 describe('@reactive decorator', () => {
 	it('should make class instances reactive using decorator', () => {

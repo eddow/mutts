@@ -3,7 +3,7 @@
  * Measures performance of array operations and reactive wrappers
  * Run with: npm run test:profile
  */
-import { reactive } from 'mutts/reactive/proxy'
+import { reactive } from 'mutts'
 import { profileSync } from './helpers'
 
 describe('Array Performance Profiling', () => {

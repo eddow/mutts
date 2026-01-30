@@ -1,4 +1,4 @@
-import { effect, reactive, untracked, reactiveOptions as options } from 'mutts/reactive'
+import { effect, reactive, untracked, reactiveOptions as options } from 'mutts'
 
 describe.each([
 	{ mode: 'throw' as const, name: 'topological' },

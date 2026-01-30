@@ -1,4 +1,4 @@
-import { Eventful } from 'mutts/eventful'
+import { Eventful } from 'mutts'
 
 describe('Eventful', () => {
 	// Define test event types

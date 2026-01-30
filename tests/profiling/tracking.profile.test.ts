@@ -3,8 +3,8 @@
  * Measures the overhead of dependant() calls which happen on every property access
  * Run with: npm run test:profile
  */
-import { effect } from 'mutts/reactive/effects'
-import { reactive } from 'mutts/reactive/proxy'
+import { effect } from 'mutts'
+import { reactive } from 'mutts'
 import { profileSync } from './helpers'
 
 describe('Dependency Tracking Performance', () => {

@@ -1,15 +1,14 @@
-import { memoize } from 'mutts/reactive/memoize'
-import { options } from 'mutts/reactive/types'
+import { memoize, reactiveOptions } from 'mutts'
 
 describe('memoize discrepancy detector', () => {
-    let originalCallback: typeof options.onMemoizationDiscrepancy
+    let originalCallback: typeof reactiveOptions.onMemoizationDiscrepancy
 
     beforeEach(() => {
-        originalCallback = options.onMemoizationDiscrepancy
+        originalCallback = reactiveOptions.onMemoizationDiscrepancy
     })
 
     afterEach(() => {
-        options.onMemoizationDiscrepancy = originalCallback
+        reactiveOptions.onMemoizationDiscrepancy = originalCallback
     })
 
     it('detects discrepancy when function depends on non-reactive value', () => {
@@ -18,13 +17,13 @@ describe('memoize discrepancy detector', () => {
         const memo = memoize(compute)
 
         const detected: any[] = []
-        options.onMemoizationDiscrepancy = jest.fn((cached, fresh, fn, args) => {
+        reactiveOptions.onMemoizationDiscrepancy = jest.fn((cached, fresh, fn, args) => {
             detected.push({ cached, fresh, fn, args })
         })
 
         // First call caches the value (1)
         expect(memo()).toBe(1)
-        expect(options.onMemoizationDiscrepancy).not.toHaveBeenCalled()
+        expect(reactiveOptions.onMemoizationDiscrepancy).not.toHaveBeenCalled()
 
         // Change external value - memo won't know because it's not reactive
         external = 2
@@ -32,7 +31,7 @@ describe('memoize discrepancy detector', () => {
         // Second call returns cached value (1) but check should see fresh is (2)
         expect(memo()).toBe(1)
         
-        expect(options.onMemoizationDiscrepancy).toHaveBeenCalledTimes(1)
+        expect(reactiveOptions.onMemoizationDiscrepancy).toHaveBeenCalledTimes(1)
         expect(detected[0]).toMatchObject({
             cached: 1,
             fresh: 2,
@@ -45,11 +44,11 @@ describe('memoize discrepancy detector', () => {
          const compute = jest.fn(() => 42)
          const memo = memoize(compute)
 
-         options.onMemoizationDiscrepancy = jest.fn()
+         reactiveOptions.onMemoizationDiscrepancy = jest.fn()
 
          memo()
          memo()
 
-         expect(options.onMemoizationDiscrepancy).not.toHaveBeenCalled()
+         expect(reactiveOptions.onMemoizationDiscrepancy).not.toHaveBeenCalled()
     })
 })

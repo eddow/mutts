@@ -1,4 +1,4 @@
-import { options as reactiveOptions } from '../src/reactive/types';
+import { reactiveOptions } from 'mutts';
 
 reactiveOptions.onMemoizationDiscrepancy = (cached, fresh, fn, args, cause) => {
     const fnName = (fn as any).name || 'anonymous';

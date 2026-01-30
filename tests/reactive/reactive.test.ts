@@ -1,4 +1,4 @@
-import { isReactive, reactive, unwrap } from 'mutts/reactive'
+import { isReactive, reactive, unwrap } from 'mutts'
 
 describe('reactive', () => {
 	describe('basic functionality', () => {

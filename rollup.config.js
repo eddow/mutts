@@ -42,14 +42,8 @@ const umdPlugins = [
 
 // Single entry with multiple inputs for efficient chunking
 const input = {
-  index: 'src/index.ts',
-  'reactive': 'src/reactive/index.ts',
-  'std-decorators': 'src/std-decorators.ts',
-  eventful: 'src/eventful.ts',
-  decorator: 'src/decorator.ts',
-  indexable: 'src/indexable.ts',
-  promiseChain: 'src/promiseChain.ts',
-  destroyable: 'src/destroyable.ts',
+  browser: 'src/async/browser.ts',
+  node: 'src/async/node.ts'
 }
 
 const config = [
@@ -126,7 +120,7 @@ const config = [
   },
   // UMD bundle for browser usage
   {
-    input: 'src/index.ts',
+    input: 'src/client.ts',
     output: [
       {
         file: 'dist/mutts.umd.js',

@@ -1,4 +1,4 @@
-import { cleanup, effect, isReactive, organized, reactive } from 'mutts/reactive'
+import { cleanup, effect, isReactive, organized, reactive } from 'mutts'
 
 describe('organized', () => {
 	it('should mirror entries with per-key cleanups', () => {

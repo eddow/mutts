@@ -1,4 +1,4 @@
-import { effect, reactive } from 'mutts/reactive'
+import { effect, reactive } from 'mutts'
 
 describe('effect reaction result', () => {
 	it('should support recording the computed result each run (via effect return cleanup)', () => {

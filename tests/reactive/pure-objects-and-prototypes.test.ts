@@ -1,4 +1,4 @@
-import { effect, reactive } from 'mutts/reactive'
+import { effect, reactive } from 'mutts'
 
 describe('pure objects and prototype chains', () => {
 	describe('pure objects (Object.create(null))', () => {

@@ -1,4 +1,4 @@
-import { atomic, effect, reactive, ReactiveErrorCode } from 'mutts/reactive'
+import { atomic, effect, reactive, ReactiveErrorCode } from 'mutts'
 
 describe('@atomic decorator', () => {
 	describe('basic functionality', () => {

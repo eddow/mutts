@@ -1,4 +1,4 @@
-import { cleanup, effect, reactive, watch } from 'mutts/reactive'
+import { cleanup, effect, reactive, watch } from 'mutts'
 
 describe('watch', () => {
 	describe('watch with value function', () => {

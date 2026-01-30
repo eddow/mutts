@@ -9,6 +9,7 @@
 - prototype forwarding -> metaProtos
 - ReflectGet/ReflectSet -> FoolProof.get/set
 - removed old mapped/reduced, rewrote `scan`
+- zoning made a double-entry point, there are 2 ways to hook an `await` (node/browser)
 
 ## Bugfixes
 

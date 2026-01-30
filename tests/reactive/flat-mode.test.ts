@@ -1,4 +1,4 @@
-import { effect, reactive, reactiveOptions as options, atomic, project } from 'mutts/reactive'
+import { effect, reactive, reactiveOptions as options, atomic, project } from 'mutts'
 
 describe('flat reactivity mode', () => {
     let originalCycleHandling = options.cycleHandling

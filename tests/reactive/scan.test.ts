@@ -1,6 +1,5 @@
-import { cleanup, reactive, reactiveOptions as options } from 'mutts/reactive'
-import { batch } from 'mutts/reactive/effects'
-import { scan } from 'mutts/reactive/buffer'
+import { cleanup, reactive, reactiveOptions as options, scan } from 'mutts'
+import { batch } from '../../src/reactive/effects'
 
 describe('scan', () => {
 	let originalDiscrepancy: any

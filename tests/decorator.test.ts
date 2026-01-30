@@ -1,5 +1,5 @@
 // Test the decorator system with all decorator types
-import { decorator } from 'mutts/decorator'
+import { decorator } from 'mutts'
 
 describe('Decorator System', () => {
 	describe('Method Decorators', () => {

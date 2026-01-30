@@ -1,4 +1,4 @@
-import { effect, ReactiveBase, reactive } from 'mutts/reactive'
+import { effect, ReactiveBase, reactive } from 'mutts'
 
 describe('ReactiveBase as Mixin', () => {
 	it('should work as a base class (backward compatibility)', () => {

@@ -1,4 +1,4 @@
-import { effect, reactive, unwrap } from 'mutts/reactive'
+import { effect, reactive, unwrap } from 'mutts'
 
 describe('ReactiveArray', () => {
 	describe('numeric index reactivity', () => {

@@ -6,7 +6,7 @@ import {
 	describe as describeDecorator,
 	isCached,
 	throttle,
-} from 'mutts/std-decorators'
+} from 'mutts'
 
 describe('cached decorator', () => {
 	it('should cache the result of a getter', () => {

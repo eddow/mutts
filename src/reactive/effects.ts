@@ -27,6 +27,8 @@ import {
 	stopped,
 } from './types'
 
+import { unwrap } from './proxy-state'
+
 /**
  * Finds a cycle in a sequence of functions by looking for the first repetition
  */
@@ -52,9 +54,6 @@ function formatRoots(roots: Function[], limit = 20): string {
 	const end = names.slice(-10)
 	return `${start.join(' → ')} ... (${names.length - 15} more) ... ${end.join(' → ')}`
 }
-
-import { unwrap } from './proxy-state'
-import { wrapAsync } from '../zone'
 
 type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
 
@@ -1036,7 +1035,8 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 }
 
 // Inject batch function to allow atomic game loops in requestAnimationFrame/setTimeout/...
-wrapAsync(fn=> batch(fn, 'immediate'))
+// TODO: perhaps introduce somewhere a way to wrap async functions - find out if it's necessary
+// wrapAsync(fn=> batch(fn, 'immediate'))
 
 /**
  * Decorator that makes methods atomic - batches all effects triggered within the method

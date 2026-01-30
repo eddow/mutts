@@ -1,4 +1,4 @@
-import { getAt, Indexable, setAt } from 'mutts/indexable'
+import { getAt, Indexable, setAt } from 'mutts'
 
 describe('Indexable', () => {
 	describe('Indexable(base, accessor)', () => {

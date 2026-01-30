@@ -13,7 +13,7 @@ export default {
   },
   moduleNameMapper: {
     '^mutts/(.*)$': '<rootDir>/src/$1',
-    '^mutts$': '<rootDir>/src/index.ts'
+    '^mutts$': '<rootDir>/src/async/node.ts'
   },
   collectCoverageFrom: [
     'src/**/*.ts',

@@ -1,4 +1,4 @@
-import { effect, reactive, reactiveOptions as options } from 'mutts/reactive'
+import { effect, reactive, reactiveOptions as options } from 'mutts'
 
 describe('effect cycle detection and ordering', () => {
 	const originalCycleHandling = options.cycleHandling

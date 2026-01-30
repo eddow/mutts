@@ -1,5 +1,4 @@
-import { memoize } from '../../src/reactive/memoize'
-import { reactive, reactiveOptions } from '../../src/reactive'
+import { memoize, reactive, reactiveOptions } from 'mutts'
 
 describe('memoize lazy', () => {
     it('does not recalculate immediately when dependencies change', () => {

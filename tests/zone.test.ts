@@ -1,4 +1,4 @@
-import { unhookAsyncZone, Zone, ZoneHistory, ZoneAggregator, wrapAsync, configureAsyncZone, asyncZone } from '../src/zone';
+import { Zone, ZoneHistory, ZoneAggregator, asyncZone } from 'mutts';
 
 describe('Zone', () => {
     test('basic with/active functionality', () => {
@@ -101,41 +101,11 @@ describe('ZoneAggregator', () => {
 describe('Async Propagation', () => {
     beforeEach(() => {
         asyncZone.clear();
-        if (unhookAsyncZone) unhookAsyncZone();
     });
 
-    test('wrapAsync preserves context in setTimeout', (done) => {
-        const zone = new Zone<string>();
-        const unhook = wrapAsync(zone.zoned, { timer: true });
-
-        zone.with('test', () => {
-            setTimeout(() => {
-                try {
-                    expect(zone.active).toBe('test');
-                    unhook();
-                    done();
-                } catch (e) {
-                    unhook();
-                    done(e);
-                }
-            }, 0);
-        });
-    });
-
-    test('check if promise is patched', () => {
-        const originalThen = Promise.prototype.then;
-        configureAsyncZone();
-        try {
-            expect(Promise.prototype.then).not.toBe(originalThen);
-        } finally {
-            if (unhookAsyncZone) unhookAsyncZone(); // Clean up if needed, though configureAsyncZone handles it
-        }
-    });
-
-    test('configureAsyncZone works top-to-bottom', async () => {
+    test('async propagation works via async hooks', async () => {
         const zone = new Zone<string>();
         asyncZone.add(zone);
-        configureAsyncZone();
 
         await zone.with('async-test', async () => {
             expect(zone.active).toBe('async-test');
@@ -149,3 +119,4 @@ describe('Async Propagation', () => {
         expect(zone.active).toBeUndefined();
     });
 });
+

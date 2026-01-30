@@ -1,4 +1,4 @@
-import { effect, reactive, reactiveOptions, unwrap } from 'mutts/reactive'
+import { effect, reactive, reactiveOptions, unwrap } from 'mutts'
 
 describe('prototype chain dependency tracking', () => {
 	it('should track both instance and prototype when using Object.create (instanceMembers=false)', () => {

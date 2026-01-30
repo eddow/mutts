@@ -1,4 +1,4 @@
-import { biDi, reactive, reactiveOptions } from 'mutts/reactive'
+import { biDi, reactive, reactiveOptions } from 'mutts'
 
 describe('biDi', () => {
 	it('should create bidirectional binding without infinite loops', () => {

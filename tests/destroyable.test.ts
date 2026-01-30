@@ -4,7 +4,7 @@ import {
 	Destroyable,
 	DestructionError,
 	destructor,
-} from 'mutts/destroyable'
+} from 'mutts'
 
 function tick(ms: number = 0) {
 	return new Promise((resolve) => setTimeout(resolve, ms))

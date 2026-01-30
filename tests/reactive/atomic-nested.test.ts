@@ -1,5 +1,5 @@
-
-import { atomic, batch } from '../../src/reactive/effects'
+import { atomic } from 'mutts'
+import { batch } from '../../src/reactive/effects'
 
 describe('Atomic Decorator Nested', () => {
 	it('should propagate return value in nested immediate batch', () => {
