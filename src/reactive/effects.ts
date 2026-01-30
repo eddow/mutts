@@ -4,6 +4,8 @@ import { getTriggerChain, isDevtoolsEnabled, registerEffectForDebug } from './de
 import {
 	captureEffectStack,
 	effectStack,
+	effectStackZonable,
+	effectZoneManager,
 	getActiveEffect,
 	withEffect,
 	withEffectStack,
@@ -57,7 +59,6 @@ function formatRoots(roots: Function[], limit = 20): string {
 }
 
 import { unwrap } from './proxy-state'
-import { ensureZoneHooked } from './zone'
 
 type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
 
@@ -1039,6 +1040,9 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 	}
 }
 
+// Inject batch function to allow atomic game loops in requestAnimationFrame
+effectStackZonable.inZone = (cb) => batch(cb, 'immediate')
+
 /**
  * Decorator that makes methods atomic - batches all effects triggered within the method
  */
@@ -1083,9 +1087,6 @@ export function effect(
 	[stopped]: boolean
 	[cleanupSymbol]: () => void
 } {
-	// Ensure zone is hooked if asyncZone option is enabled (lazy initialization)
-	// Inject batch function to allow atomic game loops in requestAnimationFrame
-	ensureZoneHooked(batch)
 
 	// Use per-effect asyncMode or fall back to global option
 	const asyncMode = effectOptions?.asyncMode ?? options.asyncMode ?? 'cancel'
@@ -1100,6 +1101,7 @@ export function effect(
 	let cleanup: (() => void) | null = null
 	// capture the parent effect at creation time for ascend
 	const parentsForAscend = captureEffectStack()
+	const boundFn = effectZoneManager.bind(fn)
 	const tracked = <T>(cb: () => T) => withEffect(runEffect, cb)
 	const ascend = <T>(cb: () => T) => withEffectStack(parentsForAscend, cb)
 	let effectStopped = false
@@ -1136,7 +1138,7 @@ export function effect(
 		let reactionCleanup: ScopedCallback | undefined
 		let result: any
 		try {
-			result = withEffect(runEffect, () => fn({ tracked, ascend, reaction: hasReacted }))
+			result = withEffect(runEffect, () => boundFn({ tracked, ascend, reaction: hasReacted }))
 			if (
 				result &&
 				typeof result !== 'function' &&

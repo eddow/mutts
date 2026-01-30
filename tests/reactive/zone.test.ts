@@ -1,16 +1,13 @@
-import { describe, expect, it, beforeAll, afterAll } from '@jest/globals'
-import { effect, reactive, isZoneEnabled, setZoneEnabled, reactiveOptions, unwrap } from '../../src/reactive/index'
+import { effect, reactive, reactiveOptions, unwrap } from '../../src/reactive'
+import { asyncZoneManager } from '../../src/zone'
 
 describe('Zone: Promise context preservation', () => {
 	beforeAll(() => {
-		// Enable async zone for these tests (truthy asyncMode enables zone)
-		reactiveOptions.asyncMode = 'cancel'
+		asyncZoneManager.hook()
 	})
 
 	afterAll(() => {
-		// Disable async zone after tests (false disables zone)
-		reactiveOptions.asyncMode = false
-		setZoneEnabled(false)
+		asyncZoneManager.unhook()
 	})
 	it('should preserve effect context in Promise.then() callbacks', async () => {
 		const state = reactive({ count: 0, name: 'test' })
@@ -110,15 +107,6 @@ describe('Zone: Promise context preservation', () => {
 		expect(state.result).toBe(2)
 	})
 
-	it('should enable/disable zone manually', () => {
-		expect(isZoneEnabled()).toBe(true) // Should be enabled if effects exist
-
-		setZoneEnabled(false)
-		expect(isZoneEnabled()).toBe(false)
-
-		setZoneEnabled(true)
-		expect(isZoneEnabled()).toBe(true)
-	})
 
 	it('should handle multiple concurrent promises', async () => {
 		const state = reactive({ results: [] as number[] })

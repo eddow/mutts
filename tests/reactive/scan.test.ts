@@ -1,5 +1,5 @@
 import { batch, cleanup, reactive, reactiveOptions as options } from 'mutts/reactive'
-import { scan } from 'mutts/reactive/scan'
+import { scan } from 'mutts/reactive/buffer'
 
 describe('scan', () => {
 	let originalDiscrepancy: any

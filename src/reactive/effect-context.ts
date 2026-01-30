@@ -1,5 +1,12 @@
+import { asyncZoneManager, ZonableStack, ZonesManager } from '../zone'
 import { effectParent, getRoot } from './registry'
 import { ReactiveError, type ScopedCallback } from './types'
+
+/**
+ * Zones manager for the reactive system context
+ * @deprecated Implement the witheffects here
+ */
+export const effectZoneManager = new ZonesManager()
 
 /**
  * Effect context stack for nested tracking (front = active, next = parent)
@@ -7,9 +14,25 @@ import { ReactiveError, type ScopedCallback } from './types'
 const stack: (ScopedCallback | undefined)[] = []
 export const effectStack = stack
 
+/**
+ * Zonable for the effect stack to preserve context across async boundaries
+ */
+export const effectStackZonable = new ZonableStack(
+	() => stack.slice(),
+	(v) => assignStack(v)
+)
+
+// Register effectZoneManager as a zonable in the global async manager
+// This manager will hold "creation context" like component stacks
+asyncZoneManager.manager.add(effectZoneManager)
+// Register effectStackZonable directly in the global async manager
+// This ensures it is preserved for async boundaries but NOT restored by effectZoneManager.bind()
+asyncZoneManager.manager.add(effectStackZonable)
+
 export function captureEffectStack() {
 	return stack.slice()
 }
+
 export function isRunning(effect: ScopedCallback): (ScopedCallback | undefined)[] | false {
 	const rootEffect = getRoot(effect)
 
@@ -55,6 +78,10 @@ export function isRunning(effect: ScopedCallback): (ScopedCallback | undefined)[
 
 	return false
 }
+
+/**
+ * @deprecated use zones instead
+ */
 export function withEffectStack<T>(snapshot: (ScopedCallback | undefined)[], fn: () => T): T {
 	const previousStack = stack.slice()
 	assignStack(snapshot)
@@ -75,6 +102,7 @@ export function getActiveEffect() {
  * @param fn - The function to execute
  * @param keepParent - Whether to keep the parent effect context
  * @returns The result of the function
+ * @deprecated use zones instead
  */
 export function withEffect<T>(effect: ScopedCallback | undefined, fn: () => T): T {
 	if (getRoot(effect) === getRoot(getActiveEffect())) return fn()

@@ -1,13 +1,13 @@
-import { describe, expect, it, beforeAll, afterAll } from '@jest/globals'
-import { effect, reactive, reactiveOptions } from '../../src/reactive/index'
+import { effect, reactive } from '../../src/reactive/index'
+import { asyncZoneManager } from '../../src/zone'
 
 describe('Zone: Timer and async entry point preservation', () => {
 	beforeAll(() => {
-		reactiveOptions.asyncMode = 'cancel'
+		asyncZoneManager.hook()
 	})
 
 	afterAll(() => {
-		reactiveOptions.asyncMode = false
+		asyncZoneManager.unhook()
 	})
 
 	it('should preserve effect context in setTimeout callbacks', async () => {

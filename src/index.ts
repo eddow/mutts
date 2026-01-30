@@ -7,6 +7,7 @@ export * from './mixins'
 export * from './reactive'
 export * from './std-decorators'
 export * from './utils'
+export * from './zone'
 
 import pkg from '../package.json'
 

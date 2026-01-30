@@ -29,7 +29,7 @@ export { immutables, isNonReactive, registerNativeReactivity } from './non-react
 export { getActiveProjection, project } from './project'
 export { isReactive, ReactiveBase, reactive, unwrap } from './proxy'
 export { organize, organized } from './record'
-export { scan, type ScanResult } from './array-helpers'
+export { scan, type ScanResult } from './buffer'
 export { Register, register } from './register'
 export {
 	type DependencyAccess,
@@ -40,7 +40,6 @@ export {
 	ReactiveErrorCode,
 	type ScopedCallback,
 } from './types'
-export { isZoneEnabled, setZoneEnabled } from './zone'
 
 import { ReactiveArray } from './array'
 import {

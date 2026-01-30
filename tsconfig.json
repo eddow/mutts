@@ -39,7 +39,8 @@
 	},
 	"include": [
 		"src/**/*",
-		"package.json"
+		"package.json",
+		"tests/zone.test.ts"
 	],
 	"exclude": [
 		"**/*.test.ts",
