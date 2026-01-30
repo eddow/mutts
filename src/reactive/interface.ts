@@ -1,7 +1,6 @@
 import { decorator, type GenericClassDecorator } from '../decorator'
 import { deepWatch } from './deep-watch'
-import { withEffect } from './effect-context'
-import { effect, getActiveEffect, untracked } from './effects'
+import { effect, untracked } from './effects'
 import { isNonReactive, nonReactiveClass, nonReactiveObjects } from './non-reactive-state'
 import { unwrap } from './proxy-state'
 import { markWithRoot } from './registry'
@@ -87,11 +86,10 @@ function watchObject(
 	changed: (value: object) => void,
 	{ immediate = false, deep = false } = {}
 ): ScopedCallback {
-	const myParentEffect = getActiveEffect()
 	if (deep) return deepWatch(value, changed, { immediate })!
 	return effect(function watchObjectEffect() {
 		dependant(value)
-		if (immediate) withEffect(myParentEffect, () => changed(value))
+		if (immediate) changed(value)
 		immediate = true
 	})
 }
@@ -101,23 +99,20 @@ function watchCallBack<T>(
 	changed: (value: T, oldValue?: T) => void,
 	{ immediate = false, deep = false } = {}
 ): ScopedCallback {
-	const myParentEffect = getActiveEffect()
 	let oldValue: T | typeof unsetYet = unsetYet
 	let deepCleanup: ScopedCallback | undefined
 	const cbCleanup = effect(
 		markWithRoot(function watchCallBackEffect(access) {
 			const newValue = value(access)
 			if (oldValue !== newValue)
-				withEffect(myParentEffect, () => {
-					if (oldValue === unsetYet) {
-						if (immediate) changed(newValue)
-					} else changed(newValue, oldValue)
-					oldValue = newValue
-					if (deep) {
-						if (deepCleanup) deepCleanup()
-						deepCleanup = deepWatch(newValue as object, (value) => changed(value as T, value as T))
-					}
-				})
+				if (oldValue === unsetYet) {
+					if (immediate) changed(newValue)
+				} else changed(newValue, oldValue)
+				oldValue = newValue
+				if (deep) {
+					if (deepCleanup) deepCleanup()
+					deepCleanup = deepWatch(newValue as object, (value) => changed(value as T, value as T))
+				}
 		}, value)
 	)
 	return () => {

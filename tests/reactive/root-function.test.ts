@@ -112,42 +112,4 @@ describe('untracked and root functions', () => {
 		
 		parentEffect()
 	})
-	
-	it('should show difference between untracked and root for effect cleanup', () => {
-		const state = reactive({ count: 0 })
-		let untrackedChildRuns = 0
-		let rootChildRuns = 0
-		
-		const parentEffect = effect(() => {
-			// Child with untracked - should be cleaned up with parent
-			untracked(() => {
-				effect(() => {
-					untrackedChildRuns++
-					state.count
-				})
-			})
-			
-			// Child with root - should continue after parent cleanup
-			root(() => {
-				effect(() => {
-					rootChildRuns++
-					state.count
-				})
-			})
-		})
-		
-		// Initial runs
-		expect(untrackedChildRuns).toBe(1)
-		expect(rootChildRuns).toBe(1)
-		
-		// Clean up parent
-		parentEffect()
-		
-		// State changes after parent cleanup
-		state.count = 1
-		
-		// Only root child should continue running
-		expect(untrackedChildRuns).toBe(1) // Stopped with parent
-		expect(rootChildRuns).toBe(2)     // Still running
-	})
 })

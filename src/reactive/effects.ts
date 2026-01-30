@@ -2,13 +2,9 @@ import { decorator } from '../decorator'
 import { IterableWeakSet } from '../iterableWeak'
 import { getTriggerChain, isDevtoolsEnabled, registerEffectForDebug } from './debug'
 import {
-	captureEffectStack,
-	effectStack,
-	effectStackZonable,
-	effectZoneManager,
+	effectAggregator,
+	effectHistory,
 	getActiveEffect,
-	withEffect,
-	withEffectStack,
 } from './effect-context'
 import {
 	effectChildren,
@@ -18,7 +14,6 @@ import {
 	markWithRoot,
 	watchers,
 } from './registry'
-import { getTrackingDisabled, setTrackingDisabled } from './tracking'
 import {
 	cleanup as cleanupSymbol,
 	type DependencyAccess,
@@ -59,10 +54,10 @@ function formatRoots(roots: Function[], limit = 20): string {
 }
 
 import { unwrap } from './proxy-state'
+import { wrapAsync } from '../zone'
 
 type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
 
-export { captureEffectStack, withEffectStack, getActiveEffect, effectStack }
 export interface ActivationRecord {
 	effect: ScopedCallback
 	obj: any
@@ -1040,8 +1035,8 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 	}
 }
 
-// Inject batch function to allow atomic game loops in requestAnimationFrame
-effectStackZonable.inZone = (cb) => batch(cb, 'immediate')
+// Inject batch function to allow atomic game loops in requestAnimationFrame/setTimeout/...
+wrapAsync(fn=> batch(fn, 'immediate'))
 
 /**
  * Decorator that makes methods atomic - batches all effects triggered within the method
@@ -1099,11 +1094,13 @@ export function effect(
 		}
 	}
 	let cleanup: (() => void) | null = null
-	// capture the parent effect at creation time for ascend
-	const parentsForAscend = captureEffectStack()
-	const boundFn = effectZoneManager.bind(fn)
-	const tracked = <T>(cb: () => T) => withEffect(runEffect, cb)
-	const ascend = <T>(cb: () => T) => withEffectStack(parentsForAscend, cb)
+	const tracked = effectHistory.present.with(runEffect, ()=> effectAggregator.zoned)
+	const ascend = effectHistory.zoned
+	//const parent = effectHistory.present.active // TODO: Double-check parenting (untracked -> stop children) - use case or untracked(effect)
+	let parent = effectHistory.present.active
+	/*if (!parent) {
+		for (const h of effectHistory.active.history) parent = h
+	}*/
 	let effectStopped = false
 	let hasReacted = false
 	let runningPromise: Promise<any> | null = null
@@ -1138,7 +1135,7 @@ export function effect(
 		let reactionCleanup: ScopedCallback | undefined
 		let result: any
 		try {
-			result = withEffect(runEffect, () => boundFn({ tracked, ascend, reaction: hasReacted }))
+			result = tracked(() => fn({ tracked, ascend, reaction: hasReacted }))
 			if (
 				result &&
 				typeof result !== 'function' &&
@@ -1248,7 +1245,6 @@ export function effect(
 
 	batch(runEffect, 'immediate')
 
-	const parent = parentsForAscend[0]
 	// Store parent relationship for hierarchy traversal
 	effectParent.set(runEffect, parent)
 	// Only ROOT effects are registered for GC cleanup and zone tracking
@@ -1305,17 +1301,7 @@ export function effect(
  * @param fn - The function to execute
  */
 export function untracked<T>(fn: () => T): T {
-	// Store current tracking state and temporarily disable it
-	// This prevents the parent effect from tracking dependencies during fn execution
-	const wasTrackingDisabled = getTrackingDisabled()
-	setTrackingDisabled(true)
-
-	try {
-		return fn()
-	} finally {
-		// Restore tracking state
-		setTrackingDisabled(wasTrackingDisabled)
-	}
+	return effectHistory.present.root(fn)
 }
 
 /**
@@ -1324,11 +1310,7 @@ export function untracked<T>(fn: () => T): T {
  * @param fn - The function to execute
  */
 export function root<T>(fn: () => T): T {
-	let rv!: T
-	withEffect(undefined, () => {
-		rv = fn()
-	})
-	return rv
+	return effectHistory.root(fn)
 }
 
 export { effectTrackers }

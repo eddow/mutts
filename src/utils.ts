@@ -274,3 +274,28 @@ export function contentRef(container: object) {
 		)
 	return contentRefs.get(container)
 }
+
+export function tag<T extends object>(obj: T, name: string): T {
+	Object.defineProperties(obj, {
+		[Symbol.toStringTag]: {
+			value: name,
+			writable: false,
+			configurable: false,
+		},
+		toString: {
+			value: () => name,
+			writable: false,
+			configurable: false,
+		},
+	})
+	return obj
+}
+
+export function named<T extends Function>(name: string, fn: T): T {
+	Object.defineProperty(fn, 'name', {
+		value: fn.name ? `${fn.name}::${name}` : name,
+		writable: false,
+		configurable: false,
+	})
+	return fn
+}

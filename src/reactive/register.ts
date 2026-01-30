@@ -1,8 +1,9 @@
+import { FunctionWrapper } from '../zone'
 import { ArrayReadForward, forwardArray, getAt, Indexable, setAt } from '../indexable'
 import { effect } from './effects'
 import { unreactive } from './interface'
 import { reactive } from './proxy'
-import { type DependencyFunction, type ScopedCallback } from './types'
+import { type ScopedCallback } from './types'
 
 // TODO: use register in a real-world crud situation, have "events" for add, delete, update
 
@@ -51,12 +52,12 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 	readonly #usage = new Map<K, number>()
 	readonly #valueInfo = new Map<T, { key: K; stop?: ScopedCallback }>()
 	readonly #keyEffects = new Set<ScopedCallback>()
-	readonly #ascend: DependencyFunction
+	readonly #ascend: FunctionWrapper
 
 	constructor(keyFn: KeyFunction<T, K>, initial?: Iterable<T>) {
 		super()
 		/* Moved below initialization */
-		let ascendGet: DependencyFunction | undefined
+		let ascendGet: FunctionWrapper | undefined
 		effect(({ ascend }) => {
 			ascendGet = ascend
 		})

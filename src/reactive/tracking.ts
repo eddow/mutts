@@ -2,30 +2,9 @@ import { getActiveEffect } from './effect-context'
 import { unwrap } from './proxy-state'
 import {
 	effectToReactiveObjects,
-	getRoot,
-	globalTrackingDisabled,
-	setGlobalTrackingDisabled,
-	trackingDisabledEffects,
 	watchers,
 } from './registry'
 import { allProps, type ScopedCallback } from './types'
-
-export function getTrackingDisabled(): boolean {
-	const active = getActiveEffect()
-	if (!active) return globalTrackingDisabled
-	return trackingDisabledEffects.has(getRoot(active))
-}
-
-export function setTrackingDisabled(value: boolean): void {
-	const active = getActiveEffect()
-	if (!active) {
-		setGlobalTrackingDisabled(value)
-		return
-	}
-	const root = getRoot(active)
-	if (value) trackingDisabledEffects.add(root)
-	else trackingDisabledEffects.delete(root)
-}
 
 /**
  * Marks a property as a dependency of the current effect
@@ -39,7 +18,6 @@ export function dependant(obj: any, prop: any = allProps) {
 	// Early return if no active effect, tracking disabled, or invalid prop
 	if (
 		!currentActiveEffect ||
-		getTrackingDisabled() ||
 		(typeof prop === 'symbol' && prop !== allProps)
 	)
 		return

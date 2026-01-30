@@ -31,7 +31,12 @@
     const val = await chainPromise(api.getUser()).config.theme;
     ```
 
-### 4. Other Utilities
+### 4. Zones (`mutts/zone`)
+*   **Context Propagation**: Manages stack-based and history-aware execution contexts.
+*   **Async Support**: Automatically preserves context across `Promises`, `setTimeout`, etc. via `configureAsyncZone()`.
+*   **Key Classes**: `Zone`, `ZoneHistory`, `ZoneAggregator`.
+
+### 5. Other Utilities
 *   **Destroyable**: Resource management with `Symbol.dispose` support.
 *   **Mixin**: Efficient class composition with caching.
 *   **Indexable**: Classes with array-like `[0]` access.

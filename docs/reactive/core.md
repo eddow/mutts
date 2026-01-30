@@ -446,13 +446,13 @@ state.c = 15 // Does NOT trigger effect
 
 ### Async Effects and the `access` Parameter
 
-The `effect` function provides a special `access` parameter with `tracked` and `ascend` functions that restore the active effect context for dependency tracking in asynchronous operations. This is crucial because async functions lose the global active effect context when they yield control.
+The `effect` function provides a special `access` parameter with `tracked` and `ascend` functions that restore the active effect context for dependency tracking in asynchronous operations. 
+
+In modern `mutts`, this is powered by the **Zone system**. When you use `configureAsyncZone()`, the active effect context is automatically preserved across `await` points and timers, making manual use of `tracked` optional for these cases.
 
 #### The Problem with Async Effects
 
-When an effect function is synchronous, reactive property access automatically tracks dependencies, however, in async functions, the active effect context is lost when the function yields control. 
-
-The `access.tracked()` function restores the active effect context for dependency tracking.
+Traditionally, in JavaScript, async functions lose their context when they yield control. 
 
 #### Understanding the active effect context
 
@@ -463,37 +463,42 @@ The reactive system uses a global active effect variable to track which effect i
 effect(() => {
     // active effect = this effect
     const value = state.count // ✅ Tracked (active effect is set)
-    // active effect = this effect (still set)
     const another = state.name // ✅ Tracked (active effect is still set)
 })
 
-// Async effect - active effect is lost after await
+// Async effect WITHOUT configureAsyncZone() - context is lost after await
 effect(async () => {
-    // active effect = this effect
-    const value = state.count // ✅ Tracked (active effect is set)
+    const value = state.count // ✅ Tracked
     
-    await someAsyncOperation() // Function exits, active effect = undefined
+    await someAsyncOperation() 
     
-    // active effect = undefined (lost!)
-    const another = state.name // ❌ NOT tracked (no active effect)
+    // context is lost!
+    const another = state.name // ❌ NOT tracked
 })
 
-// Async effect with access.tracked() - active effect is restored
+// Async effect WITH configureAsyncZone() - context is preserved
+effect(async () => {
+    const value = state.count // ✅ Tracked
+    
+    await someAsyncOperation() 
+    
+    // context is automatically restored!
+    const another = state.name // ✅ Tracked
+})
+
+// Using access.tracked() for manual restoration
 effect(async ({ tracked }) => {
-    // active effect = this effect
-    const value = state.count // ✅ Tracked (active effect is set)
+    await someAsyncOperation() 
     
-    await someAsyncOperation() // Function exits, active effect = undefined
-    
-    // tracked() temporarily restores active effect for the callback
-    const another = tracked(() => state.name) // ✅ Tracked (active effect restored)
+    // Useful for non-patched APIs or explicit scoping
+    const another = tracked(() => state.name) // ✅ Tracked
 })
 ```
 
-#### Key Benefits of `access.tracked()` in Async Effects
+#### Key Benefits of the Zone System
 
-1. **Restored Context**: `access.tracked()` temporarily restores the active effect context for dependency tracking
-2. **Consistent Tracking**: Reactive property access works the same way before and after `await`
+1.  **Automatic Restoration**: With `configureAsyncZone()`, most native async APIs (Promises, timers) automatically preserve the reactive context.
+2.  **Manual Control**: `access.tracked()` allows you to manually "passport" the context into third-party libraries or unmanaged callbacks.
 
 ### Using `ascend` for Parent Effect Tracking
 
@@ -518,8 +523,6 @@ effect(({ ascend }) => {
     }
 })
 ```
-<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
-grep
 
 **When to use `ascend`:**
 - When creating child effects that should be cleaned up with their parent

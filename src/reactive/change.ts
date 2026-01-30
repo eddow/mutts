@@ -46,7 +46,7 @@ export function collectEffects(
 				for (const effect of deps) {
 					const runningChain = isRunning(effect)
 					if (runningChain) {
-						options.skipRunningEffect(effect, runningChain as any)
+						options.skipRunningEffect(effect)
 						continue
 					}
 					if (!effects.has(effect)) {
@@ -118,7 +118,7 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 
 		const runningChain = isRunning(effect)
 		if (runningChain) {
-			options.skipRunningEffect(effect, runningChain as any)
+			options.skipRunningEffect(effect)
 			continue
 		}
 		effects.add(effect)

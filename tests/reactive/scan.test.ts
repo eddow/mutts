@@ -1,4 +1,5 @@
-import { batch, cleanup, reactive, reactiveOptions as options } from 'mutts/reactive'
+import { cleanup, reactive, reactiveOptions as options } from 'mutts/reactive'
+import { batch } from 'mutts/reactive/effects'
 import { scan } from 'mutts/reactive/buffer'
 
 describe('scan', () => {

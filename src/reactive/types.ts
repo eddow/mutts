@@ -1,11 +1,8 @@
 // biome-ignore-all lint/suspicious/noConfusingVoidType: Type 'void' is not assignable to type 'ScopedCallback | undefined'.
 // Argument of type '() => void' is not assignable to parameter of type '(dep: DependencyFunction) => ScopedCallback | undefined'.
 
-/**
- * Function type for dependency tracking in effects
- * Restores the active effect context for dependency tracking
- */
-export type DependencyFunction = <T>(cb: () => T) => T
+import { FunctionWrapper } from "../zone"
+
 /**
  * Dependency access passed to user callbacks within effects/watch
  * Provides functions to track dependencies and information about the effect execution
@@ -25,7 +22,7 @@ export interface DependencyAccess {
 	 * })
 	 * ```
 	 */
-	tracked: DependencyFunction
+	tracked: FunctionWrapper
 	/**
 	 * Tracks dependencies in the parent effect context
 	 * Use this when child effects should track dependencies in the parent,
@@ -43,7 +40,7 @@ export interface DependencyAccess {
 	 * })
 	 * ```
 	 */
-	ascend: DependencyFunction
+	ascend: FunctionWrapper
 	/**
 	 * Indicates whether the effect is running as a reaction (i.e. not the first call)
 	 * - `false`: First execution when the effect is created
@@ -280,7 +277,7 @@ export const options = {
 	 * @param effect - The effect that is already running
 	 * @param runningChain - The array of effects from the detected one to the currently running one
 	 */
-	skipRunningEffect: (_effect: ScopedCallback, _runningChain: ScopedCallback[]) => {},
+	skipRunningEffect: (_effect: ScopedCallback) => {},
 	/**
 	 * Debug purpose: maximum effect chain (like call stack max depth)
 	 * Used to prevent infinite loops
@@ -413,6 +410,7 @@ export const options = {
 	 * Configuration for zone hooks - control which async APIs are hooked
 	 * Each option controls whether the corresponding async API is wrapped to preserve effect context
 	 * Only applies when asyncMode is enabled (truthy)
+	 * @deprecated Should take all when we made sure PIXI.create, Game.create, ... are -> .root()
 	 */
 	zones: {
 		/**

@@ -57,11 +57,3 @@ export function getRoot<T extends Function | undefined>(fn: T): T {
 	while (fn && rootFunction in fn) fn = fn[rootFunction] as T
 	return fn
 }
-
-// Flag to disable dependency tracking for the current active effect (not globally)
-export const trackingDisabledEffects = new WeakSet<ScopedCallback>()
-export let globalTrackingDisabled = false
-
-export function setGlobalTrackingDisabled(value: boolean): void {
-	globalTrackingDisabled = value
-}

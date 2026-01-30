@@ -1,58 +1,151 @@
-import { effect, reactive } from '../src/reactive/index'
-import { Stack, asyncZoneManager } from '../src/zone'
-/* TODO: We should have 2 'zone.test.ts': one here and one in `./reactive`
-This one should test the zones without the reactive system.
-The later should test the zones used by the reactive system.
-*/
-describe('Generic Zoning', () => {
-	beforeAll(() => {
-		asyncZoneManager.hook()
-	})
+import { unhookAsyncZone, Zone, ZoneHistory, ZoneAggregator, wrapAsync, configureAsyncZone, asyncZone } from '../src/zone';
 
-	afterAll(() => {
-		asyncZoneManager.unhook()
-	})
+describe('Zone', () => {
+    test('basic with/active functionality', () => {
+        const zone = new Zone<string>();
+        expect(zone.active).toBeUndefined();
 
-	it('should preserve custom stack context across async boundaries', async () => {
-		const myStack = new Stack<string>()
-		asyncZoneManager.manager.add(myStack)
+        zone.with('a', () => {
+            expect(zone.active).toBe('a');
+            zone.with('b', () => {
+                expect(zone.active).toBe('b');
+            });
+            expect(zone.active).toBe('a');
+        });
 
-		let captured: string | undefined
-		myStack.push('outer')
+        expect(zone.active).toBeUndefined();
+    });
 
-		const p = Promise.resolve().then(() => {
-			captured = myStack.get()
-		})
+    test('root functionality overrides current value', () => {
+        const zone = new Zone<string>();
+        zone.with('a', () => {
+            zone.root(() => {
+                expect(zone.active).toBeUndefined();
+            });
+            expect(zone.active).toBe('a');
+        });
+    });
 
-		myStack.push('inner')
-		await p
-		expect(captured).toBe('outer')
-		
-		myStack.pop() // inner
-		myStack.pop() // outer
-	})
+    test('zoned getter snapshots current state', () => {
+        const zone = new Zone<string>();
+        let wrapper: any;
 
-	it('should preserve context in nested effects', async () => {
-		const myStack = new Stack<number>()
-		asyncZoneManager.manager.add(myStack)
-		
-		const results: number[] = []
-		
-		myStack.push(1)
-		
-		effect(() => {
-			const val = myStack.get()
-			if (val !== undefined) results.push(val)
-			
-			if (val === 1) {
-				Promise.resolve().then(() => {
-					myStack.push(2)
-					// trigger something?
-				})
-			}
-		})
-		
-		await new Promise(resolve => setTimeout(resolve, 10))
-		// This is just a basic check, real usage is more complex
-	})
-})
+        zone.with('a', () => {
+            wrapper = zone.zoned;
+        });
+
+        zone.with('b', () => {
+            wrapper(() => {
+                // Should be 'a' because it was snapshotted
+                expect(zone.active).toBe('a');
+            });
+            expect(zone.active).toBe('b');
+        });
+    });
+});
+
+describe('ZoneHistory', () => {
+    test('tracks history and allows present access', () => {
+        const zone = new ZoneHistory<string>();
+        zone.present.with('a', () => {
+            expect(zone.active.present).toBe('a');
+            expect(zone.has('a')).toBe(true);
+            
+            zone.present.with('b', () => {
+                expect(zone.active.present).toBe('b');
+                expect(zone.has('a')).toBe(true);
+                expect(zone.has('b')).toBe(true);
+            });
+        });
+    });
+
+    test('throws on re-entry of historical zone', () => {
+        const zone = new ZoneHistory<string>();
+        zone.present.with('a', () => {
+            expect(() => {
+                zone.present.with('a', () => {});
+            }).toThrow('ZoneHistory: re-entering historical zone');
+        });
+    });
+});
+
+describe('ZoneAggregator', () => {
+    test('merges multiple zones', () => {
+        const z1 = new Zone<string>();
+        const z2 = new Zone<number>();
+        const agg = new ZoneAggregator(z1, z2);
+
+        z1.with('v1', () => {
+            z2.with(123, () => {
+                const active = agg.active!;
+                expect(active.get(z1)).toBe('v1');
+                expect(active.get(z2)).toBe(123);
+            });
+        });
+    });
+
+    test('with() on aggregator enters all zones', () => {
+        const z1 = new Zone<string>();
+        const z2 = new Zone<number>();
+        const agg = new ZoneAggregator(z1, z2);
+
+        const values = new Map<any, any>([[z1, 'hello'], [z2, 42]]);
+        
+        agg.with(values, () => {
+            expect(z1.active).toBe('hello');
+            expect(z2.active).toBe(42);
+        });
+    });
+});
+
+describe('Async Propagation', () => {
+    beforeEach(() => {
+        asyncZone.clear();
+        if (unhookAsyncZone) unhookAsyncZone();
+    });
+
+    test('wrapAsync preserves context in setTimeout', (done) => {
+        const zone = new Zone<string>();
+        const unhook = wrapAsync(zone.zoned, { timer: true });
+
+        zone.with('test', () => {
+            setTimeout(() => {
+                try {
+                    expect(zone.active).toBe('test');
+                    unhook();
+                    done();
+                } catch (e) {
+                    unhook();
+                    done(e);
+                }
+            }, 0);
+        });
+    });
+
+    test('check if promise is patched', () => {
+        const originalThen = Promise.prototype.then;
+        configureAsyncZone();
+        try {
+            expect(Promise.prototype.then).not.toBe(originalThen);
+        } finally {
+            if (unhookAsyncZone) unhookAsyncZone(); // Clean up if needed, though configureAsyncZone handles it
+        }
+    });
+
+    test('configureAsyncZone works top-to-bottom', async () => {
+        const zone = new Zone<string>();
+        asyncZone.add(zone);
+        configureAsyncZone();
+
+        await zone.with('async-test', async () => {
+            expect(zone.active).toBe('async-test');
+            // Try different async points
+            await new Promise(r => setTimeout(r, 0)); 
+            expect(zone.active).toBe('async-test');
+            await Promise.resolve().then(() => {});
+            expect(zone.active).toBe('async-test');
+        });
+
+        expect(zone.active).toBeUndefined();
+    });
+});
