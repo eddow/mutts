@@ -4,6 +4,10 @@
 
 - arrays indexing on change
 
+## Finishing touches
+
+- The async hooks have been corrected and are working as expected: tests have been set to run on node and browser
+
 # 1.0.7
 
 ## Functionality

@@ -4,7 +4,15 @@ export type Hook = () => Restorer
 export const asyncHooks = {
 	addHook(_hook: Hook): () => void {
 		throw 'One must import the library from the server or the client side'
-	}
+	},
+    /** 
+     * [Hack] Sanitize a promise (or value) to prevent context leaks. 
+     * Default: Identity function.
+     * Browser: Uses Macrotask wrapping to break microtask chains.
+     */
+    sanitizePromise(p: any): any {
+        return p
+    }
 }
 
 /**

@@ -5,6 +5,7 @@ import {
 	DestructionError,
 	destructor,
 } from 'mutts'
+import { describe, expect, it } from 'vitest'
 
 function tick(ms: number = 0) {
 	return new Promise((resolve) => setTimeout(resolve, ms))

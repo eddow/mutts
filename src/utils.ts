@@ -275,7 +275,7 @@ export function contentRef(container: object) {
 	return contentRefs.get(container)
 }
 
-export function tag<T extends object>(obj: T, name: string): T {
+export function tag<T extends object>(name: string, obj: T): T {
 	Object.defineProperties(obj, {
 		[Symbol.toStringTag]: {
 			value: name,

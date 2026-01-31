@@ -26,19 +26,9 @@ export abstract class AZone<T> {
 		} finally {
 			this.leave(entered)
 		}
-        // [HACK]: Browser Promise hooks (Jan 2026) are imperfect. 
-        // If a Promise is created inside the zone, it carries the "Sticky" zone context.
-        // If returned to the outer scope, that context leaks. We wrap it in a new Promise
-        // created here (in the outer scope) to break the chain and sanitize the return value.
-        // See BROWSER_ASYNC_POLYFILL.md for full details.
-        if (res && typeof (res as any).then === 'function') {
-            return new Promise((resolve, reject) => {
-                setTimeout(() => {
-                    (res as any).then(resolve, reject)
-                }, 0)
-            }) as unknown as R
-        }
-        return res
+        // [HACK]: Sanitization
+        // See BROWSER_ASYNC_POLYFILL.md
+        return asyncHooks.sanitizePromise(res) as R
 	}
 	root<R>(fn: () => R): R {
 		let prev = this.enter()
@@ -137,7 +127,7 @@ export class ZoneAggregator extends AZone<Map<AZone<unknown>, unknown>> {
 	}
 }
 
-export const asyncZone = tag(new ZoneAggregator(), 'async')
+export const asyncZone = tag('async', new ZoneAggregator())
 asyncHooks.addHook(() => {
 	const zone = asyncZone.active
 	return () => {

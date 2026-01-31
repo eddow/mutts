@@ -14,16 +14,20 @@ This creates a dilemma:
 
 ## The Solution: Return Value Sanitization
 
-In `src/zone.ts`, we implement a "Hack" to prevent this leak:
+In `src/zone.ts`, we delegate sanitization to `asyncHooks.sanitizePromise(res)`.
+
+In `src/async/browser.ts`, we implement this using a "Hack":
 
 ```typescript
-// inside AZone.with
-if (res && typeof (res as any).then === 'function') {
-    return new Promise((resolve, reject) => {
-        setTimeout(() => {
-            (res as any).then(resolve, reject)
-        }, 0)
-    })
+asyncHooks.sanitizePromise = (res: any) => {
+    if (res && typeof (res as any).then === 'function') {
+        return new Promise((resolve, reject) => {
+            setTimeout(() => {
+                (res as any).then(resolve, reject)
+            }, 0)
+        })
+    }
+    return res
 }
 ```
 

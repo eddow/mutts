@@ -10,6 +10,22 @@ asyncHooks.addHook = function (hook: Hook) {
 	}
 }
 
+// [HACK]: Sanitization
+// If a Promise is created inside the zone, it carries the "Sticky" zone context.
+// If returned to the outer scope, that context leaks. We wrap it in a new Promise
+// created here (in the outer scope) to break the chain and sanitize the return value.
+// See BROWSER_ASYNC_POLYFILL.md for full details.
+asyncHooks.sanitizePromise = (res: any) => {
+    if (res && typeof (res as any).then === 'function') {
+        return new Promise((resolve, reject) => {
+            setTimeout(() => {
+                (res as any).then(resolve, reject)
+            }, 0)
+        })
+    }
+    return res
+}
+
 function captureRestorers() {
 	const restorers = new Set<Restorer>()
 	for (const hook of hooks) {
