@@ -3,9 +3,22 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "./dist/devtools",
-    "typeRoots": ["./node_modules/@types", "./devtool"]
+    "typeRoots": [
+      "./node_modules/@types",
+      "./devtool"
+    ],
+    "types": [
+      "node"
+    ]
   },
-  "include": ["devtool/**/*.ts", "devtool/**/*.d.ts"],
-  "exclude": ["**/*.test.ts", "**/*.spec.ts", "node_modules", "dist"]
+  "include": [
+    "devtool/**/*.ts",
+    "devtool/**/*.d.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "node_modules",
+    "dist"
+  ]
 }
-

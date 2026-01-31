@@ -2,7 +2,7 @@
   "name": "mutts",
   "description": "Modern UTility TS: A collection of TypeScript utilities",
   "version": "1.0.8",
-  "main": "dist/browser.js",
+  "main": "dist/browser.cjs",
   "module": "dist/browser.esm.js",
   "types": "dist/browser.d.ts",
   "exports": {
@@ -16,23 +16,23 @@
       "node": {
         "types": "./dist/node.d.ts",
         "import": "./dist/node.esm.js",
-        "require": "./dist/node.js"
+        "require": "./dist/node.cjs"
       },
       "default": {
         "types": "./dist/browser.d.ts",
         "import": "./dist/browser.esm.js",
-        "require": "./dist/browser.js"
+        "require": "./dist/browser.cjs"
       }
     },
     "./browser": {
       "types": "./dist/browser.d.ts",
       "import": "./dist/browser.esm.js",
-      "require": "./dist/browser.js"
+      "require": "./dist/browser.cjs"
     },
     "./node": {
       "types": "./dist/node.d.ts",
       "import": "./dist/node.esm.js",
-      "require": "./dist/node.js"
+      "require": "./dist/node.cjs"
     },
     "./src": {
       "node": {

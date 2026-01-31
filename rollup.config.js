@@ -55,8 +55,13 @@ const config = [
         dir: 'dist',
         format: 'cjs',
         sourcemap: true,
-        entryFileNames: '[name].js',
-        chunkFileNames: 'chunks/[name]-[hash].js',
+        entryFileNames: '[name].cjs',
+        chunkFileNames: 'chunks/[name]-[hash].cjs',
+        manualChunks: {
+          'async-core': ['src/async/index.ts'],
+          'async-node': ['src/async/node.ts'],
+          'async-browser': ['src/async/browser.ts'],
+        },
       },
       {
         dir: 'dist',

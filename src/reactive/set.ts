@@ -125,6 +125,6 @@ export abstract class ReactiveSet<T> extends Set<T> {
 				return this
 			},
 			[Symbol.dispose]() {},
-		}
+		} as any	//TODO? (something easy)
 	}
 }

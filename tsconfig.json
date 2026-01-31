@@ -4,13 +4,14 @@
 		"target": "ES2020",
 		"module": "ESNext",
 		"lib": [
-			"ES2023",
+			"ESNext",
 			"DOM"
 		],
-		"declaration": false,
-		"declarationMap": false,
+		"declaration": true,
+		"declarationMap": true,
 		"sourceMap": true,
 		"outDir": "./dist",
+		"declarationDir": "./dist",
 		"rootDir": "./src",
 		"experimentalDecorators": false,
 		"emitDecoratorMetadata": false,
@@ -21,6 +22,7 @@
 		"noUnusedParameters": false,
 		"esModuleInterop": true,
 		"skipLibCheck": true,
+		"composite": true,
 		"forceConsistentCasingInFileNames": true,
 		"baseUrl": ".",
 		"paths": {

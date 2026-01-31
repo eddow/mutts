@@ -113,7 +113,7 @@ export abstract class ReactiveMap<K, V> extends Map<K, V> {
 				return this
 			},
 			[Symbol.dispose]() {},
-		}
+		} as any // TODO: real iterator? (If easy)
 	}
 
 	// Implement Map methods with reactivity
