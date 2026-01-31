@@ -1,23 +1,44 @@
 import { asyncHooks } from "./async"
 import { named, tag } from "./utils"
 
+interface InternalZoneUse<T> {
+	enter(value?: T): unknown
+	leave(entered: unknown): void
+}
+function isu<T>(z: AZone<T> | InternalZoneUse<T>): InternalZoneUse<T> {
+	return z as InternalZoneUse<T>
+}
 export abstract class AZone<T> {
 	abstract active?: T
-	enter(value?: T): unknown {
+	protected enter(value?: T): unknown {
 		const prev = this.active
 		this.active = value
 		return prev
 	}
-	leave(entered: unknown): void {
+	protected leave(entered: unknown): void {
 		this.active = entered as T | undefined
 	}
 	with<R>(value: T, fn: () => R): R {
 		const entered = this.enter(value)
+        let res: R;
 		try {
-			return fn()
+			res = fn()
 		} finally {
 			this.leave(entered)
 		}
+        // [HACK]: Browser Promise hooks (Jan 2026) are imperfect. 
+        // If a Promise is created inside the zone, it carries the "Sticky" zone context.
+        // If returned to the outer scope, that context leaks. We wrap it in a new Promise
+        // created here (in the outer scope) to break the chain and sanitize the return value.
+        // See BROWSER_ASYNC_POLYFILL.md for full details.
+        if (res && typeof (res as any).then === 'function') {
+            return new Promise((resolve, reject) => {
+                setTimeout(() => {
+                    (res as any).then(resolve, reject)
+                }, 0)
+            }) as unknown as R
+        }
+        return res
 	}
 	root<R>(fn: () => R): R {
 		let prev = this.enter()
@@ -61,11 +82,11 @@ export class ZoneHistory<T> extends AZone<HistoryValue<T>> {
 				enter(value?: T) {
 					if(value && self.history.has(value)) throw new Error('ZoneHistory: re-entering historical zone')
 					if(value !== undefined) self.history.add(value)
-					return { added: value, entered: controlled.enter(value) }
+					return { added: value, entered: isu(controlled).enter(value) }
 				},
 				leave(entered: { added: T | undefined, entered: unknown }) {
 					if(entered.added !== undefined) self.history.delete(entered.added)
-					return controlled.leave(entered.entered)
+					return isu(controlled).leave(entered.entered)
 				}
 			})
 		)
@@ -98,12 +119,12 @@ export class ZoneAggregator extends AZone<Map<AZone<unknown>, unknown>> {
 		const entered = new Map<AZone<unknown>, unknown>()
 		for (const z of this.#zones) {
 			const v = value?.get(z)
-			entered.set(z, z.enter(v))
+			entered.set(z, isu(z).enter(v))
 		}
 		return entered
 	}
 	leave(entered: Map<AZone<unknown>, unknown>): void {
-		for (const z of this.#zones) z.leave(entered.get(z))
+		for (const z of this.#zones) isu(z).leave(entered.get(z))
 	}
 	add(z: AZone<unknown>) {
 		this.#zones.add(z)

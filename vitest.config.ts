@@ -11,7 +11,7 @@ console.error('[CONFIG] TEST_ENV:', process.env.TEST_ENV)
 export default defineConfig({
   resolve: {
     alias: {
-      'mutts': resolve(__dirname, process.env.TEST_ENV === 'browser' ? './src/async/browser.ts' : './src/async/node.ts')
+      'mutts': resolve(__dirname, process.env.TEST_ENV === 'browser' ? './src/entry-browser.ts' : './src/entry-node.ts')
     },
     conditions: [
       process.env.TEST_ENV === 'browser' ? 'test-browser' : 'test-node'

@@ -42,8 +42,8 @@ const umdPlugins = [
 
 // Single entry with multiple inputs for efficient chunking
 const input = {
-  browser: 'src/async/browser.ts',
-  node: 'src/async/node.ts'
+  browser: 'src/entry-browser.ts',
+  node: 'src/entry-node.ts'
 }
 
 const config = [
@@ -120,7 +120,7 @@ const config = [
   },
   // UMD bundle for browser usage
   {
-    input: 'src/async/browser.ts',
+    input: 'src/entry-browser.ts',
     output: [
       {
         file: 'dist/mutts.umd.js',

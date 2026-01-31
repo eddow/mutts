@@ -1,4 +1,5 @@
 import { asyncHook, asyncHooks, asyncZone, Zone } from 'mutts';
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 describe('Async Hook Direct Tests', () => {
     let callStack: string[] = [];
@@ -292,4 +293,98 @@ describe('Async Hook Direct Tests', () => {
             expect(lastUndo).toBeGreaterThan(callStack.indexOf('after-await-2'));
         }
     });
+
+    test('Reproduction: Context propagation across Promise.resolve().then()', async () => {
+        let currentContext = 'root';
+        // Simulate Zone-like hook
+        const removeHook = asyncHooks.addHook(() => {
+            const captured = currentContext;
+            return () => {
+                const prev = currentContext;
+                currentContext = captured;
+                return () => {
+                    currentContext = prev;
+                };
+            };
+        });
+
+        try {
+            currentContext = 'test-context';
+            await new Promise(r => setTimeout(r, 0));
+            expect(currentContext).toBe('test-context');
+            await Promise.resolve().then(() => {});
+            expect(currentContext).toBe('test-context');
+        } finally {
+            removeHook();
+        }
+    });
+
+    test('Reproduction: Map identity', async () => {
+        const key = {};
+        let currentMap = new Map();
+        
+        const removeHook = asyncHooks.addHook(() => {
+            const captured = new Map(currentMap); // Snapshot
+            return () => {
+                const prev = new Map(currentMap);
+                currentMap = captured; // Restore snapshot
+                return () => { currentMap = prev; };
+            };
+        });
+        
+        try {
+            currentMap.set(key, 'value');
+            await new Promise(r => setTimeout(r, 0));
+            expect(currentMap.get(key)).toBe('value');
+            await Promise.resolve().then(() => {});
+            expect(currentMap.get(key)).toBe('value');
+        } finally {
+            removeHook();
+        }
+    });
+
+
+
+    test('Reproduction: Scope Exit (simulating zone.with)', async () => {
+        let globalContext: string | undefined = undefined;
+        // Hook captures/restores globalContext
+        const removeHook = asyncHooks.addHook(() => {
+            const captured = globalContext;
+            return () => {
+                const prev = globalContext;
+                globalContext = captured;
+                return () => { globalContext = prev; };
+            };
+        });
+
+        try {
+            // Simulate zone.with
+            const run = async () => {
+                // Enter scope
+                const prev = globalContext;
+                globalContext = 'async-test';
+                
+                // Start async operation (simulate the body of zone.with)
+                const p = (async () => {
+                   // Initial capture happens here for setTimeout?
+                   await new Promise(r => setTimeout(r, 0));
+                   expect(globalContext).toBe('async-test'); // Check 1
+                   
+                   await Promise.resolve().then(() => {});
+                   expect(globalContext).toBe('async-test'); // Check 2
+                })();
+                
+                // Leave scope SYNC (simulate finally block of zone.with)
+                globalContext = prev; 
+                
+                return p;
+            };
+
+            await run();
+        } finally {
+            removeHook();
+        }
+    });
+
 });
+
