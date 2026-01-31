@@ -7,6 +7,7 @@ import {
 	isCached,
 	throttle,
 } from 'mutts'
+import { describe, expect, it, vi } from 'vitest'
 
 describe('cached decorator', () => {
 	it('should cache the result of a getter', () => {
@@ -530,58 +531,79 @@ describe('throttle decorator', () => {
 
 		expect(lastArgs).toEqual(['throttled1', 'throttled2'])
 	})
-	/* TODO: Test is flaky, fails randomly if ran in stressed environment
-	it('should handle different throttle delays', async () => {
-		let fastCalls = 0
-		let slowCalls = 0
+	it('should handle different throttle delays', () => {
+		vi.useFakeTimers()
+		try {
+			let fastCalls = 0
+			let slowCalls = 0
 
-		class TestClass {
-			@throttle(50)
-			fast() {
-				fastCalls++
+			class TestClass {
+				@throttle(50)
+				fast() {
+					fastCalls++
+				}
+
+				@throttle(150)
+				slow() {
+					slowCalls++
+				}
 			}
 
-			@throttle(150)
-			slow() {
-				slowCalls++
-			}
+			const obj = new TestClass()
+
+			// Call both methods
+			obj.fast()
+			obj.slow()
+
+			expect(fastCalls).toBe(1)
+			expect(slowCalls).toBe(1)
+
+			// Call again immediately (throttled)
+			obj.fast()
+			obj.slow()
+
+			expect(fastCalls).toBe(1)
+			expect(slowCalls).toBe(1)
+
+			// Fast throttle window is 50ms. Advance by 100ms to be safe.
+			vi.advanceTimersByTime(100)
+			
+			// Scheduled fast call should have fired
+			expect(fastCalls).toBe(2)
+			
+			// Call fast again - should execute immediately as >50ms passed since last executon (at T=50ms)
+			// Wait, the scheduled call ran at T=50ms. We are now at T=100ms. 
+			// 100 - 50 = 50ms. So it allows immediate execution.
+			obj.fast()
+			expect(fastCalls).toBe(3)
+			
+			// Slow call (limit 150ms). We are at T=100ms.
+			// Last slow call was at T=0. Scheduled one is for T=150.
+			expect(slowCalls).toBe(1)
+
+			// Advance another 100ms. Total T=200ms.
+			vi.advanceTimersByTime(100)
+			
+			// Slow scheduled call (at T=150ms) should have fired.
+			expect(slowCalls).toBe(2)
+			
+			// Call slow again. last execution was at T=150ms. Now T=200ms. Diff = 50ms. < 150ms.
+			// Should be throttled and scheduled.
+			obj.slow()
+			expect(slowCalls).toBe(2)
+			
+			// Advance to cover the gap (needs 100ms more since 150+150=300, we are at 200).
+			vi.advanceTimersByTime(100)
+			expect(slowCalls).toBe(3)
+		} finally {
+			vi.useRealTimers()
 		}
-
-		const obj = new TestClass()
-
-		// Call both methods
-		obj.fast()
-		obj.slow()
-
-		expect(fastCalls).toBe(1)
-		expect(slowCalls).toBe(1)
-
-		// Call again immediately (throttled)
-		obj.fast()
-		obj.slow()
-
-		expect(fastCalls).toBe(1)
-		expect(slowCalls).toBe(1)
-
-		// Wait for fast throttle window; scheduled fast should have fired
-		await new Promise((resolve) => setTimeout(resolve, 100))
-		expect(fastCalls).toBe(2)
-		obj.fast()
-		expect(fastCalls).toBe(3)
-		expect(slowCalls).toBe(1)
-
-		// Wait to exceed slow window; scheduled slow should have fired
-		await new Promise((resolve) => setTimeout(resolve, 100))
-		expect(slowCalls).toBe(2)
-		obj.slow()
-		// Immediate call is within new window start; should schedule, not increment now
-		expect(slowCalls).toBe(2)
-	})*/
+	})
 })
 
 describe('deprecated decorator with string parameter', () => {
 	it('should use custom warning message for methods', () => {
-		const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
 		class TestClass {
 			@deprecated('Use newMethod() instead')
@@ -601,7 +623,7 @@ describe('deprecated decorator with string parameter', () => {
 	})
 
 	it('should use custom warning message for getters', () => {
-		const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
 		class TestClass {
 			@deprecated('Use newValue instead')
@@ -621,7 +643,7 @@ describe('deprecated decorator with string parameter', () => {
 	})
 
 	it('should use custom warning message for setters', () => {
-		const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
 		class TestClass {
 			@deprecated('Use setNewValue() instead')
@@ -641,7 +663,7 @@ describe('deprecated decorator with string parameter', () => {
 	})
 
 	it('should use custom warning message for classes', () => {
-		const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
 		@deprecated('Use NewClass instead')
 		class OldClass {
@@ -656,7 +678,7 @@ describe('deprecated decorator with string parameter', () => {
 	})
 
 	it('should work with different custom messages', () => {
-		const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
 		class TestClass {
 			@deprecated('This will be removed in v2.0')

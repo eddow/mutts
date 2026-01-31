@@ -1,11 +1,11 @@
-import { reactive, effect, reactiveOptions } from 'mutts'
-import { memoize } from 'mutts'
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { effect, memoize, reactive, reactiveOptions } from 'mutts'
 
 describe('Reactivity Analysis: allProps & deepTouch', () => {
     
     it('should trigger allProps on property set (even if keys same)', () => {
         const obj = reactive<{ a: number }>({ a: 1 })
-        const fn = jest.fn(() => { Object.keys(obj) })
+        const fn = vi.fn(() => { Object.keys(obj) })
         
         effect(() => { fn() })
         expect(fn).toHaveBeenCalledTimes(1)
@@ -30,7 +30,7 @@ describe('Reactivity Analysis: allProps & deepTouch', () => {
             const nested = { b: 1 }
             const obj = reactive({ a: nested })
             
-            const keysFn = jest.fn(() => { Object.keys(obj) })
+            const keysFn = vi.fn(() => { Object.keys(obj) })
             effect(() => { keysFn() })
             
             expect(keysFn).toHaveBeenCalledTimes(1)
@@ -47,7 +47,7 @@ describe('Reactivity Analysis: allProps & deepTouch', () => {
             const nested = { b: 1 }
             const obj = reactive({ a: nested })
             
-            const nestedKeysFn = jest.fn(() => { Object.keys(obj.a) })
+            const nestedKeysFn = vi.fn(() => { Object.keys(obj.a) })
             effect(() => { nestedKeysFn() })
 
             expect(nestedKeysFn).toHaveBeenCalledTimes(1)

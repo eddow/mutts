@@ -42,6 +42,13 @@ requestId.with("req-123", async () => {
 });
 ```
 
+> [!WARNING]
+> TODO
+> **Browser Limitations**: In browser environments (where `AsyncLocalStorage` is unavailable), `mutts` relies on monkey-patching global async primitives (Promise, setTimeout, etc.) to propagate zones. This is generally less robust than Node.js's `async_hooks` and may fail to track context across:
+> *   Native `async/await` boundaries in some modern browsers if not transpiled.
+> *   Concurrent modifications to global prototypes by other libraries.
+
+
 ## Core API
 
 ### `AZone<T>` (Abstract)

@@ -10,17 +10,19 @@ function tick(ms: number = 0) {
 	return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-const gc = global.gc
+// TODO: Make sure gc is tested at least on one side (node I guess)
+const gc = typeof globalThis.gc === 'function' ? globalThis.gc : undefined
+const itGarbageCollection = gc ? it : it.skip
 
 async function collectGarbages() {
 	await tick()
-	gc!()
+	gc?.()
 	await tick()
 }
 
 describe('Destroyable', () => {
 	describe('with base class and destructor object', () => {
-		it('should create destroyable class with custom destructor', async () => {
+		itGarbageCollection('should create destroyable class with custom destructor', async () => {
 			let receivedAllocated: any = null
 
 			class MyClass extends Destroyable({
@@ -42,7 +44,7 @@ describe('Destroyable', () => {
 			expect(receivedAllocated.name).toBe('test')
 		})
 
-		it('should pass constructor arguments to base class', () => {
+		itGarbageCollection('should pass constructor arguments to base class', () => {
 			class BaseClass {
 				constructor(public value: number) {}
 			}
@@ -55,7 +57,7 @@ describe('Destroyable', () => {
 			expect(obj.value).toBe(42)
 		})
 
-		it('should throw error when accessing destroyed object', () => {
+		itGarbageCollection('should throw error when accessing destroyed object', () => {
 			class MyClass {
 				constructor(public name: string) {}
 			}
@@ -75,7 +77,7 @@ describe('Destroyable', () => {
 	})
 
 	describe('with destructor object only', () => {
-		it('should create destroyable class from scratch', () => {
+		itGarbageCollection('should create destroyable class from scratch', () => {
 			let destructorCalled = false
 
 			const DestroyableClass = Destroyable({
@@ -95,7 +97,7 @@ describe('Destroyable', () => {
 	})
 
 	describe('with base class only', () => {
-		it('should create destroyable class with default destructor', () => {
+		itGarbageCollection('should create destroyable class with default destructor', () => {
 			class MyClass {
 				constructor(public name: string) {}
 			}
@@ -107,7 +109,7 @@ describe('Destroyable', () => {
 	})
 
 	describe('class with [destructor] method', () => {
-		it('should call [destructor] method with allocated values', async () => {
+		itGarbageCollection('should call [destructor] method with allocated values', async () => {
 			let receivedAllocated: any = null
 
 			class MyClass extends Destroyable() {
@@ -129,7 +131,7 @@ describe('Destroyable', () => {
 		})
 	})
 	describe('decorators usage', () => {
-		it('should collect allocated from decorators', async () => {
+		itGarbageCollection('should collect allocated from decorators', async () => {
 			let receivedAllocated: any = null
 
 			class MyClass extends Destroyable() {

@@ -1,4 +1,4 @@
-import { IterableWeakMap, IterableWeakSet } from '../src'
+import { IterableWeakMap, IterableWeakSet } from 'mutts'
 
 function tick(ms: number = 0) {
 	return new Promise((resolve) => setTimeout(resolve, ms))
@@ -12,7 +12,7 @@ const gc = (globalThis as unknown as GlobalWithGC).gc
 
 async function collectGarbages() {
 	await tick()
-	gc!()
+	gc?.()
 	await tick()
 }
 

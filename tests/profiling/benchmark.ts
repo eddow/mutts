@@ -7,7 +7,7 @@
  *   npm run benchmark:compare <name> - Compare against saved baseline
  *   npm run benchmark:list            - List saved benchmarks
  */
-
+// TODO: Benchmarking should be done in specific conditions - set the options as "production" (no cycle detection, etc.)
 import { execSync } from 'child_process'
 import { writeFileSync, readFileSync, existsSync, readdirSync, mkdirSync } from 'fs'
 import { join } from 'path'

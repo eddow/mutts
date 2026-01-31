@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from 'vitest'
 import { effect, reactive, reactiveOptions as options } from 'mutts'
 
 describe('effect cycle detection and ordering', () => {
@@ -36,7 +37,7 @@ describe('effect cycle detection and ordering', () => {
 
 		it('should warn when cycle is detected (warn mode)', () => {
 			const originalCycleHandling = options.cycleHandling
-			const warnSpy = jest.spyOn(options, 'warn').mockImplementation(() => {})
+			const warnSpy = vi.spyOn(options, 'warn').mockImplementation(() => {})
 
 			try {
 				options.cycleHandling = 'warn'
@@ -73,7 +74,7 @@ describe('effect cycle detection and ordering', () => {
 
 		it('should silently break cycle (break mode)', () => {
 			const originalCycleHandling = options.cycleHandling
-			const warnSpy = jest.spyOn(options, 'warn').mockImplementation(() => {})
+			const warnSpy = vi.spyOn(options, 'warn').mockImplementation(() => {})
 
 			try {
 				options.cycleHandling = 'break'

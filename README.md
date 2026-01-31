@@ -44,6 +44,66 @@ import { Destroyable, allocated } from 'mutts/destroyable'
 
 **Note:** When importing from source files, you'll need to configure your build system (TypeScript, Vite, Webpack, etc.) to handle TypeScript compilation and module resolution. The source files are published alongside the built modules, so you can import directly from the `src` directory.
 
+### Environment Setup (Node vs Browser)
+
+`mutts` has two distinct entry points to handle environment-specific behaviors (like `async_hooks` in Node vs `wrap` in Browser).
+
+*   **Automatic Resolution**: Bundlers (Vite, Rollup, Webpack) and Node.js will automatically pick the correct entry point (`mutts/node` or `mutts/browser`) based on the `exports` field in `package.json`.
+*   **Manual Selection**: You can force a specific environment if needed:
+    ```typescript
+    import 'mutts/node' // Side-effect import to polyfill async hooks in tests
+    import { ... } from 'mutts/node' // Explicit Node entry
+    import { ... } from 'mutts/browser' // Explicit Browser entry
+    ```
+
+## [Reactive](./docs/reactive.md)
+
+A comprehensive reactivity system. See the **[Introduction](./docs/reactive/core.md)** or browse the **[Table of Contents](./docs/reactive.md)**.
+
+**Key Features:**
+- **Core Reactivity**: Proxy-based property access tracking with `reactive()`, `effect()`, `memoize()`, `project()`, and `scan()`
+- **Deep Watching**: Automatic tracking of nested object changes with `deepWatch()`
+- **Reactive Collections**: Specialized reactive versions of Array, Map, Set, WeakMap, and WeakSet
+- **Class Reactivity**: `@reactive` decorator and `ReactiveBase` for class-based reactivity
+- **Reactive Mixin**: Always-reactive classes with mixin support (`Reactive`)
+- **Back-Reference System**: Efficient change propagation through object hierarchies
+- **Type Safety**: Full TypeScript support with proper type inference
+- **Performance Optimized**: Lazy back-reference creation and efficient dependency tracking
+- **Debugging & Development**: Built-in tools like cycle detection and memoization discrepancy check
+
+**Use Cases:**
+- State management systems
+- UI framework reactivity
+- Data synchronization
+- Real-time applications
+- Form validation and processing
+
+## [Zones & Async Context](./docs/zone.md)
+
+A powerful context propagation system that maintains state across asynchronous boundaries (Promises, timeouts, listeners).
+
+**Key Features:**
+- **Universal Context**: Works reliably in both Node.js (via `async_hooks`) and Browser/Edge environments.
+- **Zone**: A simple value container that propagates with execution flow.
+- **ZoneHistory**: A zone that tracks the history of values it has held in the current execution path.
+- **ZoneAggregator**: Combines multiple zones into a single propagatable context.
+- **Async Hooks**: Low-level hooks to capture, restore, and undo context changes across async boundaries.
+
+```typescript
+import { Zone, asyncZone } from 'mutts'
+
+const userZone = new Zone<User>()
+// Register for async propagation
+asyncZone.add(userZone)
+
+userZone.with(currentUser, async () => {
+  // Context is available here
+  await someAsyncWork()
+  // Context is STILL available here, magically!
+  console.log(userZone.active) // currentUser
+})
+```
+
 ## [Indexable](./docs/indexable.md)
 
 A way to write classes that allow numeric indexes managed by a custom function - either given in the class by the symbols [getAt] and [setAt] either by a specification if the Indexable class.
@@ -157,25 +217,3 @@ A comprehensive resource management system that provides automatic cleanup for o
 - Memory management for large objects
 - Plugin systems with proper cleanup
 - Temporary resource management
-
-## [Reactive](./docs/reactive.md)
-
-A comprehensive reactivity system. See the **[Introduction](./docs/reactive/core.md)** or browse the **[Table of Contents](./docs/reactive.md)**.
-
-**Key Features:**
-- **Core Reactivity**: Proxy-based property access tracking with `reactive()`, `effect()`, `memoize()`, `project()`, and `scan()`
-- **Deep Watching**: Automatic tracking of nested object changes with `deepWatch()`
-- **Reactive Collections**: Specialized reactive versions of Array, Map, Set, WeakMap, and WeakSet
-- **Class Reactivity**: `@reactive` decorator and `ReactiveBase` for class-based reactivity
-- **Reactive Mixin**: Always-reactive classes with mixin support (`Reactive`)
-- **Back-Reference System**: Efficient change propagation through object hierarchies
-- **Type Safety**: Full TypeScript support with proper type inference
-- **Performance Optimized**: Lazy back-reference creation and efficient dependency tracking
-- **Debugging & Development**: Built-in tools like cycle detection and memoization discrepancy check
-
-**Use Cases:**
-- State management systems
-- UI framework reactivity
-- Data synchronization
-- Real-time applications
-- Form validation and processing

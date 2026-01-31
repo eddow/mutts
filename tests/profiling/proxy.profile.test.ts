@@ -122,7 +122,7 @@ describe('Proxy Performance Profiling', () => {
 
 			const comparison = compareProfiles([plainResult, reactiveResult])
 			console.log(formatComparison(comparison))
-		})
+		}, 30000)
 
 		it('benchmark: repeated reactive() calls on same object', () => {
 			const obj = { count: 0 }

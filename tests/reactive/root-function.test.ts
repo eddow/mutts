@@ -1,4 +1,4 @@
-import { effect, reactive, root, untracked } from '../../src'
+import { effect, reactive, root, untracked } from 'mutts'
 
 describe('untracked and root functions', () => {
 	it('untracked should maintain parent cleanup relationship', () => {

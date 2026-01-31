@@ -120,7 +120,7 @@ const config = [
   },
   // UMD bundle for browser usage
   {
-    input: 'src/client.ts',
+    input: 'src/async/browser.ts',
     output: [
       {
         file: 'dist/mutts.umd.js',

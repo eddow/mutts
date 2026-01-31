@@ -1,4 +1,4 @@
-TODO: redo the doc here
+
 # Standard decorators
 
 A TypeScript library that provides standard decorators that should stop being re-implemented for the 50th time
@@ -550,6 +550,74 @@ deprecated.warn = (target, propertyKey, message?) => {
 3. **Use consistent messaging**: Follow a consistent format across your codebase
 4. **Document migration paths**: Provide clear upgrade instructions
 5. **Monitor usage**: Track which deprecated features are still being used
+
+## Debounce
+
+The `debounce` decorator delays the execution of a method until a specified amount of time has passed since the last time it was called. This is useful for handling rapid events like keystrokes or window resizing.
+
+## API Reference
+
+### `@debounce(delay: number)`
+
+A decorator that debounces a method.
+
+**Parameters:**
+- `delay`: The delay in milliseconds to wait before executing the method.
+
+**Returns:** A method decorator.
+
+## Usage Example
+
+```typescript
+import { debounce } from 'mutts/std-decorators'
+
+class SearchComponent {
+  @debounce(300)
+  onSearch(query: string) {
+    // This will only run after 300ms of inactivity
+    console.log(`Searching for: ${query}`)
+    this.performApiCall(query)
+  }
+
+  performApiCall(query: string) {
+    // ...
+  }
+}
+```
+
+## Throttle
+
+The `throttle` decorator limits the execution of a method to at most once every specified amount of time. This is useful for rate-limiting expensive operations like scroll handlers or animations.
+
+## API Reference
+
+### `@throttle(delay: number)`
+
+A decorator that throttles a method.
+
+**Parameters:**
+- `delay`: The time interval in milliseconds.
+
+**Returns:** A method decorator.
+
+## Usage Example
+
+```typescript
+import { throttle } from 'mutts/std-decorators'
+
+class ScrollHandler {
+  @throttle(100)
+  onScroll(event: Event) {
+    // This will run at most once every 100ms
+    console.log('Scroll event processed')
+    this.updateUI()
+  }
+
+  updateUI() {
+    // ...
+  }
+}
+```
 
 ## Related
 

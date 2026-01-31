@@ -1,3 +1,4 @@
+import { describe, expect, it, vi } from 'vitest'
 import { memoize, reactiveOptions } from 'mutts'
 
 describe('memoize discrepancy detector', () => {
@@ -13,11 +14,11 @@ describe('memoize discrepancy detector', () => {
 
     it('detects discrepancy when function depends on non-reactive value', () => {
         let external = 1
-        const compute = jest.fn(() => external)
+        const compute = vi.fn(() => external)
         const memo = memoize(compute)
 
         const detected: any[] = []
-        reactiveOptions.onMemoizationDiscrepancy = jest.fn((cached, fresh, fn, args) => {
+        reactiveOptions.onMemoizationDiscrepancy = vi.fn((cached, fresh, fn, args) => {
             detected.push({ cached, fresh, fn, args })
         })
 
@@ -41,10 +42,10 @@ describe('memoize discrepancy detector', () => {
     })
 
     it('does not trigger when values match', () => {
-         const compute = jest.fn(() => 42)
+         const compute = vi.fn(() => 42)
          const memo = memoize(compute)
 
-         reactiveOptions.onMemoizationDiscrepancy = jest.fn()
+         reactiveOptions.onMemoizationDiscrepancy = vi.fn()
 
          memo()
          memo()

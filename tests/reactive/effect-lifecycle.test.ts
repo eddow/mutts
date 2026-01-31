@@ -53,12 +53,13 @@ describe('automatic effect cleanup', () => {
 	function tick(ms: number = 100) {
 		return new Promise((resolve) => setTimeout(resolve, ms))
 	}
-
-	const gc = global.gc
+// TODO: Make sure gc is tested at least on one side (node I guess)
+	// const gc = typeof globalThis.gc === 'function' ? globalThis.gc : undefined
+    const itGarbageCollection = typeof globalThis.gc === 'function' ? it : it.skip
 
 	async function collectGarbages() {
 		await tick()
-		gc!()
+		globalThis.gc?.()
 		await tick()
 	}
 
@@ -172,7 +173,7 @@ describe('automatic effect cleanup', () => {
 	})
 
 	describe('garbage collection cleanup', () => {
-		it('should clean up unreferenced top-level effects via GC', async () => {
+		itGarbageCollection('should clean up unreferenced top-level effects via GC', async () => {
 			const state = reactive({ value: 1 })
 			let cleanupCalled = false
 
@@ -193,7 +194,7 @@ describe('automatic effect cleanup', () => {
 			expect(cleanupCalled).toBe(true)
 		})
 
-		it('should clean up parent and child effects when both are unreferenced', async () => {
+		itGarbageCollection('should clean up parent and child effects when both are unreferenced', async () => {
 			const state = reactive({ a: 1, b: 2 })
 			const cleanupCalls: string[] = []
 
@@ -223,7 +224,7 @@ describe('automatic effect cleanup', () => {
 			expect(cleanupCalls).toHaveLength(2)
 		})
 
-		it('should clean up orphaned child effects when parent is unreferenced', async () => {
+		itGarbageCollection('should clean up orphaned child effects when parent is unreferenced', async () => {
 			const state = reactive({ a: 1, b: 2 })
 			const cleanupCalls: string[] = []
 
@@ -252,7 +253,7 @@ describe('automatic effect cleanup', () => {
 			expect(cleanupCalls).toHaveLength(2)
 		})
 
-		it('should handle child effect referenced but parent unreferenced', async () => {
+		itGarbageCollection('should handle child effect referenced but parent unreferenced', async () => {
 			const state = reactive({ a: 1, b: 2 })
 			const cleanupCalls: string[] = []
 
@@ -262,7 +263,7 @@ describe('automatic effect cleanup', () => {
 				effect(() => {
 					state.a
 
-					// Create child effect and store its cleanup function
+					// Create child effect and store itGarbageCollections cleanup function
 					stopChild = effect(() => {
 						state.b
 						return () => cleanupCalls.push('child cleanup')

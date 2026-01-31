@@ -6,3 +6,5 @@ sandbox
 benchmarks
 .windsurf
 .aider*
+__screenshots__
+*.txt

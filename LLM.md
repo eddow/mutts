@@ -5,6 +5,16 @@
 
 ## Core Modules
 
+### 0. Environment Setup (Node vs Browser)
+`mutts` has two distinct entry points to handle environment-specific behaviors (like `async_hooks` in Node vs `wrap` in Browser).
+
+*   **Automatic Resolution**: Bundlers (Vite, Rollup, Webpack) and Node.js will automatically pick the correct entry point based on the `exports` field in `package.json`.
+    *   `import { ... } from 'mutts'` -> resolves to `mutts/node` or `mutts/browser` automatically.
+*   **Manual Selection**: You can force a specific environment if needed (e.g. in tests or specific build configs):
+    *   `import 'mutts/node'` (side-effect import to polyfill async hooks)
+    *   `import { ... } from 'mutts/node'`
+    *   `import { ... } from 'mutts/browser'`
+
 ### 1. Reactivity (`mutts/reactive`)
 *   **Proxy-based**: Uses `Proxy` to track dependencies.
 *   **API**:

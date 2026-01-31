@@ -493,7 +493,9 @@ describe('ReactiveArray', () => {
 			expect(reactiveArray[1]).toBe(4)
 			expect(reactiveArray[2]).toBe(5)
 		})
+
 	})
+
 
 	describe('mixed index and length reactivity', () => {
 		it('should track both index and length changes in same effect', () => {

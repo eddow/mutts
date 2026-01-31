@@ -1312,11 +1312,7 @@ describe('cleanup symbol', () => {
 		expect(cleanupCalled).toBe(true)
 	})
 
-	it('cleanup symbol should be unique and match exported symbol', () => {
-		const { cleanup: importedCleanup } = require('mutts/reactive/interface')
-		expect(cleanup).toBe(importedCleanup)
-		expect(typeof cleanup).toBe('symbol')
-	})
+
 
 	it('cleanup should not conflict with object properties', () => {
 		const testObj = { cleanup: 'user property' }

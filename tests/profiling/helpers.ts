@@ -1,4 +1,12 @@
-import { performance, PerformanceObserver } from 'perf_hooks'
+// import { performance, PerformanceObserver } from 'perf_hooks'
+const performance = globalThis.performance 
+const process = globalThis.process || { memoryUsage: () => ({ heapUsed: 0, heapTotal: 0 }) } // @ts-ignore
+import { reactiveOptions } from 'mutts'
+
+// Force production settings for accurate profiling
+reactiveOptions.cycleHandling = 'none'
+reactiveOptions.introspection.enableHistory = false
+reactiveOptions.maxDeepWatchDepth = 1000 // Allow deep structures in benchmarks
 
 /**
  * Result of a profiling measurement

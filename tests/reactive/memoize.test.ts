@@ -1,10 +1,12 @@
 import { atomic, effect, reactive, reactiveOptions, unwrap } from 'mutts'
 import { memoize } from 'mutts'
 
+import { describe, expect, it, vi } from 'vitest'
+
 describe('memoize', () => {
 	it('returns cached value and forwards same memoized function', () => {
 		let calls1 = 0
-		const compute = jest.fn(({ value }: { value: number }) => {
+		const compute = vi.fn(({ value }: { value: number }) => {
 			if (!reactiveOptions.isVerificationRun) calls1++
 			return value * 2
 		})
@@ -19,7 +21,7 @@ describe('memoize', () => {
 		expect(calls1).toBe(1)
 		// multiple args
 		let calls2 = 0
-		const compute2 = jest.fn((a: { foo: number }, b: { bar: number }) => {
+		const compute2 = vi.fn((a: { foo: number }, b: { bar: number }) => {
 			if (!reactiveOptions.isVerificationRun) calls2++
 			return a.foo + b.bar
 		})
@@ -46,7 +48,7 @@ describe('memoize', () => {
 	it('invalidates cache when dependencies change and triggers reactive consumers', () => {
 		const source = reactive({ value: 1 })
 		let calls = 0
-		const compute = jest.fn(({ node }: { node: typeof source }) => {
+		const compute = vi.fn(({ node }: { node: typeof source }) => {
 			if (!reactiveOptions.isVerificationRun) calls++
 			return node.value * 10
 		})
@@ -164,7 +166,7 @@ describe('memoize', () => {
 
 		it('detects discrepancy when a non-reactive dependency changes', () => {
 			let nonReactiveValue = 1
-			const callback = jest.fn()
+			const callback = vi.fn()
 			reactiveOptions.onMemoizationDiscrepancy = callback
 
 			const memo = memoize(({ obj }: { obj: object }) => {
@@ -184,7 +186,7 @@ describe('memoize', () => {
 
 		it('does NOT trigger discrepancy when result is structurally equal (deepCompare)', () => {
 			let nonReactiveValue = [1, 2]
-			const callback = jest.fn()
+			const callback = vi.fn()
 			reactiveOptions.onMemoizationDiscrepancy = callback
 
 			const memo = memoize(({ obj }: { obj: object }) => {
@@ -209,7 +211,7 @@ describe('memoize', () => {
 
 		it('triggers on initial execution if there is an immediate discrepancy (unlikely but possible if side effects)', () => {
 			let count = 0
-			const callback = jest.fn()
+			const callback = vi.fn()
 			reactiveOptions.onMemoizationDiscrepancy = callback
 
 			const memo = memoize(({ obj }: { obj: object }) => {

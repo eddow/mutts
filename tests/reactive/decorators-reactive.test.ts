@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from 'vitest'
 import { effect, ReactiveBase, reactive, reactiveOptions } from 'mutts'
 
 describe('@reactive decorator', () => {
@@ -338,7 +339,7 @@ describe('reactive function', () => {
 	})
 
 	it('should warn when used with inheritance', () => {
-		const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
 		class BaseClass {
 			baseProp = 'base'

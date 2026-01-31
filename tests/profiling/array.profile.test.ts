@@ -3,7 +3,7 @@
  * Measures performance of array operations and reactive wrappers
  * Run with: npm run test:profile
  */
-import { reactive } from 'mutts'
+import { reactive, effect } from 'mutts'
 import { profileSync } from './helpers'
 
 describe('Array Performance Profiling', () => {
@@ -91,7 +91,6 @@ describe('Array Performance Profiling', () => {
 			const arr: any[] = reactive([1, 2, 3])
 			let callCount = 0
 
-			const { effect } = require('mutts/reactive/effects')
 			const stop = effect(() => {
 				callCount++
 				// biome-ignore lint/style/noUnusedExpressions: Intentional for profiling

@@ -1,3 +1,9 @@
+# 1.0.8
+
+## TODOs
+
+- arrays indexing on change
+
 # 1.0.7
 
 ## Functionality
