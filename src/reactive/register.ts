@@ -411,6 +411,28 @@ export const Register = RegisterClass as new <T, K extends PropertyKey = Propert
 	initial?: Iterable<T>
 ) => Register<T, K>
 
+/**
+ * Creates a reactive Register - an ordered, array-like collection with stable key-based identity.
+ * 
+ * Register combines array semantics (indexable access, ordering, iteration) with Map-like
+ * key-based lookups. Items with the same key share the same value instance, making it ideal
+ * for UI lists keyed by IDs or when you need to preserve identity across reorders.
+ * 
+ * @param keyFn - Function that extracts the key from each item
+ * @param initial - Optional initial items to populate the register
+ * @returns A reactive Register instance
+ * 
+ * @example
+ * ```typescript
+ * const users = register(
+ *   (user: User) => user.id,
+ *   [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }]
+ * )
+ * 
+ * users.push({ id: 3, name: 'Charlie' })
+ * const bob = users.get(2) // Get by key
+ * ```
+ */
 export function register<T, K extends PropertyKey = PropertyKey>(
 	keyFn: KeyFunction<T, K>,
 	initial?: Iterable<T>

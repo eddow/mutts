@@ -91,6 +91,14 @@ export interface EffectOptions {
 	 * Use this for effects that depend on object identity (like memoize).
 	 */
 	opaque?: boolean
+	/**
+	 * Used for debugging purpose. Provides a callback to be called every time a dependency is created.
+	 */
+	dependencyHook?: (obj: any, prop: any)=> void
+	/**
+	 * Used for debugging purpose. Provides a name for the effect.
+	 */
+	name?: string
 }
 
 /**
@@ -148,6 +156,39 @@ export const stopped = Symbol('stopped')
  * Symbol to access effect cleanup function
  */
 export const cleanup = Symbol('cleanup')
+
+/**
+ * Type for the effect cleanup function with additional properties
+ */
+export type EffectCleanup = ScopedCallback & {
+	[stopped]: boolean
+	[cleanup]: () => void
+}
+
+/**
+ * Type for the base effect function signature
+ */
+export type EffectFunction = (
+	fn: (access: DependencyAccess) => ScopedCallback | undefined | void | Promise<any>,
+	effectOptions?: EffectOptions
+) => EffectCleanup
+
+/**
+ * Interface for chainable effect modifiers
+ * Both .opaque and .named() return functions that also have these modifiers for chaining
+ */
+export interface EffectWithModifiers extends EffectFunction {
+	/**
+	 * Creates an opaque effect that sees object references themselves
+	 * and must be notified when they change, regardless of deep content similarity.
+	 */
+	get opaque(): EffectWithModifiers
+	/**
+	 * Creates a named effect for debugging purposes.
+	 * @param name - The name to identify this effect
+	 */
+	named(name: string): EffectWithModifiers
+}
 
 /**
  * Context for a running projection item effect

@@ -178,6 +178,17 @@ export const unreactive = decorator({
 
 //#endregion
 
+/**
+ * Attaches a cleanup function to an object using the cleanup symbol.
+ * The cleanup function will be called when the object needs to be disposed.
+ * 
+ * Note: most of the time, you don't need to use this function directly.
+ * The main use if for the cleanup function to be stored with the object, as GC calls the cleanup function when the *function* is garbage collected.
+ * 
+ * @param obj - The object to attach the cleanup function to
+ * @param cleanupFn - The cleanup function to attach
+ * @returns The object with the cleanup function attached
+ */
 export function cleanedBy<T extends object>(obj: T, cleanupFn: ScopedCallback) {
 	return Object.defineProperty(obj, cleanup, {
 		value: cleanupFn,

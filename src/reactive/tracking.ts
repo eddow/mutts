@@ -22,6 +22,10 @@ export function dependant(obj: any, prop: any = allProps) {
 	)
 		return
 
+	if ('dependencyHook' in currentActiveEffect) {
+		// @ts-expect-error We declared it nowhere - it's okay as it's really internal and for edge-case debug purpose only
+		currentActiveEffect.dependencyHook(obj, prop)
+	}
 	let objectWatchers = watchers.get(obj)
 	if (!objectWatchers) {
 		objectWatchers = new Map<PropertyKey, Set<ScopedCallback>>()

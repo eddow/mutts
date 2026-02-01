@@ -18,6 +18,7 @@ import {
 	cleanup as cleanupSymbol,
 	type DependencyAccess,
 	type EffectOptions,
+	type EffectWithModifiers,
 	type Evolution,
 	options,
 	ReactiveError,
@@ -71,6 +72,12 @@ let activationRegistry: Map<Function, Map<any, Map<any, number>>> | undefined
 
 export const activationLog: Omit<ActivationRecord, 'batchId'>[] = new Array(100)
 
+/**
+ * Returns the activation log containing recent effect activations for debugging.
+ * The log is a circular buffer of the last 100 activations.
+ * 
+ * @returns Array of activation records
+ */
 export function getActivationLog() {
 	return activationLog
 }
@@ -1023,9 +1030,8 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 			}
 			return firstReturn.value
 		} catch (error) {
-			throw error instanceof ReactiveError
-				? error
-				: new ReactiveError('Effects are broken', { code: ReactiveErrorCode.BrokenEffects, cause: error })
+			console.error('Effects are broken')
+			throw error
 		} finally {
 			activationRegistry = undefined
 			batchQueue = undefined
@@ -1074,15 +1080,12 @@ const fr = new FinalizationRegistry<() => void>((f) => f())
  * @param options - Options for effect execution
  * @returns A cleanup function to stop the effect
  */
-export function effect(
+function effect(
 	//biome-ignore lint/suspicious/noConfusingVoidType: We have to
 	fn: (access: DependencyAccess) => ScopedCallback | undefined | void | Promise<any>,
 	effectOptions?: EffectOptions
-): ScopedCallback & {
-	[stopped]: boolean
-	[cleanupSymbol]: () => void
-} {
-
+): ReturnType<EffectWithModifiers> {
+	if (effectOptions?.name) Object.defineProperty(fn, 'name', { value: effectOptions.name })
 	// Use per-effect asyncMode or fall back to global option
 	const asyncMode = effectOptions?.asyncMode ?? options.asyncMode ?? 'cancel'
 	if (options.introspection.enableHistory) {
@@ -1209,6 +1212,11 @@ export function effect(
 			}
 		}
 	}
+	if (effectOptions?.dependencyHook) {
+		Object.defineProperty(runEffect, 'dependencyHook', {
+			value: effectOptions.dependencyHook,
+		})
+	}
 	// Mark the runEffect callback with the original function as its root
 	markWithRoot(runEffect, fn)
 	function augmentedRv(rv: ScopedCallback) {
@@ -1294,6 +1302,23 @@ export function effect(
 
 	return subEffectCleanup
 }
+function optioned(fn: typeof effect, options: EffectOptions) {
+	return new Proxy(fn, {
+		apply(target, thisArg, [fn, opts]) {
+			return target.apply(thisArg, [fn, opts? {...opts, ...options} : options])
+		},
+	})
+}
+Object.defineProperties(effect, Object.getOwnPropertyDescriptors({
+	get opaque() {
+		return optioned(this, { opaque: true })
+	},
+	named(name: string) {
+		return optioned(this, { name })
+	}
+}))
+const effectWithModifiers = effect as EffectWithModifiers
+export { effectWithModifiers as effect }
 
 /**
  * Executes a function without tracking dependencies but maintains parent cleanup relationship

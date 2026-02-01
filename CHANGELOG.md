@@ -1,5 +1,9 @@
 # 1.0.9
 
+## Functionality
+
+- `effect` now has a `named` and `opaque` "optioned" property
+
 ## Refactoring
 
 - `resolve` -> `lift` (array buffering)

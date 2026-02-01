@@ -37,7 +37,7 @@ const reactiveHandlers = {
 	get(obj: any, prop: PropertyKey, receiver: any) {
 		if (obj && typeof obj === 'object' && !Object.hasOwn(obj, prop)) {
 			const metaProto = metaProtos.get(obj.constructor)
-			if (metaProto && prop in metaProto) {
+			if (metaProto && Object.hasOwn(metaProto, prop)) {
 				const desc = Object.getOwnPropertyDescriptor(metaProto, prop)!
 				return desc.get ? desc.get.call(obj) : (...args: any[]) => desc.value.apply(obj, args)
 			}

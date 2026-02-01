@@ -157,6 +157,27 @@ export function scan<Input extends object, Output>(
 	}) as ScanResult<Output>
 }
 
+/**
+ * Lifts a callback that returns an array into a reactive array that automatically
+ * synchronizes with the source array returned by the callback.
+ * 
+ * The returned reactive array will update whenever the callback's dependencies change,
+ * efficiently syncing only the elements that differ from the previous result.
+ * 
+ * @example
+ * ```typescript
+ * const items = reactive([1, 2, 3])
+ * const doubled = lift(() => items.map(x => x * 2))
+ * 
+ * console.log([...doubled]) // [2, 4, 6]
+ * 
+ * items.push(4)
+ * console.log([...doubled]) // [2, 4, 6, 8]
+ * ```
+ * 
+ * @param cb Callback function that returns an array
+ * @returns A reactive array synchronized with the callback's result, with a [cleanup] property to stop tracking
+ */
 export function lift<Output>(cb: () => Output[]): Output[] & { [cleanup]: ScopedCallback } {
 	const result = reactive([] as Output[])
 	return cleanedBy(result, effect(() => {

@@ -76,3 +76,119 @@ result[cleanup]()
 | **Modify Item at `i`** | O(N) calls (entire reduction) | O(N-i) calls |
 | **Append Item** | O(N+1) calls | 1 call |
 | **Move Item** | O(N) calls | O(affected chain) |
+
+---
+
+# Lift
+
+The `lift` function transforms a callback that returns an array into a reactive array that automatically synchronizes with the source array whenever dependencies change.
+
+## Overview
+
+`lift` is useful when you have a reactive computation that produces an array, and you want that array to be reactive itself. It efficiently syncs only the elements that differ from the previous result, minimizing DOM updates and downstream effects.
+
+## Basic Usage
+
+```typescript
+import { reactive, lift } from 'mutts/reactive'
+
+const items = reactive([1, 2, 3])
+const doubled = lift(() => items.map(x => x * 2))
+
+console.log([...doubled]) // [2, 4, 6]
+
+items.push(4)
+console.log([...doubled]) // [2, 4, 6, 8]
+```
+
+## How it Works
+
+`lift` creates a reactive array and sets up an effect that:
+1. Calls the provided callback to get the source array
+2. Compares the source with the current reactive array
+3. Updates only the elements that have changed
+4. Adjusts the length if needed
+
+This approach is more efficient than replacing the entire array, as it preserves references to unchanged elements and triggers minimal reactive updates.
+
+## API Reference
+
+```typescript
+function lift<Output>(
+    cb: () => Output[]
+): Output[] & { [cleanup]: ScopedCallback }
+```
+
+### Parameters
+- `cb`: A callback function that returns an array. The callback is tracked reactively, so accessing reactive values inside it will cause the array to update when those values change.
+
+### Returns
+A reactive array that stays synchronized with the callback's result. The array includes a `[cleanup]` symbol that can be called to stop tracking.
+
+```typescript
+import { cleanup } from 'mutts/reactive'
+// ...
+doubled[cleanup]()
+```
+
+## Use Cases
+
+### Dynamic Filtering
+
+```typescript
+const allItems = reactive([
+  { id: 1, active: true, name: 'Item 1' },
+  { id: 2, active: false, name: 'Item 2' },
+  { id: 3, active: true, name: 'Item 3' },
+])
+
+const activeItems = lift(() => allItems.filter(item => item.active))
+
+// activeItems automatically updates when items change or active status changes
+allItems[1].active = true
+console.log(activeItems.length) // 3
+```
+
+### Computed Transformations
+
+```typescript
+const numbers = reactive([1, 2, 3, 4, 5])
+const multiplier = reactive({ value: 2 })
+
+const scaled = lift(() => numbers.map(n => n * multiplier.value))
+
+multiplier.value = 3
+// scaled is now [3, 6, 9, 12, 15]
+```
+
+### Conditional Array Construction
+
+```typescript
+const showExtras = reactive({ value: false })
+const baseItems = reactive(['A', 'B', 'C'])
+
+const displayItems = lift(() => 
+  showExtras.value 
+    ? [...baseItems, 'Extra 1', 'Extra 2']
+    : baseItems
+)
+
+showExtras.value = true
+// displayItems is now ['A', 'B', 'C', 'Extra 1', 'Extra 2']
+```
+
+## Comparison with `scan`
+
+| Feature | `lift` | `scan` |
+| :--- | :--- | :--- |
+| **Purpose** | Synchronize with a computed array | Accumulate values with intermediates |
+| **Input** | Callback returning array | Source array + accumulator function |
+| **Optimization** | Element-wise sync | Intermediate caching + move optimization |
+| **Use Case** | Derived arrays (map, filter) | Cumulative operations (sum, reduce) |
+
+## Performance Considerations
+
+- **Efficient Updates**: Only changed elements are updated, not the entire array
+- **Length Adjustments**: Array length changes are handled separately from element updates
+- **Reference Stability**: Unchanged elements maintain their references
+- **Cleanup**: Remember to call the cleanup function when the lifted array is no longer needed to prevent memory leaks

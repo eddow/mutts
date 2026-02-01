@@ -603,6 +603,94 @@ reactiveOptions.leave = (effect) => console.log('Leaving effect:', effect)
 reactiveOptions.chain = (caller, target) => console.log('Chaining:', caller, '->', target)
 ```
 
+### Effect Modifiers
+
+The `effect` function provides convenient shortcut modifiers for common options. These can be chained for more concise syntax:
+
+#### `.opaque`
+
+Creates an opaque effect that tracks object references rather than deep content. This is useful when you want effects to re-run only when the object identity changes, not when its properties change.
+
+```typescript
+import { effect, reactive } from 'mutts/reactive'
+
+const item = reactive({ id: 1, data: { value: 10 } })
+
+// Regular effect - triggers on any property change
+effect(() => {
+    console.log('Item data:', item.data.value) // Triggers on item.data.value changes
+})
+
+// Opaque effect - only triggers when item.data reference changes
+effect.opaque(() => {
+    console.log('Data object:', item.data) // Only triggers when item.data is replaced
+})
+
+item.data.value = 20       // Triggers regular effect, NOT opaque effect
+item.data = { value: 30 }  // Triggers BOTH effects
+```
+
+**Use cases for opaque effects:**
+- When you only care about object identity (e.g., cache keys, memoization)
+- When deep watching would be too expensive
+- When working with external data that shouldn't trigger deep reactivity
+
+#### `.named(name)`
+
+Creates a named effect for easier debugging and profiling. The name appears in DevTools and debug logs.
+
+```typescript
+import { effect, reactive } from 'mutts/reactive'
+
+const state = reactive({ count: 0 })
+
+// Create a named effect
+effect.named('counter-effect')(() => {
+    console.log('Count:', state.count)
+})
+
+// Named effects can also be combined with other options
+effect.named('data-loader').opaque(() => {
+    console.log('Loading data...')
+})
+```
+
+**Benefits of named effects:**
+- Easier identification in DevTools
+- Better stack traces during debugging
+- Helpful for performance profiling
+
+#### Combining Modifiers
+
+Modifiers can be chained in any order:
+
+```typescript
+// Named opaque effect
+effect.named('my-effect').opaque(() => {
+    // Effect code
+})
+
+// These are equivalent - order doesn't matter for the result
+effect.opaque.named('my-effect')(() => {
+    // Effect code
+})
+```
+
+Note: The modifiers return new effect functions with the options pre-applied, so they can be stored and reused:
+
+```typescript
+// Create a reusable named effect factory
+const createDataEffect = effect.named('data-layer')
+
+createDataEffect(() => {
+    console.log('Effect 1')
+})
+
+createDataEffect(() => {
+    console.log('Effect 2')
+})
+```
+
 
 ### `@reactive` Decorator
 

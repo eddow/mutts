@@ -1,4 +1,6 @@
-import { atomic, effect, reactive, ReactiveErrorCode } from 'mutts'
+import { fail } from 'assert'
+import { atomic, describe, effect, reactive, ReactiveErrorCode } from 'mutts'
+import { it, expect } from 'vitest'
 
 describe('@atomic decorator', () => {
 	describe('basic functionality', () => {
@@ -380,7 +382,7 @@ describe('@atomic decorator', () => {
 				instance.updateWithError()
 				fail('Should have thrown')
 			} catch (e: any) {
-				expect(e.message).toBe('Effects are broken')
+				expect(e.message).toBe('Test error')
 				expect(e.debugInfo.code).toBe(ReactiveErrorCode.BrokenEffects)
 				expect(e.debugInfo.cause.message).toBe('Test error')
 			}
@@ -433,7 +435,7 @@ describe('@atomic decorator', () => {
 				instance.outerUpdate()
 				fail('Should have thrown')
 			} catch (e: any) {
-				expect(e.message).toBe('Effects are broken')
+				expect(e.message).toBe('Nested error')
 				expect(e.code).toBe(ReactiveErrorCode.BrokenEffects)
 				expect(e.cause.message).toBe('Nested error')
 			}
