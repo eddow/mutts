@@ -39,7 +39,7 @@ const reactiveHandlers = {
 			const metaProto = metaProtos.get(obj.constructor)
 			if (metaProto && prop in metaProto) {
 				const desc = Object.getOwnPropertyDescriptor(metaProto, prop)!
-				return desc.get ? desc.get.call(obj) : (...args) => desc.value.apply(obj, args)
+				return desc.get ? desc.get.call(obj) : (...args: any[]) => desc.value.apply(obj, args)
 			}
 		}
 		if (prop === nonReactiveMark) return false

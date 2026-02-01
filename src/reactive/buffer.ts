@@ -157,7 +157,7 @@ export function scan<Input extends object, Output>(
 	}) as ScanResult<Output>
 }
 
-export function resolve<Output>(cb: () => Output[]): Output[] & { [cleanup]: ScopedCallback } {
+export function lift<Output>(cb: () => Output[]): Output[] & { [cleanup]: ScopedCallback } {
 	const result = reactive([] as Output[])
 	return cleanedBy(result, effect(() => {
 		const source = cb()

@@ -1,16 +1,8 @@
 import { createHook } from 'node:async_hooks'
-import { Hook, Restorer, asyncHooks } from '.'
+import { Restorer, hooks } from '.'
 
 // 1. Generic async_hooks implementation for Hooks
 // This maintains support for 'asyncHooks.addHook' for generic use cases.
-
-const hooks = new Set<Hook>()
-asyncHooks.addHook = function (hook: Hook) {
-	hooks.add(hook)
-	return () => {
-		hooks.delete(hook)
-	}
-}
 
 const contexts = new Map<number, Restorer[]>()
 const activeUndoers = new Map<number, (() => void)[]>()

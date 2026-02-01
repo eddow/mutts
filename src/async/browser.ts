@@ -1,14 +1,7 @@
-import { Hook, Restorer, asyncHooks } from '.'
+import { Restorer, asyncHooks, hooks } from '.'
 
-const hooks = new Set<Hook>()
 const promiseContexts = new WeakMap<Promise<any>, Set<Restorer>>()
 
-asyncHooks.addHook = function (hook: Hook) {
-	hooks.add(hook)
-	return () => {
-		hooks.delete(hook)
-	}
-}
 
 // [HACK]: Sanitization
 // If a Promise is created inside the zone, it carries the "Sticky" zone context.

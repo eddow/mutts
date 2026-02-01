@@ -1,9 +1,13 @@
 export type Restorer = () => () => void
 export type Hook = () => Restorer
 
+// Queue for hooks registered before the environment is ready (circular dependency fix)
+export const hooks = new Set<Hook>()
+
 export const asyncHooks = {
-	addHook(_hook: Hook): () => void {
-		throw 'One must import the library from the server or the client side'
+	addHook(hook: Hook): () => void {
+		hooks.add(hook)
+        return () => hooks.delete(hook)
 	},
     /** 
      * [Hack] Sanitize a promise (or value) to prevent context leaks. 

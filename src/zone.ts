@@ -18,7 +18,7 @@ export abstract class AZone<T> {
 	protected leave(entered: unknown): void {
 		this.active = entered as T | undefined
 	}
-	with<R>(value: T, fn: () => R): R {
+	with<R>(value: T | undefined, fn: () => R): R {
 		const entered = this.enter(value)
         let res: R;
 		try {
@@ -44,7 +44,7 @@ export abstract class AZone<T> {
 	}
 }
 
-export type FunctionWrapper = <R>(fn?: () => R) => R
+export type FunctionWrapper = <R>(fn: () => R) => R
 
 export class Zone<T> extends AZone<T> {
 	active: T | undefined

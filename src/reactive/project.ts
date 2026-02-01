@@ -19,7 +19,10 @@ export function getActiveProjection(): ProjectionContext | undefined {
 	const active = getActiveEffect()
 	return active ? effectProjectionMetadata.get(active) : undefined
 }
-
+function setActiveProjection(projection: ProjectionContext | undefined) {
+	const active = getActiveEffect()
+	if (active) effectProjectionMetadata.set(active, projection)
+}
 /* TODO
 It seems to work and I feel like it's correct but I couldn't validate theoretically that `ascend`
 is the correct way to deal with nested effects.
@@ -113,7 +116,8 @@ function projectArray<SourceValue, ResultValue>(
 			if (indexEffects.has(i)) continue
 			ascend(() => {
 				const index = i
-				const stop = effect(function projectArrayIndexEffect() {
+				const stop = effect(function projectArrayIndexEffect({ reaction }) {
+					if(!reaction) setActiveProjection({ source, key: index, target, depth, parent })
 					const previous = untracked(() => target[index])
 					const accessBase = {
 						key: index,
@@ -128,13 +132,6 @@ function projectArray<SourceValue, ResultValue>(
 					target[index] = produced
 				})
 				setEffectName(stop, `project[${depth}]:${index}`)
-				effectProjectionMetadata.set(stop, {
-					source,
-					key: index,
-					target,
-					depth,
-					parent,
-				})
 				indexEffects.set(i, stop)
 			})
 		}
@@ -160,7 +157,7 @@ function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
 		ResultValue
 	>
 ): ProjectResult<Map<Key, ResultValue>> {
-	const observedSource = reactive(source) as Register<SourceValue, Key>
+	source = reactive(source) as Register<SourceValue, Key>
 	const rawTarget = new Map<Key, ResultValue>()
 	const target = reactive(rawTarget) as Map<Key, ResultValue>
 	const keyEffects = new Map<Key, ScopedCallback>()
@@ -179,19 +176,20 @@ function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
 
 	const cleanupKeys = effect(function projectRegisterEffect({ ascend }) {
 		const keys = new Set<Key>()
-		for (const key of observedSource.mapKeys()) keys.add(key)
+		for (const key of source.mapKeys()) keys.add(key)
 
 		for (const key of keys) {
 			if (keyEffects.has(key)) continue
 			ascend(() => {
-				const stop = effect(function projectRegisterKeyEffect() {
+				const stop = effect(function projectRegisterKeyEffect({ reaction }) {
+					if(!reaction) setActiveProjection({ source, key, target, depth, parent })
 					const previous = untracked(() => target.get(key))
 					const accessBase = {
 						key,
-						source: observedSource,
-						get: () => observedSource.get(key) as SourceValue,
+						source: source,
+						get: () => source.get(key) as SourceValue,
 						set: (value: SourceValue) => {
-							observedSource.set(key, value)
+							source.set(key, value)
 							return true
 						},
 						old: previous,
@@ -201,13 +199,6 @@ function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
 					target.set(key, produced)
 				})
 				setEffectName(stop, `project[${depth}]:${String(key)}`)
-				effectProjectionMetadata.set(stop, {
-					source: observedSource,
-					key,
-					target,
-					depth,
-					parent,
-				})
 				keyEffects.set(key, stop)
 			})
 		}
@@ -216,7 +207,7 @@ function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
 	})
 
 	return makeCleanup(target, keyEffects, () => cleanupKeys(), {
-		source: observedSource,
+		source: source,
 		target,
 		apply,
 		depth,
@@ -234,7 +225,7 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 		ResultValue
 	>
 ): ProjectResult<Record<keyof Source, ResultValue>> {
-	const observedSource = reactive(source) as Source
+	source = reactive(source) as Source
 	const target = reactive({} as Record<keyof Source, ResultValue>)
 	const keyEffects = new Map<PropertyKey, ScopedCallback>()
 
@@ -252,24 +243,25 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 
 	const cleanupKeys = effect(function projectRecordEffect({ ascend }) {
 		const keys = new Set<PropertyKey>()
-		for (const key in observedSource) keys.add(key)
-		const observed = Reflect.ownKeys(observedSource)
+		for (const key in source) keys.add(key)
+		const observed = Reflect.ownKeys(source)
 		for (const key of observed) keys.add(key)
 
 		for (const key of keys) {
 			if (keyEffects.has(key)) continue
 			ascend(() => {
-				const stop = effect(function projectRecordKeyEffect() {
+				const stop = effect(function projectRecordKeyEffect({ reaction }) {
+					if(!reaction) setActiveProjection({ source, key, target, depth, parent })
 					const sourceKey = key as keyof Source
 					const previous = untracked(
 						() => (target as Record<PropertyKey, ResultValue | undefined>)[key]
 					)
 					const accessBase = {
 						key: sourceKey,
-						source: observedSource,
-						get: () => FoolProof.get(observedSource, sourceKey, observedSource),
+						source: source,
+						get: () => FoolProof.get(source, sourceKey, source),
 						set: (value: Source[typeof sourceKey]) =>
-							FoolProof.set(observedSource, sourceKey, value, observedSource),
+							FoolProof.set(source, sourceKey, value, source),
 						old: previous,
 					} as ProjectAccess<
 						Source[typeof sourceKey],
@@ -282,13 +274,6 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 					;(target as any)[sourceKey] = produced
 				})
 				setEffectName(stop, `project[${depth}]:${String(key)}`)
-				effectProjectionMetadata.set(stop, {
-					source: observedSource,
-					key,
-					target,
-					depth,
-					parent,
-				})
 				keyEffects.set(key, stop)
 			})
 		}
@@ -297,7 +282,7 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 	})
 
 	return makeCleanup(target, keyEffects, () => cleanupKeys(), {
-		source: observedSource,
+		source: source,
 		target,
 		apply,
 		depth,
@@ -309,7 +294,7 @@ function projectMap<Key, Value, ResultValue>(
 	source: Map<Key, Value>,
 	apply: ProjectCallback<Value, Key, Map<Key, ResultValue>, Map<Key, Value>, ResultValue>
 ): ProjectResult<Map<Key, ResultValue>> {
-	const observedSource = reactive(source) as Map<Key, Value>
+	source = reactive(source) as Map<Key, Value>
 	const rawTarget = new Map<Key, ResultValue>()
 	const target = reactive(rawTarget) as Map<Key, ResultValue>
 	const keyEffects = new Map<Key, ScopedCallback>()
@@ -328,19 +313,20 @@ function projectMap<Key, Value, ResultValue>(
 
 	const cleanupKeys = effect(function projectMapEffect({ ascend }) {
 		const keys = new Set<Key>()
-		for (const key of observedSource.keys()) keys.add(key)
+		for (const key of source.keys()) keys.add(key)
 
 		for (const key of keys) {
 			if (keyEffects.has(key)) continue
 			ascend(() => {
-				const stop = effect(function projectMapKeyEffect() {
+				const stop = effect(function projectMapKeyEffect({ reaction }) {
+					if(!reaction) setActiveProjection({ source, key, target, depth, parent })
 					const previous = untracked(() => target.get(key))
 					const accessBase = {
 						key,
-						source: observedSource,
-						get: () => observedSource.get(key) as Value,
+						source: source,
+						get: () => source.get(key) as Value,
 						set: (value: Value) => {
-							observedSource.set(key, value)
+							source.set(key, value)
 							return true
 						},
 						old: previous,
@@ -350,13 +336,6 @@ function projectMap<Key, Value, ResultValue>(
 					target.set(key, produced)
 				})
 				setEffectName(stop, `project[${depth}]:${String(key)}`)
-				effectProjectionMetadata.set(stop, {
-					source: observedSource,
-					key,
-					target,
-					depth,
-					parent,
-				})
 				keyEffects.set(key, stop)
 			})
 		}
@@ -365,7 +344,7 @@ function projectMap<Key, Value, ResultValue>(
 	})
 
 	return makeCleanup(target, keyEffects, () => cleanupKeys(), {
-		source: observedSource,
+		source: source,
 		target,
 		apply,
 		depth,

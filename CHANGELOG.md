@@ -1,3 +1,9 @@
+# 1.0.9
+
+## Refactoring
+
+- `resolve` -> `lift` (array buffering)
+
 # 1.0.8
 
 ## TODOs
@@ -23,5 +29,5 @@
 
 ## Bugfixes
 
-- biDi now uses `programatticallySetValue` to prevent circular updates instead of hacking in the batch
+- biDi now uses `programmaticallySetValue` to prevent circular updates instead of hacking in the batch
 - added `toJSON` to reactive arrays

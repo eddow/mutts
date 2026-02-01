@@ -103,17 +103,17 @@ export abstract class ReactiveArray extends Array {
 	}
 
 	// Iterator methods with reactivity tracking
-	entries() {
+	entries(): any {
 		dependant(this)
 		return makeReactiveEntriesIterator(this.entries())
 	}
 
-	keys() {
+	keys(): any {
 		dependant(this, 'length')
 		return this.keys()
 	}
 
-	values() {
+	values(): any {
 		dependant(this)
 		return makeReactiveIterator(this.values())
 	}
@@ -360,7 +360,7 @@ export abstract class ReactiveArray extends Array {
 		return false
 	}
 	// Side-effectful
-	push(...items: any[]) {
+	push(...items: any[]): number {
 		const oldLength = this.length
 		try {
 			return this.push(...items)
@@ -373,7 +373,7 @@ export abstract class ReactiveArray extends Array {
 		}
 	}
 
-	pop() {
+	pop(): any {
 		if (this.length === 0) return undefined
 		try {
 			return reactive(this.pop())
@@ -382,7 +382,7 @@ export abstract class ReactiveArray extends Array {
 		}
 	}
 
-	shift() {
+	shift(): any {
 		if (this.length === 0) return undefined
 		try {
 			return reactive(this.shift())
@@ -391,7 +391,7 @@ export abstract class ReactiveArray extends Array {
 		}
 	}
 
-	unshift(...items: any[]) {
+	unshift(...items: any[]): number {
 		try {
 			return this.unshift(...items)
 		} finally {
@@ -403,7 +403,7 @@ export abstract class ReactiveArray extends Array {
 		}
 	}
 
-	splice(start: number, deleteCount?: number, ...items: any[]) {
+	splice(start: number, deleteCount?: number, ...items: any[]): any[] {
 		const oldLength = this.length
 
 		// Normalize start index
@@ -435,7 +435,7 @@ export abstract class ReactiveArray extends Array {
 		}
 	}
 
-	reverse() {
+	reverse(): any[] {
 		try {
 			return this.reverse()
 		} finally {
@@ -443,7 +443,7 @@ export abstract class ReactiveArray extends Array {
 		}
 	}
 
-	sort(compareFn?: (a: any, b: any) => number) {
+	sort(compareFn?: (a: any, b: any) => number): this {
 		compareFn = compareFn || ((a, b) => a.toString().localeCompare(b.toString()))
 		try {
 			return this.sort((a, b) => compareFn(reactive(a), reactive(b))) as any
@@ -452,7 +452,7 @@ export abstract class ReactiveArray extends Array {
 		}
 	}
 
-	fill(value: any, start?: number, end?: number) {
+	fill(value: any, start?: number, end?: number): this {
 		const len = this.length
 		let k = start === undefined ? 0 : start
 		if (k < 0) k = Math.max(len + k, 0)
@@ -473,7 +473,7 @@ export abstract class ReactiveArray extends Array {
 		}
 	}
 
-	copyWithin(target: number, start: number, end?: number) {
+	copyWithin(target: number, start: number, end?: number): this {
 		try {
 			if (end === undefined) return this.copyWithin(target, start) as any
 			return this.copyWithin(target, start, end) as any

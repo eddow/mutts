@@ -1366,16 +1366,16 @@ export function biDi<T>(
 		set = get.set
 		get = get.get
 	}
-	let programatticallySetValue: any = Symbol()
+	let programmaticallySetValue: any = Symbol()
 	effect(
 		markWithRoot(() => {
 			const newValue = get()
-			if (unwrap(newValue) !== programatticallySetValue) received(newValue)
+			if (unwrap(newValue) !== programmaticallySetValue) received(newValue)
 		}, received)
 	)
 	return set
 		? atomic((value: T) => {
-				programatticallySetValue = unwrap(value)
+				programmaticallySetValue = unwrap(value)
 				set(value)
 			})
 		: () => {}

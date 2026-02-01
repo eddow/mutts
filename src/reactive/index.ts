@@ -27,7 +27,7 @@ export { immutables, isNonReactive, registerNativeReactivity } from './non-react
 export { getActiveProjection, project } from './project'
 export { isReactive, ReactiveBase, reactive, unwrap } from './proxy'
 export { organize, organized } from './record'
-export { scan, type ScanResult, resolve } from './buffer'
+export { scan, type ScanResult, lift } from './buffer'
 export { Register, register } from './register'
 export { getActiveEffect, effectAggregator } from './effect-context'
 export {
