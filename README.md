@@ -217,3 +217,20 @@ A comprehensive resource management system that provides automatic cleanup for o
 - Memory management for large objects
 - Plugin systems with proper cleanup
 - Temporary resource management
+
+## [Flavored](./docs/flavored.md)
+
+A utility for creating extensible functions with chainable property modifiers. Enables fluent APIs where properties return specialized variants of the base function.
+
+**Key Features:**
+- **Property-based Modifiers**: Add chainable properties to functions via getters or methods
+- **Options Merging**: `flavorOptions` helper for automatic options object merging
+- **Argument Transformation**: `createFlavor` helper for custom argument transformation
+- **Hand-made Functions**: Return custom functions for complete control (the generic case)
+- **Full TypeScript Support**: Proper type inference for chained modifiers
+
+**Use Cases:**
+- Creating functions with preset configurations (e.g., `effect.opaque`, `effect.named()`)
+- Fluent APIs for function variants
+- Partial application with named parameters
+- Building chainable configuration DSLs

@@ -1,13 +1,38 @@
 import { FunctionWrapper } from '../zone'
 import { ArrayReadForward, forwardArray, getAt, Indexable, setAt } from '../indexable'
 import { effect } from './effects'
+import { Eventful } from '../eventful'
 import { unreactive } from './interface'
 import { reactive } from './proxy'
 import { type ScopedCallback } from './types'
 
-// TODO: use register in a real-world crud situation, have "events" for add, delete, update
-
 type KeyFunction<T, K extends PropertyKey> = (item: T) => K
+
+/**
+ * Events emitted by the Register for CRUD operations
+ */
+export interface RegisterEvents<T, K extends PropertyKey> {
+	/**
+	 * Emitted when a new item is added to the register
+	 */
+	add: (item: T, key: K, index: number) => void
+	/**
+	 * Emitted when an item is removed from the register
+	 */
+	delete: (item: T, key: K, index: number) => void
+	/**
+	 * Emitted when an item's value is updated (same key, new value)
+	 */
+	update: (oldItem: T, newItem: T, key: K, index: number) => void
+	/**
+	 * Emitted when an item's key changes (rekey operation)
+	 */
+	rekey: (item: T, oldKey: K, newKey: K, index: number) => void
+	/**
+	 * Index signature for EventsBase compatibility
+	 */
+	[key: string]: (...args: any[]) => void
+}
 
 // Helper to work around TypeScript limitation: base class expressions cannot reference class type parameters
 function getRegisterBase<T>() {
@@ -53,6 +78,51 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 	readonly #valueInfo = new Map<T, { key: K; stop?: ScopedCallback }>()
 	readonly #keyEffects = new Set<ScopedCallback>()
 	readonly #ascend: FunctionWrapper
+	readonly #events = new Eventful<RegisterEvents<T, K>>()
+
+	/**
+	 * Register event listeners for CRUD operations
+	 */
+	on(events: Partial<RegisterEvents<T, K>>): void
+	on<EventType extends keyof RegisterEvents<T, K>>(
+		event: EventType,
+		cb: RegisterEvents<T, K>[EventType]
+	): () => void
+	on<EventType extends keyof RegisterEvents<T, K>>(
+		eventOrEvents: EventType | Partial<RegisterEvents<T, K>>,
+		cb?: RegisterEvents<T, K>[EventType]
+	): () => void {
+		// @ts-expect-error Delegate to Eventful
+		return this.#events.on(eventOrEvents, cb)
+	}
+
+	/**
+	 * Remove event listeners
+	 */
+	off(events: Partial<RegisterEvents<T, K>>): void
+	off<EventType extends keyof RegisterEvents<T, K>>(
+		event: EventType,
+		cb?: RegisterEvents<T, K>[EventType]
+	): void
+	off<EventType extends keyof RegisterEvents<T, K>>(
+		eventOrEvents: EventType | Partial<RegisterEvents<T, K>>,
+		cb?: RegisterEvents<T, K>[EventType]
+	): void {
+		// @ts-expect-error Delegate to Eventful
+		this.#events.off(eventOrEvents, cb)
+	}
+
+	/**
+	 * Register a global hook that receives all events
+	 */
+	hook(
+		cb: <EventType extends keyof RegisterEvents<T, K>>(
+			event: EventType,
+			...args: Parameters<RegisterEvents<T, K>[EventType]>
+		) => void
+	): () => void {
+		return this.#events.hook(cb)
+	}
 
 	constructor(keyFn: KeyFunction<T, K>, initial?: Iterable<T>) {
 		super()
@@ -96,10 +166,17 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 			throw new Error('Register key function must return a property key')
 	}
 
-	private setKeyValue(key: K, value: T) {
+	private setKeyValue(key: K, value: T, index?: number) {
 		const existing = this.#values.get(key)
-		if (existing !== undefined && existing !== value) this.cleanupValue(existing)
-		this.#values.set(key, value)
+		if (existing !== undefined && existing !== value) {
+			this.cleanupValue(existing)
+			this.#values.set(key, value)
+			if (index !== undefined) {
+				this.#events.emit('update', existing, value, key, index)
+			}
+		} else {
+			this.#values.set(key, value)
+		}
 	}
 
 	private cleanupValue(value: T) {
@@ -128,13 +205,20 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 		if (!count) return
 		const existingCount = this.#usage.get(newKey) ?? 0
 		this.setKeyValue(newKey, value)
+		let index = -1
 		for (let i = 0; i < this.#keys.length; i++)
-			if (Object.is(this.#keys[i], oldKey)) this.#keys[i] = newKey
+			if (Object.is(this.#keys[i], oldKey)) {
+				this.#keys[i] = newKey
+				if (index === -1) index = i
+			}
 		this.#usage.set(newKey, existingCount + count)
 		this.#usage.delete(oldKey)
 		this.#values.delete(oldKey)
 		const updatedInfo = this.#valueInfo.get(value)
 		if (updatedInfo) updatedInfo.key = newKey
+		if (index !== -1) {
+			this.#events.emit('rekey', value, oldKey, newKey, index)
+		}
 	}
 
 	private incrementUsage(key: K) {
@@ -142,14 +226,18 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 		this.#usage.set(key, count + 1)
 	}
 
-	private decrementUsage(key: K) {
+	private decrementUsage(key: K, index?: number) {
 		const count = this.#usage.get(key)
 		if (!count) return
 		if (count <= 1) {
 			const value = this.#values.get(key)
 			this.#usage.delete(key)
 			this.#values.delete(key)
-			if (value !== undefined) this.cleanupValue(value)
+			if (value !== undefined) {
+				this.cleanupValue(value)
+				const idx = index ?? this.#keys.indexOf(key)
+				this.#events.emit('delete', value, key, idx)
+			}
 		} else {
 			this.#usage.set(key, count - 1)
 		}
@@ -170,19 +258,25 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 	private assignAt(index: number, key: K, value: T) {
 		const oldKey = this.#keys[index]
 		if (oldKey !== undefined && Object.is(oldKey, key)) {
+			const oldValue = this.#values.get(key)
 			this.setKeyValue(key, value)
+			if (oldValue !== undefined && oldValue !== value) {
+				this.#events.emit('update', oldValue, value, key, index)
+			}
 			return
 		}
 		if (oldKey !== undefined) this.decrementUsage(oldKey as K)
 		this.#keys[index] = key
 		this.incrementUsage(key)
 		this.setKeyValue(key, value)
+		this.#events.emit('add', value, key, index)
 	}
 
 	private insertKeyValue(index: number, key: K, value: T) {
 		this.#keys.splice(index, 0, key)
 		this.incrementUsage(key)
 		this.setKeyValue(key, value)
+		this.#events.emit('add', value, key, index)
 	}
 
 	private rebuildFrom(values: T[]) {
@@ -255,10 +349,11 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 		for (const item of items) keysToInsert.push(this.ensureKey(item))
 		const removedKeys = this.#keys.splice(normalizedStart, actualDelete, ...keysToInsert)
 		const removedValues: T[] = []
-		for (const key of removedKeys) {
+		for (let i = 0; i < removedKeys.length; i++) {
+			const key = removedKeys[i]
 			if (key === undefined) continue
 			const value = this.#values.get(key as K)
-			this.decrementUsage(key as K)
+			this.decrementUsage(key as K, normalizedStart + i)
 			removedValues.push(value as T)
 		}
 		for (let i = 0; i < keysToInsert.length; i++) {
@@ -296,7 +391,7 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 		const [key] = this.#keys.splice(index, 1)
 		if (key === undefined) return undefined
 		const value = this.#values.get(key as K)
-		this.decrementUsage(key as K)
+		this.decrementUsage(key as K, index)
 		return value
 	}
 
@@ -336,7 +431,10 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 	update(...values: T[]): void {
 		for (const value of values) {
 			const key = this.ensureKey(value)
-			if (this.#values.has(key)) this.setKeyValue(key, value)
+			if (this.#values.has(key)) {
+				const index = this.#keys.indexOf(key)
+				this.setKeyValue(key, value, index)
+			}
 		}
 	}
 

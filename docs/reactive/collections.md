@@ -347,6 +347,61 @@ The `Register` exposes additional methods and behaviors that standard arrays do 
   - `toArray(): T[]` materializes the current values into a plain array.
   - `toString(): string` returns a concise description like `[Register length=3]`.
 
+### Register CRUD Events
+
+`Register` emits lifecycle events for add, delete, update, and rekey operations. This enables side effects like logging, syncing with external systems, or triggering derived updates.
+
+```typescript
+const list = register(({id}: { id: number }) => id)
+
+// Listen to individual events
+list.on('add', (item, key, index) => {
+    console.log(`Added ${key} at index ${index}:`, item)
+})
+
+list.on('delete', (item, key, index) => {
+    console.log(`Removed ${key} from index ${index}:`, item)
+})
+
+list.on('update', (oldItem, newItem, key, index) => {
+    console.log(`Updated ${key} at index ${index}`)
+})
+
+list.on('rekey', (item, oldKey, newKey, index) => {
+    console.log(`Key changed from ${oldKey} to ${newKey}`)
+})
+
+// Bulk event registration
+list.on({
+    add: (item) => console.log('Added:', item),
+    delete: (item) => console.log('Deleted:', item),
+})
+
+// Global hook - receive all events
+const unhook = list.hook((event, ...args) => {
+    console.log(`Event: ${String(event)}`, args)
+})
+
+// Unsubscribe
+const unsubscribe = list.on('add', handler)
+unsubscribe()
+```
+
+**Event Types:**
+
+| Event | Arguments | Description |
+|-------|-----------|-------------|
+| `add` | `(item, key, index)` | New item added to register |
+| `delete` | `(item, key, index)` | Item removed from register |
+| `update` | `(oldItem, newItem, key, index)` | Item value updated (same key) |
+| `rekey` | `(item, oldKey, newKey, index)` | Item's key changed |
+
+**Use Cases:**
+- Audit logging
+- Syncing with databases
+- Triggering notifications
+- Cascading updates to dependent systems
+
 Notes:
 - Direct length modification via `list.length = n` is not supported; use `splice` instead.
 - Assigning to an index (`list[i] = value`) uses the key function to bind that slot to `value`’s key.

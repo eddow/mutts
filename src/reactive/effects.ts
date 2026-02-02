@@ -1,4 +1,5 @@
 import { decorator } from '../decorator'
+import { flavorOptions, flavored } from '../flavored'
 import { IterableWeakSet } from '../iterableWeak'
 import { getTriggerChain, isDevtoolsEnabled, registerEffectForDebug } from './debug'
 import {
@@ -500,44 +501,6 @@ function decrementInDegreesForExecuted(batch: BatchQueue, executedRoot: Function
 			}
 		}
 	}
-}
-
-/**
- * Computes the in-degree (number of dependencies) for an effect in the current batch
- * Uses causesClosure to count all effects (directly or indirectly) that trigger this effect
- * @param root - Root function of the effect
- * @param batchEffects - Map of all effects in current batch (todos - effects that still need execution)
- * @returns Number of effects in batch that trigger this effect (directly or indirectly)
- *
- * TODO: Optimization - For large graphs with small batches, iterating over all causes in the closure
- * can be expensive. Consider maintaining a separate "batch causes" set or caching in-degrees.
- */
-/* function computeInDegreeInBatch(
-	root: Function,
-	batchEffects: Map<Function, ScopedCallback>
-): number {
-	let inDegree = 0
-	const activeEffect = getActiveEffect()
-	const activeRoot = activeEffect ? getRoot(activeEffect) : null
-
-	// Count effects in batch that trigger this effect (directly or indirectly)
-	// Using causesClosure which contains all transitive causes
-	// Note: batchEffects only contains effects that still need execution (todos),
-	// so we don't need to check if causes have been executed - they're not in the map if executed
-	const causes = causesClosure.get(root)
-	if (causes) {
-		for (const causeRoot of causes) {
-			// Only count if it's in the batch (still needs execution)
-			// BUT: don't count the currently executing effect (active effect)
-			// This handles the case where an effect is triggered during another effect's execution
-			// Note: Self-loops are ignored - they should not appear in closures, but we check to be safe
-			if (batchEffects.has(causeRoot) && causeRoot !== activeRoot && causeRoot !== root) {
-				inDegree++
-			}
-		}
-	}
-
-	return inDegree
 }
 
 /**
@@ -1247,22 +1210,16 @@ function effect(
 
 	return subEffectCleanup
 }
-function optioned(fn: typeof effect, options: EffectOptions) {
-	return new Proxy(fn, {
-		apply(target, thisArg, [fn, opts]) {
-			return target.apply(thisArg, [fn, opts? {...opts, ...options} : options])
-		},
-	})
-}
-Object.defineProperties(effect, Object.getOwnPropertyDescriptors({
-	get opaque() {
-		return optioned(this, { opaque: true })
+
+const effectWithModifiers = flavored(effect, {
+	get opaque(): EffectWithModifiers {
+		return flavorOptions(this, { opaque: true }) as EffectWithModifiers
 	},
-	named(name: string) {
-		return optioned(this, { name })
-	}
-}))
-const effectWithModifiers = effect as EffectWithModifiers
+	named(name: string): EffectWithModifiers {
+		return flavorOptions(this, { name }) as EffectWithModifiers
+	},
+})
+
 export { effectWithModifiers as effect }
 
 /**
