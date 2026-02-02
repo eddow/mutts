@@ -6,7 +6,8 @@
 
 ## Refactoring
 
-- `resolve` -> `lift` (array buffering)
+- `resolve` -> `lift` (array buffering - renaming)
+- Cycle detection algorithms update (now, modes are `'production' | 'development' | 'debug'`)
 
 # 1.0.8
 

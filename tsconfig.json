@@ -41,14 +41,13 @@
 	},
 	"include": [
 		"src/**/*",
-		"package.json",
-		"tests/zone.test.ts"
+		"package.json"
 	],
 	"exclude": [
 		"**/*.test.ts",
 		"**/*.spec.ts",
+		"tests/**",
 		"node_modules",
-		"dist",
-		"tests/**"
+		"dist"
 	]
 }

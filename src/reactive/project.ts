@@ -23,10 +23,6 @@ function setActiveProjection(projection: ProjectionContext | undefined) {
 	const active = getActiveEffect()
 	if (active) effectProjectionMetadata.set(active, projection)
 }
-/* TODO
-It seems to work and I feel like it's correct but I couldn't validate theoretically that `ascend`
-is the correct way to deal with nested effects.
-*/
 
 type ProjectOldValue<Target> = Target extends readonly (infer Item)[]
 	? Item
@@ -128,8 +124,7 @@ function projectArray<SourceValue, ResultValue>(
 						old: previous,
 					} as ProjectAccess<SourceValue, number, readonly SourceValue[], ResultValue[]>
 					defineAccessValue(accessBase)
-					const produced = apply(accessBase, target)
-					target[index] = produced
+					target[index] = apply(accessBase, target)
 				})
 				setEffectName(stop, `project[${depth}]:${index}`)
 				indexEffects.set(i, stop)

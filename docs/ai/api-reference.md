@@ -120,7 +120,7 @@ export interface MutationRecord {
 export declare function getDependencyGraph(): ReactivityGraph;
 export declare function getMutationHistory(): MutationRecord[];
 export declare const options: {
-    cycleHandling: 'throw' | 'warn' | 'break' | 'strict';
+    cycleHandling: 'production' | 'development' | 'debug';
     introspection: { enableHistory: boolean; historySize: number };
 };
 

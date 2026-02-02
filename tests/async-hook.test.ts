@@ -1,5 +1,4 @@
 import { asyncHook, asyncHooks, asyncZone, Zone } from 'mutts';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 describe('Async Hook Direct Tests', () => {
     let callStack: string[] = [];

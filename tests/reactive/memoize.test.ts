@@ -1,8 +1,6 @@
 import { atomic, effect, reactive, reactiveOptions, unwrap } from 'mutts'
 import { memoize } from 'mutts'
 
-import { describe, expect, it, vi } from 'vitest'
-
 describe('memoize', () => {
 	it('returns cached value and forwards same memoized function', () => {
 		let calls1 = 0

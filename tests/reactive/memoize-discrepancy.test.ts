@@ -1,4 +1,3 @@
-import { describe, expect, it, vi } from 'vitest'
 import { memoize, reactiveOptions } from 'mutts'
 
 describe('memoize discrepancy detector', () => {

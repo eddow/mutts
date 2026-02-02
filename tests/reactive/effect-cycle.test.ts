@@ -1,10 +1,9 @@
-import { vi, describe, it, expect } from 'vitest'
 import { effect, reactive, reactiveOptions as options } from 'mutts'
 
 describe('effect cycle detection and ordering', () => {
 	const originalCycleHandling = options.cycleHandling
 	beforeEach(() => {
-		options.cycleHandling = 'throw'
+		options.cycleHandling = 'debug'
 	})
 	afterEach(() => {
 		options.cycleHandling = originalCycleHandling
@@ -33,79 +32,6 @@ describe('effect cycle detection and ordering', () => {
 
 			// Cleanup
 			effectA?.()
-		})
-
-		it('should warn when cycle is detected (warn mode)', () => {
-			const originalCycleHandling = options.cycleHandling
-			const warnSpy = vi.spyOn(options, 'warn').mockImplementation(() => {})
-
-			try {
-				options.cycleHandling = 'warn'
-
-				const state = reactive({ a: 0, b: 0 })
-
-				let effectA: (() => void) | undefined
-
-				effectA = effect(() => {
-					state.b = state.a + 1
-				})
-
-				// Creating effectB will trigger effectA, which will try to trigger effectB again
-				// This should warn but not throw
-				effect(() => {
-					state.a = state.b + 1
-				})
-
-				// Should have warned about cycle
-				expect(warnSpy).toHaveBeenCalledWith(
-					expect.stringContaining('Cycle detected')
-				)
-
-				// Should still execute (cycle broken)
-				expect(state.a).toBeGreaterThan(0)
-				expect(state.b).toBeGreaterThan(0)
-
-				effectA?.()
-			} finally {
-				options.cycleHandling = originalCycleHandling
-				warnSpy.mockRestore()
-			}
-		})
-
-		it('should silently break cycle (break mode)', () => {
-			const originalCycleHandling = options.cycleHandling
-			const warnSpy = vi.spyOn(options, 'warn').mockImplementation(() => {})
-
-			try {
-				options.cycleHandling = 'break'
-
-				const state = reactive({ a: 0, b: 0 })
-
-				let effectA: (() => void) | undefined
-
-				effectA = effect(() => {
-					state.b = state.a + 1
-				})
-
-				// Should not throw
-				expect(() => {
-					effect(() => {
-						state.a = state.b + 1
-					})
-				}).not.toThrow()
-
-				// Should not warn
-				expect(warnSpy).not.toHaveBeenCalled()
-
-				// Should still execute (cycle broken)
-				expect(state.a).toBeGreaterThan(0)
-				expect(state.b).toBeGreaterThan(0)
-
-				effectA?.()
-			} finally {
-				options.cycleHandling = originalCycleHandling
-				warnSpy.mockRestore()
-			}
 		})
 
 		it('should detect complex cycles (A -> B -> C -> A)', () => {
@@ -355,6 +281,88 @@ describe('effect cycle detection and ordering', () => {
 		})
 	})
 
+	describe('mode comparison - same cycle, different reactions', () => {
+		// Helper to create a simple A -> B -> A cycle that runs for a limited number of iterations
+		// The cycle: effectA reads a and writes b, effectB reads b and writes a
+		function createSimpleCycle(maxIterations = 10) {
+			const state = reactive({ a: 0, b: 0, count: 0 })
+
+			effect(() => {
+				// Effect A: reads a, writes b
+				if (state.count < maxIterations) {
+					state.b = state.a + 1
+					state.count++
+				}
+			})
+
+			effect(() => {
+				// Effect B: reads b, writes a (completing the cycle)
+				if (state.count < maxIterations) {
+					state.a = state.b + 1
+					state.count++
+				}
+			})
+
+			return state
+		}
+
+		it('production mode: detects cycle only when maxEffectChain is exceeded', () => {
+			const originalMaxChain = options.maxEffectChain
+			options.cycleHandling = 'production'
+
+			// With maxEffectChain=5, cycle of 10 iterations will be caught
+			options.maxEffectChain = 5
+			expect(() => createSimpleCycle(10)).toThrow(/Max effect chain reached/)
+
+			// With maxEffectChain=100, same cycle completes without error
+			options.maxEffectChain = 100
+			const state = createSimpleCycle(10)
+			expect(state.count).toBe(10) // 10 iterations * 2 effects per iteration
+
+			options.cycleHandling = originalCycleHandling
+			options.maxEffectChain = originalMaxChain
+		})
+
+		it('development mode: detects cycle immediately at edge creation', () => {
+			options.cycleHandling = 'development'
+
+			try {
+				// Cycle is caught immediately when adding edge, regardless of maxEffectChain
+				expect(() => createSimpleCycle(10)).toThrow(/Cycle detected/)
+
+				let caughtError: any
+				try {
+					createSimpleCycle(10)
+				} catch (error) {
+					caughtError = error
+				}
+				expect(caughtError?.debugInfo?.code).toBe('CYCLE_DETECTED')
+			} finally {
+				options.cycleHandling = originalCycleHandling
+			}
+		})
+
+		it('debug mode: detects cycle with detailed path information', () => {
+			options.cycleHandling = 'debug'
+
+			try {
+				// Same immediate detection as development
+				expect(() => createSimpleCycle(10)).toThrow(/Cycle detected/)
+
+				let caughtError: any
+				try {
+					createSimpleCycle(10)
+				} catch (error) {
+					caughtError = error
+				}
+				expect(caughtError?.debugInfo?.code).toBe('CYCLE_DETECTED')
+				expect(caughtError?.debugInfo?.cycle).toBeDefined()
+				expect(Array.isArray(caughtError?.debugInfo?.cycle)).toBe(true)
+			} finally {
+				options.cycleHandling = originalCycleHandling
+			}
+		})
+	})
 
 })
 

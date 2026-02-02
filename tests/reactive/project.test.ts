@@ -1,4 +1,4 @@
-import { cleanup, project, reactive } from 'mutts'
+import { cleanup, effect, project, reactive } from 'mutts'
 
 describe('project', () => {
 	it('projects arrays with per-index reactivity', () => {
@@ -127,6 +127,128 @@ describe('project', () => {
 		const projectedRecord = project(sourceRecord, ({ get }) => get()?.value ?? 0)
 		expect(projectedRecord.a).toBe(2)
 		projectedRecord[cleanup]()
+	})
+
+	it('keeps nested projection item effects alive across inner structural updates', () => {
+		const source = reactive([
+			{
+				children: reactive([{ value: 'a' }]),
+			},
+		])
+		const calls: Record<string, number> = {}
+		const cleanupCalls: string[] = []
+
+		const target = project.array(source, ({ get, key: outerKey }) => {
+			const outer = get()
+			if (!outer) return []
+			const inner = project.array(outer.children, ({ get: getChild, key: innerKey }) => {
+				const child = getChild()
+				const k = `${outerKey}:${innerKey}`
+				calls[k] = (calls[k] ?? 0) + 1
+				effect(() => {
+					void child?.value
+					return () => cleanupCalls.push(`cleanup ${k}`)
+				})
+				return child?.value.toUpperCase() ?? 'NONE'
+			})
+			return inner
+		})
+
+		expect(target[0][0]).toBe('A')
+		expect(calls['0:0']).toBe(1)
+		expect(cleanupCalls).toEqual([])
+
+		source[0].children.push({ value: 'b' })
+		expect(target[0][0]).toBe('A')
+		expect(target[0][1]).toBe('B')
+		expect(calls['0:0']).toBe(1)
+		expect(calls['0:1']).toBe(1)
+		expect(cleanupCalls).toEqual([])
+
+		target[cleanup]()
+		expect(cleanupCalls).toHaveLength(2)
+		expect(cleanupCalls).toContain('cleanup 0:0')
+		expect(cleanupCalls).toContain('cleanup 0:1')
+	})
+
+	it('cleans nested projection effects when an outer item is disposed', () => {
+		const source = reactive([
+			{ children: reactive([{ value: 'a' }]) },
+			{ children: reactive([{ value: 'b' }]) },
+		])
+		const cleanupCalls: string[] = []
+
+		const target = project.array(source, ({ get, key: outerKey }) => {
+			const outer = get()
+			if (!outer) return []
+			const inner = project.array(outer.children, ({ get: getChild, key: innerKey }) => {
+				const child = getChild()
+				const k = `${outerKey}:${innerKey}`
+				effect(() => {
+					void child?.value
+					return () => cleanupCalls.push(`cleanup ${k}`)
+				})
+				return child?.value.toUpperCase() ?? 'NONE'
+			})
+			return inner
+		})
+
+		expect(target[0][0]).toBe('A')
+		expect(target[1][0]).toBe('B')
+		expect(cleanupCalls).toEqual([])
+
+		source.pop()
+		expect(cleanupCalls).toHaveLength(1)
+		expect(cleanupCalls).toContain('cleanup 1:0')
+		expect(cleanupCalls).not.toContain('cleanup 0:0')
+
+		target[cleanup]()
+		expect(cleanupCalls).toHaveLength(2)
+		expect(cleanupCalls).toContain('cleanup 0:0')
+	})
+
+	describe('garbage collection cleanup', () => {
+		const itGarbageCollection = typeof globalThis.gc === 'function' ? it : it.skip
+
+		function tick(ms: number = 100) {
+			return new Promise((resolve) => setTimeout(resolve, ms))
+		}
+
+		async function collectGarbages() {
+			await tick()
+			globalThis.gc?.()
+			await tick()
+		}
+
+		itGarbageCollection(
+			'cleans projection effects when the owning effect is collected',
+			async () => {
+				const source = reactive([{ children: reactive([{ value: 'a' }]) }])
+				const cleanupCalls: string[] = []
+
+				;(() => {
+					effect(() => {
+						const target = project.array(source, ({ get }) => {
+							const outer = get()
+							if (!outer) return []
+							return project.array(outer.children, ({ get: getChild, key }) => {
+								const child = getChild()
+								effect(() => {
+									void child?.value
+									return () => cleanupCalls.push(`cleanup ${key}`)
+								})
+								return child?.value.toUpperCase() ?? 'NONE'
+							})
+						})
+						void target
+					})
+				})()
+
+				expect(cleanupCalls).toEqual([])
+				await collectGarbages()
+				expect(cleanupCalls).toContain('cleanup 0')
+			}
+		)
 	})
 })
 

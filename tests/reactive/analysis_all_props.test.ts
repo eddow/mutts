@@ -1,4 +1,3 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { effect, memoize, reactive, reactiveOptions } from 'mutts'
 
 describe('Reactivity Analysis: allProps & deepTouch', () => {

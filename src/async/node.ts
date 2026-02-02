@@ -80,8 +80,6 @@ const originalMethods = {
 	all: OriginalPromise.all,
 }
 
-
-
 // Patch prototype
 OriginalPromise.prototype.then = function(onFulfilled, onRejected) {
 	return originalMethods.then.call(this, wrap(onFulfilled), wrap(onRejected))

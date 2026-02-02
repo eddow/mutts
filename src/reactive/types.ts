@@ -8,8 +8,6 @@ import { FunctionWrapper } from "../zone"
  * Provides functions to track dependencies and information about the effect execution
  */
 export interface DependencyAccess {
-	// TODO: remove tracked (async is managed)
-	// TODO: remove ascend (make a global like `untracked` who  withEffect(parentEffect, () => {}))
 	/**
 	 * Tracks dependencies in the current effect context
 	 * Use this for normal dependency tracking within the effect
@@ -234,11 +232,6 @@ export type MaxReactionDebugInfo = {
 	effect: string
 }
 
-export type BrokenEffectsDebugInfo = {
-	code: ReactiveErrorCode.BrokenEffects
-	cause: any
-}
-
 export type GenericDebugInfo = {
 	code: ReactiveErrorCode
 	causalChain?: string[]
@@ -250,7 +243,6 @@ export type ReactiveDebugInfo =
 	| CycleDebugInfo
 	| MaxDepthDebugInfo
 	| MaxReactionDebugInfo
-	| BrokenEffectsDebugInfo
 	| GenericDebugInfo
 
 /**
@@ -368,20 +360,20 @@ export const options = {
 	/**
 	 * How to handle cycles detected in effect batches.
 	 *
-	 * - `'none'` (Default): High-performance mode. Disables dependency graph maintenance and
+	 * - `'production'` (Default): High-performance mode. Disables dependency graph maintenance and
 	 *   Topological Sorting in favor of a simple FIFO queue. Use this for trustworthy, acyclic UI code.
-	 *   Cycle detection is heuristic (uses execution counts).
+	 *   Cycle detection is heuristic (uses maxEffectChain execution counts).
 	 *
-	 * - `'throw'`: Traditional Topological Sorting. Guarantees dependency order and catches
-	 *   circular dependencies mathematically before execution.
+	 * - `'development'`: Maintains direct dependency graph for early cycle detection during edge creation.
+	 *   Catches cycles before effects execute via DFS check when adding edges. Throws immediately with
+	 *   basic path information. Good balance of debugging help with moderate overhead.
 	 *
-	 * - `'warn'`: Topological sorting, but logs a warning instead of throwing on cycles.
-	 * - `'break'`: Topological sorting, but silently breaks cycles.
-	 * - `'strict'`: Prevents cycle creation by checking the graph *during* dependency discovery.
+	 * - `'debug'`: Full diagnostic mode with transitive closures and topological sorting.
+	 *   Provides detailed cycle path reporting. Highest overhead but most informative for bug hunting.
 	 *
-	 * @default 'none'
+	 * @default 'production'
 	 */
-	cycleHandling: 'none' as 'none' | 'throw' | 'warn' | 'break' | 'strict',
+	cycleHandling: 'development' as 'production' | 'development' | 'debug',
 	/**
 	 * Internal flag used by memoization discrepancy detector to avoid counting calls in tests
 	 * @warning Do not modify this flag manually, this flag is given by the engine

@@ -161,14 +161,14 @@ export function recordActivation(
  * })
  *
  * state.count = 5
- * // Logs: Effect triggered by: { object: state, change: 'set', property: 'count' }
- * ```
  */
-export function trackEffect(onTouch: EffectTracking) {
+export function trackEffect(onTouch: EffectTracking, options: { allowRoot?: boolean } = {}) {
 	const activeEffect = getActiveEffect()
-	if (!activeEffect) throw new Error('Not in an effect')
-	if (!effectTrackers.has(activeEffect)) effectTrackers.set(activeEffect, new Set([onTouch]))
-	else effectTrackers.get(activeEffect)!.add(onTouch)
+	if (activeEffect) {
+		if (!effectTrackers.has(activeEffect)) effectTrackers.set(activeEffect, new Set([onTouch]))
+		else effectTrackers.get(activeEffect)!.add(onTouch)
+	}
+	else if(options.allowRoot !== true) throw new Error('Not in an effect')
 }
 
 const effectTrackers = new WeakMap<ScopedCallback, Set<EffectTracking>>()
@@ -211,7 +211,7 @@ function getOrCreateClosure(
  * @param targetRoot - Root function of the effect being triggered
  */
 function addGraphEdge(callerRoot: Function, targetRoot: Function) {
-	if (options.cycleHandling === 'none') return
+	if (options.cycleHandling === 'production') return
 	// Skip if edge already exists
 	const triggers = effectTriggers.get(callerRoot)
 	if (triggers?.has(targetRoot)) {
@@ -337,7 +337,7 @@ function hasPathExcluding(start: Function, end: Function, exclude: Function): bo
  * @param effect - The effect being cleaned up
  */
 function cleanupEffectFromGraph(effect: ScopedCallback) {
-	if (options.cycleHandling === 'none') return
+	if (options.cycleHandling === 'production') return
 	const root = getRoot(effect)
 
 	// Get closures before removing direct edges (needed for propagation)
@@ -460,7 +460,7 @@ const batchCleanups = new Set<ScopedCallback>()
  * Called once when batch starts or when new effects are added
  */
 function computeAllInDegrees(batch: BatchQueue): void {
-	if (options.cycleHandling === 'none') return
+	if (options.cycleHandling === 'production') return
 	const activeEffect = getActiveEffect()
 	const activeRoot = activeEffect ? getRoot(activeEffect) : null
 
@@ -642,7 +642,7 @@ function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?:
 	const root = getRoot(effect)
 
 	// 1. Add to batch first (needed for cycle detection)
-	if (options.cycleHandling === 'none' && batchQueue.all.has(root)) {
+	if (options.cycleHandling === 'production' && batchQueue.all.has(root)) {
 		// If already present in flat mode, remove it so that the next set puts it at the end
 		batchQueue.all.delete(root)
 	}
@@ -651,7 +651,7 @@ function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?:
 
 	// 2. Add to global graph (if caller exists and not immediate) - USE ROOTS ONLY
 	// When immediate is true, don't create edges - the effect is not considered as a consequence
-	if (caller && !immediate && options.cycleHandling !== 'none') {
+	if (caller && !immediate && options.cycleHandling !== 'production') {
 		const callerRoot = getRoot(caller)
 
 		// Check for cycle BEFORE adding edge
@@ -665,48 +665,17 @@ function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?:
 					? `Cycle detected: ${cyclePath.map((r) => r.name || r.toString()).join(' → ')}`
 					: `Cycle detected: ${callerRoot.name || callerRoot.toString()} → ${root.name || root.toString()} (and back)`
 
-			const cycleHandling = options.cycleHandling
+			batchQueue.all.delete(root)
+			const causalChain = getTriggerChain(effect)
+			const creationStack = effectCreationStacks.get(root)
 
-			// In strict mode, we throw immediately on detection
-			if (cycleHandling === 'strict') {
-				batchQueue.all.delete(root)
-				const causalChain = getTriggerChain(effect)
-				const creationStack = effectCreationStacks.get(root)
-
-				throw new ReactiveError(`[reactive] Strict Cycle Prevention: ${cycleMessage}`, {
-					code: ReactiveErrorCode.CycleDetected,
-					cycle: cyclePath.map((r) => r.name || r.toString()),
-					details: cycleMessage,
-					causalChain,
-					creationStack,
-				})
-			}
-
-			switch (cycleHandling) {
-				case 'throw': {
-					// Remove from batch before throwing
-					batchQueue.all.delete(root)
-					const causalChain = getTriggerChain(effect)
-					const creationStack = effectCreationStacks.get(root)
-
-					throw new ReactiveError(`[reactive] ${cycleMessage}`, {
-						code: ReactiveErrorCode.CycleDetected,
-						cycle: cyclePath.map((r) => r.name || r.toString()),
-						details: cycleMessage,
-						causalChain,
-						creationStack,
-					})
-				}
-				case 'warn':
-					options.warn(`[reactive] ${cycleMessage}`)
-					// Don't add the edge, break the cycle
-					batchQueue.all.delete(root)
-					return
-				case 'break':
-					// Silently break cycle, don't add the edge
-					batchQueue.all.delete(root)
-					return
-			}
+			throw new ReactiveError(`[reactive] ${cycleMessage}`, {
+				code: ReactiveErrorCode.CycleDetected,
+				cycle: cyclePath.map((r) => r.name || r.toString()),
+				details: cycleMessage,
+				causalChain,
+				creationStack,
+			})
 		}
 
 		addGraphEdge(callerRoot, root) // Add to persistent graph using roots
@@ -818,7 +787,7 @@ function executeNext(effectuatedRoots: Function[]): any {
 	let nextEffect: ScopedCallback | null = null
 	let nextRoot: Function | null = null
 
-	if (options.cycleHandling === 'none') {
+	if (options.cycleHandling === 'production') {
 		// In flat mode, we just take the first effect in the queue (FIFO)
 		const first = batchQueue!.all.entries().next().value
 		if (first) {
@@ -872,34 +841,11 @@ function executeNext(effectuatedRoots: Function[]): any {
 					? `Cycle detected: ${cycle.map((r) => r.name || '<anonymous>').join(' → ')}`
 					: 'Cycle detected in effect batch - all effects have dependencies that prevent execution'
 
-			const cycleHandling = options.cycleHandling
-			switch (cycleHandling) {
-				case 'throw':
-					throw new ReactiveError(`[reactive] ${cycleMessage}`)
-				case 'warn': {
-					options.warn(`[reactive] ${cycleMessage}`)
-					// Break the cycle by executing one effect anyway
-					const firstEffect = batchQueue!.all.values().next().value
-					if (firstEffect) {
-						const firstRoot = getRoot(firstEffect)
-						batchQueue!.all.delete(firstRoot)
-						batchQueue!.inDegrees.delete(firstRoot)
-						return firstEffect()
-					}
-					break
-				}
-				case 'break': {
-					// Silently break cycle
-					const firstEffect2 = batchQueue!.all.values().next().value
-					if (firstEffect2) {
-						const firstRoot2 = getRoot(firstEffect2)
-						batchQueue!.all.delete(firstRoot2)
-						batchQueue!.inDegrees.delete(firstRoot2)
-						return firstEffect2()
-					}
-					break
-				}
-			}
+			throw new ReactiveError(`[reactive] ${cycleMessage}`, {
+				code: ReactiveErrorCode.CycleDetected,
+				cycle: cycle.map((r) => r.name || r.toString()),
+				details: cycleMessage,
+			})
 		}
 		return null // Batch complete
 	}
@@ -1041,8 +987,11 @@ export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'im
 }
 
 // Inject batch function to allow atomic game loops in requestAnimationFrame/setTimeout/...
-// TODO: perhaps introduce somewhere a way to wrap async functions - find out if it's necessary
-// wrapAsync(fn=> batch(fn, 'immediate'))
+// Note: Automatic batching of async callbacks (setTimeout, Promise.then, etc.) is NOT implemented.
+// Rationale: (1) asyncHooks.addHook API doesn't support knowing when callbacks complete (needed for batching),
+// (2) hooking all callback-creating functions adds overhead without guaranteed benefit,
+// (3) incomplete coverage in Node (async_hooks misses user-land patterns).
+// Solution: Use explicit @atomic decorator or manual batch() calls where optimization is needed.
 
 /**
  * Decorator that makes methods atomic - batches all effects triggered within the method
@@ -1099,11 +1048,7 @@ function effect(
 	let cleanup: (() => void) | null = null
 	const tracked = effectHistory.present.with(runEffect, ()=> effectAggregator.zoned)
 	const ascend = effectHistory.zoned
-	//const parent = effectHistory.present.active // TODO: Double-check parenting (untracked -> stop children) - use case or untracked(effect)
-	let parent = effectHistory.present.active
-	/*if (!parent) {
-		for (const h of effectHistory.active.history) parent = h
-	}*/
+	const parent = effectHistory.present.active
 	let effectStopped = false
 	let hasReacted = false
 	let runningPromise: Promise<any> | null = null

@@ -129,7 +129,7 @@ function watchCallBack<T>(
  * Mark an object as non-reactive. This object and all its properties will never be made reactive.
  * @param obj - The object to mark as non-reactive
  */
-function deepNonReactive<T>(obj: T): T {
+function shallowNonReactive<T>(obj: T): T {
 	obj = unwrap(obj)
 	if (isNonReactive(obj)) return obj
 	try {
@@ -152,7 +152,7 @@ function unreactiveApplication<T extends object>(
 	...args: (keyof T)[]
 ): GenericClassDecorator<T> | T {
 	return typeof arg1 === 'object'
-		? deepNonReactive(arg1)
+		? shallowNonReactive(arg1)
 		: (((original) => {
 				// Copy the parent's unreactive properties if they exist
 				original.prototype[unreactiveProperties] = new Set<PropertyKey>(
@@ -179,7 +179,7 @@ export const unreactive = decorator({
 //#endregion
 
 /**
- * Attaches a cleanup function to an object using the cleanup symbol.
+ * ADD a cleanup function to an object using the cleanup symbol.
  * The cleanup function will be called when the object needs to be disposed.
  * 
  * Note: most of the time, you don't need to use this function directly.
@@ -190,8 +190,9 @@ export const unreactive = decorator({
  * @returns The object with the cleanup function attached
  */
 export function cleanedBy<T extends object>(obj: T, cleanupFn: ScopedCallback) {
+	const oldCleanup = obj[cleanup]
 	return Object.defineProperty(obj, cleanup, {
-		value: cleanupFn,
+		value: oldCleanup ? () => { oldCleanup(); cleanupFn() } : cleanupFn,
 		writable: false,
 		enumerable: false,
 		configurable: true,

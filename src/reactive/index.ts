@@ -32,6 +32,7 @@ export { Register, register } from './register'
 export { getActiveEffect, effectAggregator } from './effect-context'
 export {
 	type DependencyAccess,
+	type EffectOptions,
 	type Evolution,
 	options as reactiveOptions,
 	ReactiveError,

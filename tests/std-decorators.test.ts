@@ -7,7 +7,6 @@ import {
 	isCached,
 	throttle,
 } from 'mutts'
-import { describe, expect, it, vi } from 'vitest'
 
 describe('cached decorator', () => {
 	it('should cache the result of a getter', () => {

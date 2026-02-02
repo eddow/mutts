@@ -4,7 +4,7 @@ const process = globalThis.process || { memoryUsage: () => ({ heapUsed: 0, heapT
 import { reactiveOptions } from 'mutts'
 
 // Force production settings for accurate profiling
-reactiveOptions.cycleHandling = 'none'
+reactiveOptions.cycleHandling = 'production'
 reactiveOptions.introspection.enableHistory = false
 reactiveOptions.maxDeepWatchDepth = 1000 // Allow deep structures in benchmarks
 

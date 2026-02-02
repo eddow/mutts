@@ -1,4 +1,3 @@
-import { vi, describe, it, expect } from 'vitest'
 import { effect, ReactiveBase, reactive, reactiveOptions } from 'mutts'
 
 describe('@reactive decorator', () => {
