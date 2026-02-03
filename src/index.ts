@@ -1,7 +1,7 @@
 export * from './decorator'
 export * from './destroyable'
 export * from './eventful'
-export * from './flavored'
+export { flavored, createFlavor, flavorOptions } from './flavored'
 export * from './indexable'
 export * from './iterableWeak'
 export * from './mixins'

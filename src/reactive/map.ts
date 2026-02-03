@@ -97,23 +97,15 @@ export abstract class ReactiveMap<K, V> extends Map<K, V> {
 
 	[Symbol.iterator](): MapIterator<[K, V]> {
 		dependant(contentRef(this))
-		const nativeIterator = this[Symbol.iterator]()
-		return {
-			next() {
-				const result = nativeIterator.next()
-				if (result.done) {
-					return result
-				}
-				return {
-					value: [result.value[0], reactive(result.value[1])],
-					done: false,
-				}
-			},
-			[Symbol.iterator]() {
-				return this
-			},
-			[Symbol.dispose]() {},
-		} as any // TODO: real iterator? (If easy)
+		const it: MapIterator<[K, V]> = Map.prototype[Symbol.iterator].call(this)
+		const nativeNext = it.next.bind(it)
+		it.next = () => {
+			const result = nativeNext()
+			if (result.done) return result
+			const [key, value] = result.value
+			return { value: [reactive(key), reactive(value)], done: false }
+		}
+		return it
 	}
 
 	// Implement Map methods with reactivity

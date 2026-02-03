@@ -112,19 +112,13 @@ export abstract class ReactiveSet<T> extends Set<T> {
 
 	[Symbol.iterator](): SetIterator<T> {
 		dependant(contentRef(this))
-		const nativeIterator = this[Symbol.iterator]()
-		return {
-			next() {
-				const result = nativeIterator.next()
-				if (result.done) {
-					return result
-				}
-				return { value: reactive(result.value), done: false }
-			},
-			[Symbol.iterator]() {
-				return this
-			},
-			[Symbol.dispose]() {},
-		} as any	//TODO? (something easy)
+		const it: SetIterator<T> = Set.prototype[Symbol.iterator].call(this)
+		const nativeNext = it.next.bind(it)
+		it.next = () => {
+			const result = nativeNext()
+			if (result.done) return result
+			return { value: reactive(result.value), done: false }
+		}
+		return it
 	}
 }
