@@ -4,7 +4,7 @@ import { getActiveEffect, isRunning } from './effect-context'
 import { batch, hasBatched, opaqueEffects, recordActivation } from './effects'
 import { unwrap } from './proxy-state'
 import { watchers } from './registry'
-import { allProps, type Evolution, options, type ScopedCallback, type State } from './types'
+import { allProps, type Evolution, options, type State, type EffectTrigger } from './types'
 
 const states = new WeakMap<object, State>()
 
@@ -34,8 +34,8 @@ export function getState(obj: any) {
 export function collectEffects(
 	obj: any,
 	evolution: Evolution,
-	effects: Set<ScopedCallback>,
-	objectWatchers: Map<any, Set<ScopedCallback>>,
+	effects: Set<EffectTrigger>,
+	objectWatchers: Map<any, Set<EffectTrigger>>,
 	...keyChains: Iterable<any>[]
 ) {
 	const sourceEffect = getActiveEffect()
@@ -80,7 +80,7 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 	const objectWatchers = watchers.get(obj)
 	if (objectWatchers) {
 		// Note: we have to collect effects to remove duplicates in the specific case when no batch is running
-		const effects = new Set<ScopedCallback>()
+		const effects = new Set<EffectTrigger>()
 		if (props) collectEffects(obj, evolution, effects, objectWatchers, [allProps], props)
 		else collectEffects(obj, evolution, effects, objectWatchers, objectWatchers.keys())
 		options.touched(obj, evolution, props as any[] | undefined, effects)
@@ -105,7 +105,7 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 	const deps = objectWatchers.get(prop)
 	if (!deps) return
 
-	const effects = new Set<ScopedCallback>()
+	const effects = new Set<EffectTrigger>()
 	const sourceEffect = getActiveEffect()
 
 	for (const effect of deps) {

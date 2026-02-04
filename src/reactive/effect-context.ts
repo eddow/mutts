@@ -1,9 +1,9 @@
 import { tag } from '../utils'
 import { asyncZone, ZoneAggregator, ZoneHistory } from '../zone'
 import { getRoot } from './registry'
-import { type ScopedCallback } from './types'
+import { type EffectTrigger } from './types'
 
-export const effectHistory = tag('effectHistory', new ZoneHistory<ScopedCallback>())
+export const effectHistory = tag('effectHistory', new ZoneHistory<EffectTrigger>())
 tag('effectHistory.present', effectHistory.present)
 asyncZone.add(effectHistory)
 
@@ -13,7 +13,7 @@ asyncZone.add(effectHistory)
  */
 export const effectAggregator = tag('effectAggregator', new ZoneAggregator(effectHistory.present))
 
-export function isRunning(effect: ScopedCallback): boolean {
+export function isRunning(effect: EffectTrigger): boolean {
 	const root = getRoot(effect)
 	return effectHistory.some((e) => getRoot(e) === root)
 }

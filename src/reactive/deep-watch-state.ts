@@ -1,5 +1,5 @@
 import { batch } from './effects'
-import type { Evolution, ScopedCallback } from './types'
+import type { Evolution, EffectTrigger } from './types'
 
 // Track which objects contain which other objects (back-references)
 export const objectParents = new WeakMap<object, Set<{ parent: object; prop: PropertyKey }>>()
@@ -8,10 +8,10 @@ export const objectParents = new WeakMap<object, Set<{ parent: object; prop: Pro
 export const objectsWithDeepWatchers = new WeakSet<object>()
 
 // Track deep watchers per object
-export const deepWatchers = new WeakMap<object, Set<ScopedCallback>>()
+export const deepWatchers = new WeakMap<object, Set<EffectTrigger>>()
 
 // Track which effects are doing deep watching
-export const effectToDeepWatchedObjects = new WeakMap<ScopedCallback, Set<object>>()
+export const effectToDeepWatchedObjects = new WeakMap<EffectTrigger, Set<object>>()
 
 /**
  * Add a back-reference from child to parent

@@ -5,21 +5,21 @@
  * - Provides graph data for tooling (DevTools panel, etc.)
  */
 
-import { raiseEffectTrigger, effect } from './effects'
+import { raiseEffectTrigger } from './effects'
 import { effectParent, effectToReactiveObjects, getRoot } from './registry'
-import { allProps, type Evolution, options, type ScopedCallback } from './types'
+import { allProps, EffectCleanup, EffectTrigger, type Evolution, options, type ScopedCallback } from './types'
 
 const EXTERNAL_SOURCE = Symbol('external-source')
-type SourceEffect = ScopedCallback | typeof EXTERNAL_SOURCE
+type SourceEffect = EffectCleanup | typeof EXTERNAL_SOURCE
 
 let devtoolsEnabled = false
 
 // Registry for debugging (populated lazily when DevTools are enabled)
-const debugEffectRegistry = new Set<ScopedCallback>()
+const debugEffectRegistry = new Set<EffectCleanup>()
 const debugObjectRegistry = new Set<object>()
 
 // Human-friendly names
-const effectNames = new WeakMap<ScopedCallback, string>()
+const effectNames = new WeakMap<EffectCleanup, string>()
 const objectNames = new WeakMap<object, string>()
 let effectCounter = 0
 let objectCounter = 0
@@ -34,7 +34,7 @@ interface TriggerRecord {
 	lastTriggered: number
 }
 
-const triggerGraph = new Map<SourceEffect, Map<ScopedCallback, Map<string, TriggerRecord>>>()
+const triggerGraph = new Map<SourceEffect, Map<EffectCleanup, Map<string, TriggerRecord>>>()
 
 export type NodeKind = 'effect' | 'external' | 'state'
 export type EdgeKind = 'cause' | 'dependency' | 'trigger'
@@ -73,7 +73,7 @@ export interface ReactivityGraph {
 	}
 }
 
-function ensureEffectName(effect: ScopedCallback): string {
+function ensureEffectName(effect: EffectCleanup): string {
 	let name = effectNames.get(effect)
 	if (!name) {
 		const root = getRoot(effect)
@@ -101,7 +101,7 @@ function describeProp(obj: object, prop: any): string {
 	return `${objectName}.${String(prop)}`
 }
 
-function addEffectToRegistry(effect: ScopedCallback) {
+function addEffectToRegistry(effect: EffectCleanup) {
 	if (!effect || debugEffectRegistry.has(effect)) return
 	debugEffectRegistry.add(effect)
 	const deps = effectToReactiveObjects.get(effect)
@@ -123,7 +123,7 @@ function dbRegisterObject(obj: object) {
 	ensureObjectName(obj)
 }
 
-function ensureParentChains(effects: Set<ScopedCallback>) {
+function ensureParentChains(effects: Set<EffectCleanup>) {
 	const queue = Array.from(effects)
 	for (let i = 0; i < queue.length; i++) {
 		const effect = queue[i]
@@ -146,7 +146,7 @@ function ensureTriggerContainers(source: SourceEffect) {
 
 function ensureTriggerRecord(
 	source: SourceEffect,
-	target: ScopedCallback,
+	target: EffectTrigger,
 	label: string,
 	obj: object,
 	prop: any,
@@ -169,7 +169,7 @@ function ensureTriggerRecord(
 /**
  * Assign a debug-friendly name to an effect (shown in DevTools)
  */
-export function setEffectName(effect: ScopedCallback, name: string) {
+export function setEffectName(effect: EffectCleanup, name: string) {
 	effectNames.set(effect, name)
 }
 
@@ -184,7 +184,7 @@ export function setObjectName(obj: object, name: string) {
 /**
  * Register an effect so it appears in the DevTools graph
  */
-export function registerEffectForDebug(effect: ScopedCallback) {
+export function registerEffectForDebug(effect: EffectTrigger) {
 	if (!effect || !devtoolsEnabled) return
 	addEffectToRegistry(effect)
 }
@@ -206,8 +206,8 @@ export function registerObjectForDebug(obj: object) {
  * @param evolution - The type of change (set/add/del/bunch)
  */
 export function recordTriggerLink(
-	source: ScopedCallback | undefined,
-	target: ScopedCallback,
+	source: EffectTrigger | undefined,
+	target: EffectTrigger,
 	obj: object,
 	prop: any,
 	evolution: Evolution
@@ -238,14 +238,14 @@ export function recordTriggerLink(
  * @param effect The effect to trace back
  * @param limit Max depth
  */
-export function getTriggerChain(effect: ScopedCallback, limit = 5): string[] {
+export function getTriggerChain(effect: EffectTrigger, limit = 5): string[] {
 	const chain: string[] = []
 	let current = effect
 	for (let i = 0; i < limit; i++) {
 		// Find who triggered 'current'
 		// We need to reverse search the triggerGraph (source -> target)
 		// This is expensive O(Edges) but okay for error reporting
-		let foundSource: ScopedCallback | undefined
+		let foundSource: EffectCleanup | undefined
 		let foundReason = ''
 
 		search: for (const [source, targetMap] of triggerGraph) {
@@ -257,7 +257,7 @@ export function getTriggerChain(effect: ScopedCallback, limit = 5): string[] {
 						if (record.lastTriggered > lastTime) {
 							lastTime = record.lastTriggered
 							foundReason = record.label
-							foundSource = source === EXTERNAL_SOURCE ? undefined : (source as ScopedCallback)
+							foundSource = source === EXTERNAL_SOURCE ? undefined : (source as EffectCleanup)
 						}
 					}
 					if (foundSource || foundReason) break search
@@ -280,9 +280,9 @@ export function getTriggerChain(effect: ScopedCallback, limit = 5): string[] {
 	return chain.reverse()
 }
 
-function buildEffectNodes(allEffects: Set<ScopedCallback>) {
+function buildEffectNodes(allEffects: Set<EffectTrigger>) {
 	const nodes: EffectNode[] = []
-	const nodeByEffect = new Map<ScopedCallback, EffectNode>()
+	const nodeByEffect = new Map<EffectTrigger, EffectNode>()
 
 	const ordered = Array.from(allEffects)
 	for (const effect of ordered) {
@@ -298,8 +298,8 @@ function buildEffectNodes(allEffects: Set<ScopedCallback>) {
 		nodeByEffect.set(effect, node)
 	}
 
-	const depthCache = new Map<ScopedCallback, number>()
-	const computeDepth = (effect: ScopedCallback | undefined): number => {
+	const depthCache = new Map<EffectTrigger, number>()
+	const computeDepth = (effect: EffectTrigger | undefined): number => {
 		if (!effect) return 0
 		const cached = depthCache.get(effect)
 		if (cached !== undefined) return cached
@@ -331,7 +331,7 @@ export function buildReactivityGraph(): ReactivityGraph {
 	const edges: GraphEdge[] = []
 	const nodeIds = new Map<ScopedCallback | object | SourceEffect, string>()
 
-	const allEffects = new Set<ScopedCallback>(debugEffectRegistry)
+	const allEffects = new Set<EffectTrigger>(debugEffectRegistry)
 	ensureParentChains(allEffects)
 	const { nodes: effectNodes, nodeByEffect } = buildEffectNodes(allEffects)
 	for (const node of effectNodes) nodes.push(node)
@@ -445,8 +445,8 @@ export function getDependencyGraph() {
 /**
  * Returns a list of effects that depend on the given object.
  */
-export function getDependents(obj: object): ScopedCallback[] {
-	const dependents: ScopedCallback[] = []
+export function getDependents(obj: object): EffectTrigger[] {
+	const dependents: EffectTrigger[] = []
 	// Scan the trigger graph for effects triggered by this object
 	// This is O(E) where E is the number of edges, might need optimization for large graphs
 	// but acceptable for introspection
@@ -468,7 +468,7 @@ export function getDependents(obj: object): ScopedCallback[] {
 /**
  * Returns a list of objects that the given effect depends on.
  */
-export function getDependencies(effect: ScopedCallback): object[] {
+export function getDependencies(effect: EffectTrigger): object[] {
 	const deps = effectToReactiveObjects.get(effect)
 	return deps ? Array.from(deps) : []
 }
@@ -489,8 +489,8 @@ const mutationHistory: MutationRecord[] = []
 let mutationCounter = 0
 
 function addToMutationHistory(
-	source: ScopedCallback | undefined,
-	target: ScopedCallback,
+	source: EffectTrigger | undefined,
+	target: EffectTrigger,
 	obj: object,
 	prop: any,
 	evolution: Evolution

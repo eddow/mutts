@@ -4,7 +4,7 @@ import {
 	effectToReactiveObjects,
 	watchers,
 } from './registry'
-import { allProps, type ScopedCallback } from './types'
+import { allProps, type EffectTrigger, type ScopedCallback } from './types'
 
 /**
  * Marks a property as a dependency of the current effect
@@ -28,12 +28,12 @@ export function dependant(obj: any, prop: any = allProps) {
 	}
 	let objectWatchers = watchers.get(obj)
 	if (!objectWatchers) {
-		objectWatchers = new Map<PropertyKey, Set<ScopedCallback>>()
+		objectWatchers = new Map<PropertyKey, Set<EffectTrigger>>()
 		watchers.set(obj, objectWatchers)
 	}
 	let deps = objectWatchers.get(prop)
 	if (!deps) {
-		deps = new Set<ScopedCallback>()
+		deps = new Set<EffectTrigger>()
 		objectWatchers.set(prop, deps)
 	}
 	deps.add(currentActiveEffect)

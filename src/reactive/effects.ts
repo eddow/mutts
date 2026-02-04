@@ -22,7 +22,7 @@ import {
 	type EffectCleanup,
 	type EffectCloser,
 	type EffectOptions,
-	type EffectWithModifiers,
+	EffectTrigger,
 	type Evolution,
 	forwardThrow,
 	options,
@@ -64,7 +64,7 @@ function formatRoots(roots: Function[], limit = 20): string {
 type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
 
 export interface ActivationRecord {
-	effect: ScopedCallback
+	effect: EffectTrigger
 	obj: any
 	evolution: Evolution
 	prop: any
@@ -88,7 +88,7 @@ export function getActivationLog() {
 }
 
 export function recordActivation(
-	effect: ScopedCallback,
+	effect: EffectTrigger,
 	obj: any,
 	evolution: Evolution,
 	prop: any
@@ -167,31 +167,31 @@ export function recordActivation(
  *
  * state.count = 5
  */
-export function onEffectTrigger(onTouch: EffectTracking) {
-	const activeEffect = getActiveEffect()
-	if (!activeEffect) throw new Error('Tracking an effect trigger while not in an effect')
-	if (!effectTrackers.has(activeEffect)) effectTrackers.set(activeEffect, [onTouch])
-	else effectTrackers.get(activeEffect).push(onTouch)
+export function onEffectTrigger(onTouch: EffectTracking, effect?: EffectTrigger) {
+	effect ??= getActiveEffect()
+	if (!effect) throw new Error('Tracking an effect trigger while not in an effect')
+	if (!effectTrackers.has(effect)) effectTrackers.set(effect, [onTouch])
+	else effectTrackers.get(effect).push(onTouch)
 }
 
-const effectTrackers = new WeakMap<ScopedCallback, EffectTracking[]>()
+const effectTrackers = new WeakMap<EffectTrigger, EffectTracking[]>()
 
-export function raiseEffectTrigger(effect: ScopedCallback, obj: any, evolution: Evolution, prop: any) {
+export function raiseEffectTrigger(effect: EffectTrigger, obj: any, evolution: Evolution, prop: any) {
 	const trackers = effectTrackers.get(effect)
 	if (trackers) {
 		for (const tracker of trackers) tracker(obj, evolution, prop)
 		//trackers.delete(effect)
 	}
 }
-export function onEffectThrow(onThrow: CatchFunction) {
-	const activeEffect = getActiveEffect()
-	if (!activeEffect) throw new Error('Tracking an effect throw while not in an effect')
-	if (!effectCatchers.has(activeEffect)) effectCatchers.set(activeEffect, [onThrow])
-	else effectCatchers.get(activeEffect).push(onThrow)
+export function onEffectThrow(onThrow: CatchFunction, effect?: EffectTrigger) {
+	effect ??= getActiveEffect()
+	if (!effect) throw new Error('Tracking an effect throw while not in an effect')
+	if (!effectCatchers.has(effect)) effectCatchers.set(effect, [onThrow])
+	else effectCatchers.get(effect).push(onThrow)
 }
-const effectCatchers = new WeakMap<ScopedCallback, CatchFunction[]>()
+const effectCatchers = new WeakMap<EffectTrigger, CatchFunction[]>()
 
-export const opaqueEffects = new WeakSet<ScopedCallback>()
+export const opaqueEffects = new WeakSet<EffectTrigger>()
 
 // Dependency graph: tracks which effects trigger which other effects
 // Uses roots (Function) as keys for consistency
@@ -353,7 +353,7 @@ function hasPathExcluding(start: Function, end: Function, exclude: Function): bo
  * Called when an effect is stopped/cleaned up
  * @param effect - The effect being cleaned up
  */
-function cleanupEffectFromGraph(effect: ScopedCallback) {
+function cleanupEffectFromGraph(effect: EffectTrigger) {
 	if (options.cycleHandling === 'production') return
 	const root = getRoot(effect)
 
@@ -459,7 +459,7 @@ function cleanupEffectFromGraph(effect: ScopedCallback) {
 // Batch queue structure - optimized with cached in-degrees
 interface BatchQueue {
 	// All effects in the current batch that still need to be executed (todos)
-	all: Map<Function, ScopedCallback> // root → effect
+	all: Map<Function, EffectTrigger> // root → effect
 	// Cached in-degrees for each effect in the batch (number of causes in batch)
 	inDegrees: Map<Function, number> // root → in-degree count
 }
@@ -467,10 +467,10 @@ interface BatchQueue {
 // Track currently executing effects to prevent re-execution
 // These are all the effects triggered under `activeEffect`
 let batchQueue: BatchQueue | undefined
-export function hasBatched(effect: ScopedCallback) {
+export function hasBatched(effect: EffectTrigger) {
 	return batchQueue?.all.has(getRoot(effect))
 }
-const batchCleanups = new Set<ScopedCallback>()
+const batchCleanups = new Set<EffectCleanup>()
 
 /**
  * Computes and caches in-degrees for all effects in the batch
@@ -611,7 +611,7 @@ function wouldCreateCycle(callerRoot: Function, targetRoot: Function): boolean {
  * @param caller - The active effect that triggered this one (optional)
  * @param immediate - If true, don't create edges in the dependency graph
  */
-function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?: boolean) {
+function addToBatch(effect: EffectTrigger, caller?: EffectTrigger, immediate?: boolean) {
 	(effect as any)[cleanupSymbol]?.()
 	// If the effect was stopped during cleanup (e.g. lazy memoization), don't add it to the batch
 	if ((effect as any)[stopped]) return
@@ -665,7 +665,7 @@ function addToBatch(effect: ScopedCallback, caller?: ScopedCallback, immediate?:
  * Adds a cleanup function to be called when the current batch of effects completes
  * @param cleanup - The cleanup function to add
  */
-export function addBatchCleanup(cleanup: ScopedCallback) {
+export function addBatchCleanup(cleanup: EffectCleanup) {
 	if (!batchQueue) cleanup()
 	else batchCleanups.add(cleanup)
 }
@@ -763,7 +763,7 @@ function findCycle(
  */
 function executeNext(effectuatedRoots: Function[]): any {
 	// Find an effect with in-degree 0 using cached values
-	let nextEffect: ScopedCallback | null = null
+	let nextEffect: EffectTrigger | null = null
 	let nextRoot: Function | null = null
 
 	if (options.cycleHandling === 'production') {
@@ -843,7 +843,7 @@ function executeNext(effectuatedRoots: Function[]): any {
 
 // Track which sub-effects have been executed to prevent infinite loops
 // These are all the effects triggered under `activeEffect` and all their sub-effects
-export function batch(effect: ScopedCallback | ScopedCallback[], immediate?: 'immediate') {
+export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'immediate') {
 	if (!Array.isArray(effect)) effect = [effect]
 	const roots = effect.map(getRoot)
 
@@ -981,7 +981,7 @@ export const atomic = decorator({
 			const atomicEffect = () => original.apply(this, args)
 			// Debug: helpful to have a name
 			Object.defineProperty(atomicEffect, 'name', { value: `atomic(${original.name})` })
-			return batch(atomicEffect, 'immediate')
+			return batch(atomicEffect as EffectTrigger, 'immediate')
 		}
 	},
 	default<Args extends any[], Return>(
@@ -991,7 +991,7 @@ export const atomic = decorator({
 			const atomicEffect = () => original.apply(this, args)
 			// Debug: helpful to have a name
 			Object.defineProperty(atomicEffect, 'name', { value: `atomic(${original.name})` })
-			return batch(atomicEffect, 'immediate')
+			return batch(atomicEffect as EffectTrigger, 'immediate')
 		}
 	},
 })
@@ -1008,11 +1008,11 @@ const fr = new FinalizationRegistry<() => void>((f) => f())
  * @param options - Options for effect execution
  * @returns A cleanup function to stop the effect
  */
-function effect(
+export const effect = flavored((
 	//biome-ignore lint/suspicious/noConfusingVoidType: We have to
 	fn: (access: EffectAccess) => EffectCloser | undefined | void | Promise<any>,
 	effectOptions?: EffectOptions
-): ReturnType<EffectWithModifiers> {
+): EffectCleanup=> {
 	if (effectOptions?.name) Object.defineProperty(fn, 'name', { value: effectOptions.name })
 	// Use per-effect asyncMode or fall back to global option
 	const asyncMode = effectOptions?.asyncMode ?? options.asyncMode ?? 'cancel'
@@ -1024,21 +1024,8 @@ function effect(
 			effectCreationStacks.set(getRoot(fn), cleanStack)
 		}
 	}
-	let cleanup: (() => void) | null = null
-	const tracked = effectHistory.present.with(runEffect, ()=> effectAggregator.zoned)
-	const ascend = effectHistory.zoned
-	const parent = effectHistory.present.active
-	let thrower: CatchFunction | undefined
-	let effectStopped = false
-	let access: EffectAccess = {
-		tracked,
-		ascend,
-		reaction: false
-	}
-	let runningPromise: Promise<any> | null = null
-	let cancelPrevious: (() => void) | null = null
 
-	function runEffect() {
+	const runEffect = Object.defineProperties(() => {
 		// Clear previous dependencies
 		if (cleanup) {
 			const prevCleanup = cleanup
@@ -1162,7 +1149,35 @@ function effect(
 				effectChildren.delete(runEffect)
 			}
 		}
+	}, {
+		[forwardThrow]: {
+			get: ()=> thrower,
+		},
+		[cleanupSymbol]: {
+			value: () => {
+				if (cleanup) {
+					try { untracked(() => cleanup()) }
+					finally { cleanup = null }
+				}
+			},
+		},
+		parent: {
+			get: () => parent,
+		},
+	}) as EffectTrigger
+	let cleanup: (() => void) | null = null
+	const tracked = effectHistory.present.with(runEffect, ()=> effectAggregator.zoned)
+	const ascend = effectHistory.zoned
+	const parent = effectHistory.present.active
+	let thrower: CatchFunction | undefined
+	let effectStopped = false
+	let access: EffectAccess = {
+		tracked,
+		ascend,
+		reaction: false
 	}
+	let runningPromise: Promise<any> | null = null
+	let cancelPrevious: (() => void) | null = null
 	if (effectOptions?.dependencyHook) {
 		Object.defineProperty(runEffect, 'dependencyHook', {
 			value: effectOptions.dependencyHook,
@@ -1175,21 +1190,8 @@ function effect(
 			[stopped]: {
 				get: ()=> effectStopped,
 			},
-			[forwardThrow]: {
-				get: ()=> thrower,
-			},
-			[cleanupSymbol]: {
-				value: () => {
-					if (cleanup) {
-						const prevCleanup = cleanup
-						cleanup = null
-						untracked(() => prevCleanup())
-					}
-				},
-			},
 		}) as EffectCleanup
 	}
-	augmentedRv(runEffect)
 
 	// Register strict mode if enabled
 	if (effectOptions?.opaque) {
@@ -1252,16 +1254,14 @@ function effect(
 	return subEffectCleanup
 }
 
-const effectWithModifiers = flavored(effect, {
-	get opaque(): EffectWithModifiers {
-		return flavorOptions(this, { opaque: true }) as EffectWithModifiers
+, {
+	get opaque() {
+		return flavorOptions(this, { opaque: true })
 	},
-	named(name: string): EffectWithModifiers {
-		return flavorOptions(this, { name }) as EffectWithModifiers
+	named(name: string) {
+		return flavorOptions(this, { name })
 	},
 })
-
-export { effectWithModifiers as effect }
 
 /**
  * Executes a function without tracking dependencies but maintains parent cleanup relationship

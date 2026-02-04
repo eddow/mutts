@@ -8,14 +8,16 @@ import { dependant } from './tracking'
 import {
 	type EffectAccess,
 	nonReactiveMark,
+	type EffectCleanup,
 	type ScopedCallback,
 	unreactiveProperties,
+	cleanup as cleanupSymbol,
 } from './types'
 
 /**
  * Symbol for accessing the cleanup function on cleaned objects
  */
-export const cleanup = Symbol('cleanup')
+export const cleanup = cleanupSymbol
 
 //#region watch
 

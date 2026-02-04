@@ -3,13 +3,13 @@ import { effect, untracked } from './effects'
 import { cleanedBy, cleanup } from './interface'
 import { memoize } from './memoize'
 import { reactive } from './proxy'
-import type { ScopedCallback } from './types'
+import type { EffectAccess, EffectCleanup, EffectCleanupS } from './types'
 
 /**
  * Result of a reactive scan, which is a reactive array of accumulated values
  * with an attached cleanup function.
  */
-export type ScanResult<Output> = readonly Output[] & { [cleanup]: ScopedCallback }
+export type ScanResult<Output> = readonly Output[] & { [cleanup]: EffectCleanup }
 
 /**
  * Perform a reactive scan over an array of items.
@@ -50,7 +50,7 @@ export function scan<Input extends object, Output>(
 	const result = reactive([] as Output[])
 	
 	// Track effects for each index to dispose them when the array shrinks
-	const indexEffects = new Map<number, ScopedCallback>()
+	const indexEffects = new Map<number, EffectCleanupS>()
 	// Mapping from index to its current intermediate object
 	const indexToIntermediate = reactive([] as Intermediate[])
 	const intermediaries = new WeakMap<Input, Intermediate[]>()
@@ -150,11 +150,11 @@ export function scan<Input extends object, Output>(
 		})
 	})
 
-	return cleanedBy(result, () => {
+	return cleanedBy(result, (() => {
 		mainEffect()
 		for (const stop of indexEffects.values()) stop()
 		indexEffects.clear()
-	}) as ScanResult<Output>
+	}) as EffectCleanup) as ScanResult<Output>
 }
 
 /**
@@ -178,10 +178,10 @@ export function scan<Input extends object, Output>(
  * @param cb Callback function that returns an array
  * @returns A reactive array synchronized with the callback's result, with a [cleanup] property to stop tracking
  */
-export function lift<Output>(cb: () => Output[]): Output[] & { [cleanup]: ScopedCallback } {
+export function lift<Output>(cb: (access: EffectAccess) => Output[]): Output[] & { [cleanup]: EffectCleanup } {
 	const result = reactive([] as Output[])
-	return cleanedBy(result, effect(() => {
-		const source = cb()
+	return cleanedBy(result, effect((access) => {
+		const source = cb(access)
 		if (result.length !== source.length) result.length = source.length
 		for (let i = 0; i < source.length; i++)
 			if (result[i] !== source[i]) result[i] = source[i]

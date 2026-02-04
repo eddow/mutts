@@ -1,16 +1,16 @@
-import { rootFunction, type ScopedCallback } from './types'
+import { EffectCleanup, EffectTrigger, rootFunction } from './types'
 
 // Track which effects are watching which reactive objects for cleanup
-export const effectToReactiveObjects = new WeakMap<ScopedCallback, Set<object>>()
+export const effectToReactiveObjects = new WeakMap<EffectTrigger, Set<object>>()
 
 // Track effects per reactive object and property
-export const watchers = new WeakMap<object, Map<any, Set<ScopedCallback>>>()
+export const watchers = new WeakMap<object, Map<any, Set<EffectTrigger>>>()
 
 // runEffect -> set<stop>
-export const effectChildren = new WeakMap<ScopedCallback, Set<ScopedCallback>>()
+export const effectChildren = new WeakMap<EffectTrigger, Set<EffectCleanup>>()
 
 // Track parent effect relationships for hierarchy traversal (used in deep touch filtering)
-export const effectParent = new WeakMap<ScopedCallback, ScopedCallback | undefined>()
+export const effectParent = new WeakMap<EffectTrigger, EffectTrigger | undefined>()
 
 // Track reverse mapping to ensure unicity: One Root -> One Function
 const reverseRoots = new WeakMap<any, WeakRef<Function>>()

@@ -5,12 +5,12 @@ import { effect, untracked } from './effects'
 import { cleanedBy, cleanup } from './interface'
 import { reactive } from './proxy'
 import { Register } from './register'
-import { type ProjectionContext, projectionInfo, type ScopedCallback } from './types'
+import { type ProjectionContext, projectionInfo, type EffectCleanup, type EffectTrigger } from './types'
 
 /**
  * Maps projection effects (item effects) to their projection context
  */
-export const effectProjectionMetadata = new WeakMap<ScopedCallback, ProjectionContext>()
+export const effectProjectionMetadata = new WeakMap<EffectTrigger, ProjectionContext>()
 
 /**
  * Returns the projection context of the currently running effect, if any.
@@ -46,7 +46,7 @@ export type ProjectCallback<SourceValue, Key, Target extends object, SourceType,
 	target: Target
 ) => Result
 
-export type ProjectResult<Target extends object> = Target & { [cleanup]: ScopedCallback }
+export type ProjectResult<Target extends object> = Target & { [cleanup]: EffectCleanup }
 
 function defineAccessValue<Access extends { get(): unknown; set(value: unknown): boolean }>(
 	access: Access
@@ -61,7 +61,7 @@ function defineAccessValue<Access extends { get(): unknown; set(value: unknown):
 
 function makeCleanup<Result extends object>(
 	target: Result,
-	effectMap: Map<unknown, ScopedCallback>,
+	effectMap: Map<unknown, EffectTrigger>,
 	onDispose: () => void,
 	metadata?: any
 ): ProjectResult<Result> {
@@ -86,7 +86,7 @@ function projectArray<SourceValue, ResultValue>(
 ): ProjectResult<ResultValue[]> {
 	source = reactive(source)
 	const target = reactive([] as ResultValue[])
-	const indexEffects = new Map<number, ScopedCallback>()
+	const indexEffects = new Map<number, EffectCleanup>()
 
 	function normalizeTargetLength(length: number) {
 		FoolProof.set(target as unknown as object, 'length', length, target)
@@ -155,7 +155,7 @@ function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
 	source = reactive(source) as Register<SourceValue, Key>
 	const rawTarget = new Map<Key, ResultValue>()
 	const target = reactive(rawTarget) as Map<Key, ResultValue>
-	const keyEffects = new Map<Key, ScopedCallback>()
+	const keyEffects = new Map<Key, EffectTrigger>()
 
 	function disposeKey(key: Key) {
 		const stopEffect = keyEffects.get(key)
@@ -222,7 +222,7 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 ): ProjectResult<Record<keyof Source, ResultValue>> {
 	source = reactive(source) as Source
 	const target = reactive({} as Record<keyof Source, ResultValue>)
-	const keyEffects = new Map<PropertyKey, ScopedCallback>()
+	const keyEffects = new Map<PropertyKey, EffectTrigger>()
 
 	function disposeKey(key: PropertyKey) {
 		const stopEffect = keyEffects.get(key)
@@ -292,7 +292,7 @@ function projectMap<Key, Value, ResultValue>(
 	source = reactive(source) as Map<Key, Value>
 	const rawTarget = new Map<Key, ResultValue>()
 	const target = reactive(rawTarget) as Map<Key, ResultValue>
-	const keyEffects = new Map<Key, ScopedCallback>()
+	const keyEffects = new Map<Key, EffectTrigger>()
 
 	function disposeKey(key: Key) {
 		const stopEffect = keyEffects.get(key)

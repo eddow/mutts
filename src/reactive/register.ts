@@ -4,7 +4,7 @@ import { effect } from './effects'
 import { Eventful } from '../eventful'
 import { unreactive } from './interface'
 import { reactive } from './proxy'
-import { type ScopedCallback } from './types'
+import type { EffectCleanup, EffectTrigger } from './types'
 
 type KeyFunction<T, K extends PropertyKey> = (item: T) => K
 
@@ -75,8 +75,8 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 	readonly #keys: K[]
 	readonly #values: Map<K, T>
 	readonly #usage = new Map<K, number>()
-	readonly #valueInfo = new Map<T, { key: K; stop?: ScopedCallback }>()
-	readonly #keyEffects = new Set<ScopedCallback>()
+	readonly #valueInfo = new Map<T, { key: K; stop?: EffectCleanup }>()
+	readonly #keyEffects = new Set<EffectCleanup>()
 	readonly #ascend: FunctionWrapper
 	readonly #events = new Eventful<RegisterEvents<T, K>>()
 
@@ -154,7 +154,7 @@ class RegisterClass<T, K extends PropertyKey = PropertyKey>
 				info!.key = nextKey
 			})
 			info!.stop = stop
-			this.#keyEffects.add(stop)
+			this.#keyEffects.add(stop as EffectCleanup)
 		})
 		if (info.key === undefined) throw new Error('Register key function must return a property key')
 		return info.key

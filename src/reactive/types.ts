@@ -66,9 +66,25 @@ export interface EffectAccess {
 // It automatically preserves effect context across Promise boundaries (.then, .catch, .finally)
 
 /**
- * Type for effect cleanup functions
+ * Base type for effect callbacks - simple function without additional properties
  */
 export type ScopedCallback = () => void
+
+/**
+ * Type for effect cleanup functions with stopped state tracking
+ */
+export type EffectCleanup = ScopedCallback & {
+	[stopped]: boolean
+}
+
+/**
+ * Type for the `runEffect` function of an effect - argument-less function to call to trigger the effect
+ */
+export type EffectTrigger = ScopedCallback & {
+	[cleanup]: ScopedCallback
+	[forwardThrow]: CatchFunction
+	parent?: EffectTrigger
+}
 
 /**
  * Async execution mode for effects
@@ -164,39 +180,7 @@ export const forwardThrow = Symbol('throw')
 export type EffectCloser = (error?: any) => void
 //biome-ignore lint/suspicious/noConfusingVoidType: We have to
 export type CatchFunction = (error: any) => EffectCloser | undefined | void
-/**
- * Type for the effect cleanup function with additional properties
- */
-export type EffectCleanup = ScopedCallback & {
-	[stopped]: boolean
-	[cleanup]: ScopedCallback
-	[forwardThrow]: CatchFunction
-}
 
-/**
- * Type for the base effect function signature
- */
-export type EffectFunction = (
-	fn: (access: EffectAccess) => ScopedCallback | undefined | void | Promise<any>,
-	effectOptions?: EffectOptions
-) => EffectCleanup
-
-/**
- * Interface for chainable effect modifiers
- * Both .opaque and .named() return functions that also have these modifiers for chaining
- */
-export interface EffectWithModifiers extends EffectFunction {
-	/**
-	 * Creates an opaque effect that sees object references themselves
-	 * and must be notified when they change, regardless of deep content similarity.
-	 */
-	get opaque(): EffectWithModifiers
-	/**
-	 * Creates a named effect for debugging purposes.
-	 * @param name - The name to identify this effect
-	 */
-	named(name: string): EffectWithModifiers
-}
 
 /**
  * Context for a running projection item effect
@@ -314,13 +298,13 @@ export const options = {
 	 * @param props - The properties that changed
 	 * @param deps - The dependencies that changed
 	 */
-	touched: (_obj: any, _evolution: Evolution, _props?: any[], _deps?: Set<ScopedCallback>) => {},
+	touched: (_obj: any, _evolution: Evolution, _props?: any[], _deps?: Set<EffectTrigger>) => {},
 	/**
 	 * Debug purpose: called when an effect is skipped because it's already running
 	 * @param effect - The effect that is already running
 	 * @param runningChain - The array of effects from the detected one to the currently running one
 	 */
-	skipRunningEffect: (_effect: ScopedCallback) => {},
+	skipRunningEffect: (_effect: EffectTrigger) => {},
 	/**
 	 * Debug purpose: maximum effect chain (like call stack max depth)
 	 * Used to prevent infinite loops
