@@ -2,11 +2,17 @@
 
 ## Functionality
 
-- `effect` now has a `named` and `opaque` "optioned" property
+- `flavored`: shortcut to give "flavors" to functions
+- events now accept the `button.on.click(cb)` syntax
+
+### Reactive
+- `effect` now has a `named` and `opaque` "flavored" property
+- `onEffectThrow` - effect throw/catch feature
 
 ## Refactoring
 
 - `resolve` -> `lift` (array buffering - renaming)
+- `trackedEffect` -> `onEffectTrigger`
 - Cycle detection algorithms update (now, modes are `'production' | 'development' | 'debug'`)
 
 # 1.0.8

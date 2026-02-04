@@ -7,6 +7,7 @@
   - [5-Minute Quick Start](#5-minute-quick-start)
 - [Core API](#core-api)
 - [Effect System](#effect-system)
+  - [Error Handling](./error-handling.md)
 - [Atomic Operations](./advanced.md#atomic-operations)
 - [Advanced Effects](./advanced.md#advanced-effects)
 - [Evolution Tracking](./advanced.md#evolution-tracking)

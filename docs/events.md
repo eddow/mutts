@@ -32,8 +32,9 @@ class MyClass extends Eventful<MyEvents> {
 
 #### `on(events: Partial<Events>): void`
 #### `on<EventType extends keyof Events>(event: EventType, cb: Events[EventType]): () => void`
+#### `on.eventName(cb: Events['eventName']): () => void`
 
-Registers event listeners. Can be called with either a single event and callback, or an object containing multiple events and their callbacks.
+Registers event listeners. Can be called with either a single event and callback, an object containing multiple events, or using dot notation.
 
 **Parameters:**
 - `event`: The event name (when using single event overload)
@@ -49,6 +50,11 @@ const unsubscribe = myObject.on('userLogin', (userId, timestamp) => {
   console.log(`User ${userId} logged in at ${timestamp}`)
 })
 
+// Dot notation (equivalent to above)
+const unsubscribe = myObject.on.userLogin((userId, timestamp) => {
+  console.log(`User ${userId} logged in at ${timestamp}`)
+})
+
 // Multiple events
 myObject.on({
   userLogin: (userId, timestamp) => console.log('Login:', userId),
@@ -59,8 +65,9 @@ myObject.on({
 
 #### `off(events: Partial<Events>): void`
 #### `off<EventType extends keyof Events>(event: EventType, cb?: Events[EventType]): void`
+#### `off.eventName(cb?: Events['eventName']): void`
 
-Removes event listeners. Can be called with either a single event (and optional callback), or an object containing multiple events.
+Removes event listeners. Can be called with either a single event (and optional callback), an object containing multiple events, or using dot notation.
 
 **Parameters:**
 - `event`: The event name (when using single event overload)
@@ -72,8 +79,14 @@ Removes event listeners. Can be called with either a single event (and optional 
 // Remove specific callback
 myObject.off('userLogin', myCallback)
 
+// Remove specific callback using dot notation
+myObject.off.userLogin(myCallback)
+
 // Remove all listeners for an event
 myObject.off('userLogin')
+
+// Remove all listeners for an event using dot notation
+myObject.off.userLogin()
 
 // Remove multiple events
 myObject.off({
@@ -83,6 +96,7 @@ myObject.off({
 ```
 
 #### `emit<EventType extends keyof Events>(event: EventType, ...args: Parameters<Events[EventType]>): void`
+#### `emit.eventName(...args: Parameters<Events['eventName']>): void`
 
 Emits an event, calling all registered listeners and global hooks.
 
@@ -93,8 +107,13 @@ Emits an event, calling all registered listeners and global hooks.
 **Example:**
 ```typescript
 myObject.emit('userLogin', 'user123', new Date())
+myObject.emit.userLogin('user123', new Date())  // Dot notation
+
 myObject.emit('dataUpdate', [1, 2, 3])
+myObject.emit.dataUpdate([1, 2, 3])  // Dot notation
+
 myObject.emit('error', new Error('Something went wrong'))
+myObject.emit.error(new Error('Something went wrong'))  // Dot notation
 ```
 
 #### `hook(cb: <EventType extends keyof Events>(event: EventType, ...args: Parameters<Events[EventType]>) => void): () => void`
@@ -111,6 +130,42 @@ Registers a global hook that receives all events emitted by this instance.
 const unsubscribe = myObject.hook((event, ...args) => {
   console.log(`Event ${String(event)} emitted with args:`, args)
 })
+```
+
+## Dot Notation Syntax
+
+For convenience, `on`, `off`, and `emit` all support a dot notation syntax that provides a cleaner alternative to the string-based API.
+
+| String Notation | Dot Notation |
+|----------------|--------------|
+| `obj.on('event', cb)` | `obj.on.event(cb)` |
+| `obj.off('event', cb)` | `obj.off.event(cb)` |
+| `obj.off('event')` | `obj.off.event()` |
+| `obj.emit('event', args)` | `obj.emit.event(args)` |
+
+Both forms are functionally equivalent. The dot notation provides:
+
+- **Cleaner syntax**: No quotes needed around event names
+- **Better IDE support**: Autocomplete for event names
+- **Type safety**: Full TypeScript inference for event arguments
+
+**Example:**
+
+```typescript
+class Button extends Eventful<{ click: (x: number, y: number) => void; hover: () => void }> {}
+
+const button = new Button()
+
+// Register listener using dot notation
+button.on.click((x, y) => console.log(`Clicked at ${x}, ${y}`))
+
+// Emit using dot notation
+button.emit.click(100, 200)
+
+// Remove listener using dot notation
+button.off.click(myCallback)
+// Or remove all click listeners
+button.off.click()
 ```
 
 ## Usage Examples

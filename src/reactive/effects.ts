@@ -16,11 +16,15 @@ import {
 	watchers,
 } from './registry'
 import {
+	type CatchFunction,
 	cleanup as cleanupSymbol,
-	type DependencyAccess,
+	type EffectAccess,
+	type EffectCleanup,
+	type EffectCloser,
 	type EffectOptions,
 	type EffectWithModifiers,
 	type Evolution,
+	forwardThrow,
 	options,
 	ReactiveError,
 	ReactiveErrorCode,
@@ -138,7 +142,7 @@ export function recordActivation(
  * - The specific property that changed
  *
  * **Note:** The tracker callback is automatically removed after being called once. If you need
- * to track multiple triggers, call `trackEffect` again within the effect.
+ * to track multiple triggers, call `onEffectTrigger` again within the effect.
  *
  * @param onTouch - Callback function that receives (obj, evolution, prop) when the effect is triggered
  * @throws {Error} If called outside of an effect context
@@ -149,7 +153,7 @@ export function recordActivation(
  *
  * effect(() => {
  *   // Register a tracker to see what triggers this effect
- *   trackEffect((obj, evolution, prop) => {
+ *   onEffectTrigger((obj, evolution, prop) => {
  *     console.log(`Effect triggered by:`, {
  *       object: obj,
  *       change: evolution.type,
@@ -163,16 +167,29 @@ export function recordActivation(
  *
  * state.count = 5
  */
-export function trackEffect(onTouch: EffectTracking, options: { allowRoot?: boolean } = {}) {
+export function onEffectTrigger(onTouch: EffectTracking) {
 	const activeEffect = getActiveEffect()
-	if (activeEffect) {
-		if (!effectTrackers.has(activeEffect)) effectTrackers.set(activeEffect, new Set([onTouch]))
-		else effectTrackers.get(activeEffect)!.add(onTouch)
-	}
-	else if(options.allowRoot !== true) throw new Error('Not in an effect')
+	if (!activeEffect) throw new Error('Tracking an effect trigger while not in an effect')
+	if (!effectTrackers.has(activeEffect)) effectTrackers.set(activeEffect, [onTouch])
+	else effectTrackers.get(activeEffect).push(onTouch)
 }
 
-const effectTrackers = new WeakMap<ScopedCallback, Set<EffectTracking>>()
+const effectTrackers = new WeakMap<ScopedCallback, EffectTracking[]>()
+
+export function raiseEffectTrigger(effect: ScopedCallback, obj: any, evolution: Evolution, prop: any) {
+	const trackers = effectTrackers.get(effect)
+	if (trackers) {
+		for (const tracker of trackers) tracker(obj, evolution, prop)
+		//trackers.delete(effect)
+	}
+}
+export function onEffectThrow(onThrow: CatchFunction) {
+	const activeEffect = getActiveEffect()
+	if (!activeEffect) throw new Error('Tracking an effect throw while not in an effect')
+	if (!effectCatchers.has(activeEffect)) effectCatchers.set(activeEffect, [onThrow])
+	else effectCatchers.get(activeEffect).push(onThrow)
+}
+const effectCatchers = new WeakMap<ScopedCallback, CatchFunction[]>()
 
 export const opaqueEffects = new WeakSet<ScopedCallback>()
 
@@ -993,7 +1010,7 @@ const fr = new FinalizationRegistry<() => void>((f) => f())
  */
 function effect(
 	//biome-ignore lint/suspicious/noConfusingVoidType: We have to
-	fn: (access: DependencyAccess) => ScopedCallback | undefined | void | Promise<any>,
+	fn: (access: EffectAccess) => EffectCloser | undefined | void | Promise<any>,
 	effectOptions?: EffectOptions
 ): ReturnType<EffectWithModifiers> {
 	if (effectOptions?.name) Object.defineProperty(fn, 'name', { value: effectOptions.name })
@@ -1011,8 +1028,13 @@ function effect(
 	const tracked = effectHistory.present.with(runEffect, ()=> effectAggregator.zoned)
 	const ascend = effectHistory.zoned
 	const parent = effectHistory.present.active
+	let thrower: CatchFunction | undefined
 	let effectStopped = false
-	let hasReacted = false
+	let access: EffectAccess = {
+		tracked,
+		ascend,
+		reaction: false
+	}
 	let runningPromise: Promise<any> | null = null
 	let cancelPrevious: (() => void) | null = null
 
@@ -1042,10 +1064,28 @@ function effect(
 		if (effectStopped) return
 
 		options.enter(getRoot(fn))
-		let reactionCleanup: ScopedCallback | undefined
+		let reactionCleanup: EffectCloser | undefined
 		let result: any
+		let caught = -1
+		thrower = (error: any) => {
+			++caught
+			const catches = effectCatchers.get(runEffect)
+			if(catches) while (caught < catches.length) {
+				reactionCleanup?.(error)
+				reactionCleanup = undefined
+				try {
+					reactionCleanup = catches[caught](error) as EffectCloser | undefined
+					return
+				} catch (e) {
+					caught++
+				}
+			}
+			if(parent) parent[forwardThrow](error)
+			else throw error
+		}
 		try {
-			result = tracked(() => fn({ tracked, ascend, reaction: hasReacted }))
+			result = tracked(() => fn(access))
+			options.leave(fn)
 			if (
 				result &&
 				typeof result !== 'function' &&
@@ -1083,15 +1123,19 @@ function effect(
 				// Synchronous result - treat as cleanup function
 				reactionCleanup = result as undefined | ScopedCallback
 			}
+		} catch (error) {
+			thrower?.(error)
 		} finally {
-			hasReacted = true
-			options.leave(fn)
+			access.reaction = true
 		}
 
 		// Create cleanup function for next run
 		cleanup = () => {
 			cleanup = null
 			reactionCleanup?.()
+			reactionCleanup = undefined
+			effectTrackers.delete(runEffect)
+			effectCatchers.delete(runEffect)
 			// Remove this effect from all reactive objects it's watching
 			const effectObjects = effectToReactiveObjects.get(runEffect)
 			if (effectObjects) {
@@ -1129,9 +1173,10 @@ function effect(
 	function augmentedRv(rv: ScopedCallback) {
 		return Object.defineProperties(rv, {
 			[stopped]: {
-				get() {
-					return effectStopped
-				},
+				get: ()=> effectStopped,
+			},
+			[forwardThrow]: {
+				get: ()=> thrower,
 			},
 			[cleanupSymbol]: {
 				value: () => {
@@ -1142,10 +1187,7 @@ function effect(
 					}
 				},
 			},
-		}) as ScopedCallback & {
-			[stopped]: boolean
-			[cleanupSymbol]: () => void
-		}
+		}) as EffectCleanup
 	}
 	augmentedRv(runEffect)
 
@@ -1238,8 +1280,6 @@ export function untracked<T>(fn: () => T): T {
 export function root<T>(fn: () => T): T {
 	return effectHistory.root(fn)
 }
-
-export { effectTrackers }
 
 /**
  * Creates a bidirectional binding between a reactive value and a non-reactive external value

@@ -1,13 +1,17 @@
 // biome-ignore-all lint/suspicious/noConfusingVoidType: Type 'void' is not assignable to type 'ScopedCallback | undefined'.
 // Argument of type '() => void' is not assignable to parameter of type '(dep: DependencyFunction) => ScopedCallback | undefined'.
 
-import { FunctionWrapper } from "../zone"
+import type { FunctionWrapper } from "../zone"
+
+export type EffectAccessEvents = {
+	triggered(event: string, ...args: any[]): void
+}
 
 /**
- * Dependency access passed to user callbacks within effects/watch
+ * Effect access passed to user callbacks within effects/watch
  * Provides functions to track dependencies and information about the effect execution
  */
-export interface DependencyAccess {
+export interface EffectAccess {
 	/**
 	 * Tracks dependencies in the current effect context
 	 * Use this for normal dependency tracking within the effect
@@ -155,19 +159,25 @@ export const stopped = Symbol('stopped')
  */
 export const cleanup = Symbol('cleanup')
 
+export const forwardThrow = Symbol('throw')
+
+export type EffectCloser = (error?: any) => void
+//biome-ignore lint/suspicious/noConfusingVoidType: We have to
+export type CatchFunction = (error: any) => EffectCloser | undefined | void
 /**
  * Type for the effect cleanup function with additional properties
  */
 export type EffectCleanup = ScopedCallback & {
 	[stopped]: boolean
-	[cleanup]: () => void
+	[cleanup]: ScopedCallback
+	[forwardThrow]: CatchFunction
 }
 
 /**
  * Type for the base effect function signature
  */
 export type EffectFunction = (
-	fn: (access: DependencyAccess) => ScopedCallback | undefined | void | Promise<any>,
+	fn: (access: EffectAccess) => ScopedCallback | undefined | void | Promise<any>,
 	effectOptions?: EffectOptions
 ) => EffectCleanup
 

@@ -1,4 +1,4 @@
-import { FunctionWrapper } from '../zone'
+import type { FunctionWrapper } from '../zone'
 import { ArrayReadForward, forwardArray, getAt, Indexable, setAt } from '../indexable'
 import { effect } from './effects'
 import { Eventful } from '../eventful'

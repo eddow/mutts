@@ -1,7 +1,7 @@
 import { recordTriggerLink } from './debug'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { getActiveEffect, isRunning } from './effect-context'
-import { batch, effectTrackers, hasBatched, opaqueEffects, recordActivation } from './effects'
+import { batch, hasBatched, opaqueEffects, recordActivation } from './effects'
 import { unwrap } from './proxy-state'
 import { watchers } from './registry'
 import { allProps, type Evolution, options, type ScopedCallback, type State } from './types'
@@ -53,12 +53,7 @@ export function collectEffects(
 						effects.add(effect)
 						if (!hasBatched(effect)) recordActivation(effect, obj, evolution, key)
 					}
-					const trackers = effectTrackers.get(effect)
 					recordTriggerLink(sourceEffect, effect, obj, key, evolution)
-					if (trackers) {
-						for (const tracker of trackers) tracker(obj, evolution, key)
-						trackers.delete(effect)
-					}
 				}
 		}
 }
@@ -123,12 +118,7 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 		}
 		effects.add(effect)
 		recordActivation(effect, obj, evolution, prop)
-		const trackers = effectTrackers.get(effect)
 		recordTriggerLink(sourceEffect, effect, obj, prop, evolution)
-		if (trackers) {
-			for (const tracker of trackers) tracker(obj, evolution, prop)
-			trackers.delete(effect)
-		}
 	}
 
 	if (effects.size > 0) {

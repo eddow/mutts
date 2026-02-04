@@ -6,7 +6,7 @@ import { unwrap } from './proxy-state'
 import { markWithRoot } from './registry'
 import { dependant } from './tracking'
 import {
-	type DependencyAccess,
+	type EffectAccess,
 	nonReactiveMark,
 	type ScopedCallback,
 	unreactiveProperties,
@@ -38,7 +38,7 @@ export interface WatchOptions {
  * @returns Cleanup function to stop watching
  */
 export function watch<T>(
-	value: (dep: DependencyAccess) => T,
+	value: (dep: EffectAccess) => T,
 	changed: (value: T, oldValue?: T) => void,
 	options?: Omit<WatchOptions, 'deep'> & { deep?: false }
 ): ScopedCallback
@@ -50,7 +50,7 @@ export function watch<T>(
  * @returns Cleanup function to stop watching
  */
 export function watch<T extends object | any[]>(
-	value: (dep: DependencyAccess) => T,
+	value: (dep: EffectAccess) => T,
 	changed: (value: T, oldValue?: T) => void,
 	options?: Omit<WatchOptions, 'deep'> & { deep: true }
 ): ScopedCallback
@@ -95,7 +95,7 @@ function watchObject(
 }
 
 function watchCallBack<T>(
-	value: (dep: DependencyAccess) => T,
+	value: (dep: EffectAccess) => T,
 	changed: (value: T, oldValue?: T) => void,
 	{ immediate = false, deep = false } = {}
 ): ScopedCallback {
@@ -206,7 +206,7 @@ export function cleanedBy<T extends object>(obj: T, cleanupFn: ScopedCallback) {
  * @param compute - Function that computes the derived value
  * @returns Object with value and cleanup function
  */
-export function derived<T>(compute: (dep: DependencyAccess) => T): {
+export function derived<T>(compute: (dep: EffectAccess) => T): {
 	value: T
 	[cleanup]: ScopedCallback
 } {

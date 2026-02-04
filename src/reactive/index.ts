@@ -1,3 +1,4 @@
+// TODO: "effect stack", knowing the stack of effects, to know when we are in a re-evaluation the stack like if we just entered from first effect execution of all effects in lineage
 export { getState, touched, touched1 } from './change'
 export type { ReactivityGraph } from './debug'
 export {
@@ -18,7 +19,8 @@ export {
 	effect,
 	getActivationLog,
 	root,
-	trackEffect,
+	onEffectTrigger,
+	onEffectThrow,
 	untracked,
 } from './effects'
 export { cleanedBy, cleanup, derived, unreactive, watch } from './interface'
@@ -31,7 +33,7 @@ export { scan, type ScanResult, lift } from './buffer'
 export { Register, register } from './register'
 export { getActiveEffect, effectAggregator } from './effect-context'
 export {
-	type DependencyAccess,
+	type EffectAccess as DependencyAccess,
 	type EffectOptions,
 	type Evolution,
 	options as reactiveOptions,

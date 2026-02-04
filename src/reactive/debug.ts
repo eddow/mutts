@@ -5,6 +5,7 @@
  * - Provides graph data for tooling (DevTools panel, etc.)
  */
 
+import { raiseEffectTrigger, effect } from './effects'
 import { effectParent, effectToReactiveObjects, getRoot } from './registry'
 import { allProps, type Evolution, options, type ScopedCallback } from './types'
 
@@ -211,6 +212,7 @@ export function recordTriggerLink(
 	prop: any,
 	evolution: Evolution
 ) {
+	raiseEffectTrigger(target, obj, evolution, prop)
 	if (options.introspection.enableHistory) {
 		addToMutationHistory(source, target, obj, prop, evolution)
 	}

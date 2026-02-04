@@ -10,16 +10,7 @@ describe('Eventful', () => {
 		withNumber: (value: number) => void
 	}
 
-	class TestEventful extends Eventful<TestEvents> {
-		// Test class that extends Eventful
-		// Just make `emit` public for testing
-		public emit<EventType extends keyof TestEvents>(
-			event: EventType,
-			...args: Parameters<TestEvents[EventType]>
-		) {
-			super.emit(event, ...args)
-		}
-	}
+	class TestEventful extends Eventful<TestEvents> {}
 
 	describe('basic functionality', () => {
 		it('should register and emit single events', () => {
@@ -375,6 +366,212 @@ describe('Eventful', () => {
 			eventful.emit('userLogin', 'user123', new Date())
 			eventful.emit('dataUpdate', [1, 2, 3])
 			eventful.emit('error', new Error('test'))
+		})
+	})
+
+	describe('dot notation syntax', () => {
+		describe('on.eventName', () => {
+			it('should register event using dot notation', () => {
+				const eventful = new TestEventful()
+				let callCount = 0
+				let receivedUserId = ''
+
+				eventful.on.userLogin((userId: string) => {
+					callCount++
+					receivedUserId = userId
+				})
+
+				eventful.emit('userLogin', 'user123', new Date())
+
+				expect(callCount).toBe(1)
+				expect(receivedUserId).toBe('user123')
+			})
+
+			it('should support multiple listeners via dot notation', () => {
+				const eventful = new TestEventful()
+				let callCount1 = 0
+				let callCount2 = 0
+
+				eventful.on.simple(() => callCount1++)
+				eventful.on.simple(() => callCount2++)
+
+				eventful.emit('simple')
+
+				expect(callCount1).toBe(1)
+				expect(callCount2).toBe(1)
+			})
+
+			it('should return unsubscribe function from dot notation', () => {
+				const eventful = new TestEventful()
+				let callCount = 0
+
+				const unsubscribe = eventful.on.simple(() => callCount++)
+
+				eventful.emit('simple')
+				expect(callCount).toBe(1)
+
+				unsubscribe()
+				eventful.emit('simple')
+				expect(callCount).toBe(1)
+			})
+
+			it('should work with events that have arguments', () => {
+				const eventful = new TestEventful()
+				let receivedValue = 0
+
+				eventful.on.withNumber((value: number) => {
+					receivedValue = value
+				})
+
+				eventful.emit('withNumber', 42)
+
+				expect(receivedValue).toBe(42)
+			})
+		})
+
+		describe('off.eventName', () => {
+			it('should remove specific listener using dot notation', () => {
+				const eventful = new TestEventful()
+				let callCount = 0
+
+				const callback = () => callCount++
+				eventful.on('simple', callback)
+
+				eventful.emit('simple')
+				expect(callCount).toBe(1)
+
+				eventful.off.simple(callback)
+				eventful.emit('simple')
+				expect(callCount).toBe(1)
+			})
+
+			it('should remove all listeners when no callback provided', () => {
+				const eventful = new TestEventful()
+				let callCount1 = 0
+				let callCount2 = 0
+
+				eventful.on.simple(() => callCount1++)
+				eventful.on.simple(() => callCount2++)
+
+				eventful.emit('simple')
+				expect(callCount1).toBe(1)
+				expect(callCount2).toBe(1)
+
+				eventful.off.simple()
+				eventful.emit('simple')
+				expect(callCount1).toBe(1)
+				expect(callCount2).toBe(1)
+			})
+		})
+
+		describe('emit.eventName', () => {
+			it('should emit event using dot notation', () => {
+				const eventful = new TestEventful()
+				let callCount = 0
+				let receivedUserId = ''
+				let receivedTimestamp: Date | null = null
+
+				eventful.on('userLogin', (userId, timestamp) => {
+					callCount++
+					receivedUserId = userId
+					receivedTimestamp = timestamp
+				})
+
+				const testDate = new Date()
+				eventful.emit.userLogin('user123', testDate)
+
+				expect(callCount).toBe(1)
+				expect(receivedUserId).toBe('user123')
+				expect(receivedTimestamp).toBe(testDate)
+			})
+
+			it('should emit events with no arguments using dot notation', () => {
+				const eventful = new TestEventful()
+				let callCount = 0
+
+				eventful.on('simple', () => callCount++)
+				eventful.emit.simple()
+
+				expect(callCount).toBe(1)
+			})
+
+			it('should emit events with primitive arguments using dot notation', () => {
+				const eventful = new TestEventful()
+				let receivedValue = 0
+
+				eventful.on('withNumber', (value) => {
+					receivedValue = value
+				})
+				eventful.emit.withNumber(42)
+
+				expect(receivedValue).toBe(42)
+			})
+
+			it('should emit to multiple listeners using dot notation', () => {
+				const eventful = new TestEventful()
+				let callCount1 = 0
+				let callCount2 = 0
+
+				eventful.on('simple', () => callCount1++)
+				eventful.on('simple', () => callCount2++)
+				eventful.emit.simple()
+
+				expect(callCount1).toBe(1)
+				expect(callCount2).toBe(1)
+			})
+
+			it('should trigger hooks when using dot notation emit', () => {
+				const eventful = new TestEventful()
+				let hookCalls: Array<{ event: string; args: any[] }> = []
+
+				eventful.hook((event, ...args) => {
+					hookCalls.push({ event: String(event), args })
+				})
+
+				eventful.emit.userLogin('user123', new Date())
+				eventful.emit.simple()
+
+				expect(hookCalls).toHaveLength(2)
+				expect(hookCalls[0].event).toBe('userLogin')
+				expect(hookCalls[1].event).toBe('simple')
+			})
+		})
+
+		describe('equivalence between dot notation and string notation', () => {
+			it('on.eventName should be equivalent to on("eventName", cb)', () => {
+				const eventful1 = new TestEventful()
+				const eventful2 = new TestEventful()
+				let count1 = 0
+				let count2 = 0
+
+				eventful1.on('simple', () => count1++)
+				eventful2.on.simple(() => count2++)
+
+				eventful1.emit('simple')
+				eventful2.emit('simple')
+
+				expect(count1).toBe(count2)
+			})
+
+			it('emit.eventName should be equivalent to emit("eventName", ...args)', () => {
+				const eventful = new TestEventful()
+				let dotNotationReceived: number | null = null
+				let stringNotationReceived: number | null = null
+
+				eventful.on('withNumber', (value) => {
+					if (dotNotationReceived === null) {
+						dotNotationReceived = value
+					} else {
+						stringNotationReceived = value
+					}
+				})
+
+				eventful.emit.withNumber(1)
+				eventful.emit('withNumber', 2)
+
+				expect(dotNotationReceived).toBe(1)
+				expect(stringNotationReceived).toBe(2)
+			})
 		})
 	})
 })

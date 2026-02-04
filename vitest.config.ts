@@ -6,8 +6,6 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-console.error('[CONFIG] TEST_ENV:', process.env.TEST_ENV)
-
 export default defineConfig({
   resolve: {
     alias: {
@@ -28,7 +26,11 @@ export default defineConfig({
         { 
           browser: 'chromium',
           name: 'chromium', 
-          provider: playwright(),
+			provider: playwright({
+				launchOptions: {
+					channel: 'chrome',
+				},
+			}),
         }
       ]
     },
