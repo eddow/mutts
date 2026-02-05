@@ -8,6 +8,7 @@
 import { raiseEffectTrigger } from './effects'
 import { effectParent, effectToReactiveObjects, getRoot } from './registry'
 import { allProps, EffectCleanup, EffectTrigger, type Evolution, options, type ScopedCallback } from './types'
+import { getStackFrame, getLineage, formatLineage } from './lineage'
 
 const EXTERNAL_SOURCE = Symbol('external-source')
 type SourceEffect = EffectTrigger | typeof EXTERNAL_SOURCE
@@ -403,17 +404,31 @@ export function buildReactivityGraph(): ReactivityGraph {
 }
 
 /**
- * Enables the DevTools bridge and exposes the debug API on window.
+ * Enables the DevTools bridge and exposes the debug API on window/global.
  * Call as early as possible in development builds.
  */
 export function enableDevTools() {
-	if (typeof window === 'undefined') return
+	const globalScope = (
+		typeof globalThis !== 'undefined'
+			? globalThis
+			: typeof window !== 'undefined'
+				? window
+				: typeof global !== 'undefined'
+					? global
+					: undefined
+	) as any
+	if (!globalScope) return
 	if (devtoolsEnabled) return
 	devtoolsEnabled = true
 
-	// @ts-expect-error - global window extension
-	window.__MUTTS_DEVTOOLS__ = {
+	globalScope.__MUTTS_DEVTOOLS__ = {
 		getGraph: buildReactivityGraph,
+		get lineage() {
+			return formatLineage(getLineage())
+		},
+		getLineage,
+		captureLineage: getStackFrame,
+		formatLineage,
 		setEffectName,
 		setObjectName,
 		registerEffect: registerEffectForDebug,

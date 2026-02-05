@@ -99,5 +99,12 @@ In `mutts`, you define **what things are**, not **when things happen**.
 
 Tools are built-in in order to catch common reactivity-related issues.
 
+### Effect Lineage
+Track the creation history of effects intertwined with JS stack traces. This is particularly useful for debugging complex chains of effects.
+
+- `getLineage()`: Returns a structured lineage of the current execution, tracing back through parents and their creation stacks.
+- `captureLineage(skipFrames)`: Utility to get a structured call stack.
+- To enable lineage tracking, set `reactiveOptions.introspection.enableHistory = true`.
+
 **Full Documentation**: [docs/reactive/debugging.md](file:///home/fmdm/dev/reactive/debugging.md)
 

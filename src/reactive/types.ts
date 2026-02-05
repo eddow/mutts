@@ -229,7 +229,8 @@ export type MaxReactionDebugInfo = {
 export type GenericDebugInfo = {
 	code: ReactiveErrorCode
 	causalChain?: string[]
-	creationStack?: string
+	creationStack?: string | any[]
+	lineage?: any[]
 	[key: string]: any
 }
 
@@ -463,5 +464,16 @@ export const options = {
 	},
 }
 // biome-ignore-end lint/correctness/noUnusedFunctionParameters: Interface declaration with empty defaults
+
+// TODO: all `options.stuff(...)` should be an `optionCall('stuff', ...)`
+export const optionCall = (name: string, ...args: any) => {
+	if (options[name]) {
+		try {
+			return options[name](...args)
+		} catch (error) {
+			options.warn(`options.${name} threw`, error)
+		}
+	}
+}
 
 export { type State, nativeReactive, rootFunction }

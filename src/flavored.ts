@@ -26,14 +26,19 @@
  * flavoredGreet.loud('World') // "HELLO, WORLD!"
  * ```
  */
+import { named } from './utils'
+
+/**
+ * Creates a flavored (extensible) version of a function with chainable property modifiers.
+ */
 export function flavored<T extends (...args: any[]) => any, F extends Record<string, any>>(
 	fn: T,
 	flavors: F
 ): T & F {
+	// Store flavors for recursive flavoring
+	;(fn as any).flavors = flavors
+
 	return new Proxy(fn, {
-		apply(target, thisArg, args) {
-			return target.apply(thisArg, args)
-		},
 		get(target, prop, receiver) {
 			if (prop in flavors) {
 				return Reflect.get(flavors, prop, receiver)
@@ -57,13 +62,15 @@ export function flavored<T extends (...args: any[]) => any, F extends Record<str
  */
 export function createFlavor<T extends (...args: any[]) => any>(
 	fn: T,
-	transform: (...args: Parameters<T>) => Parameters<T>
+	transform: (...args: Parameters<T>) => Parameters<T>,
+	name?: string
 ): T {
-	return new Proxy(fn, {
-		apply(target, thisArg, args: Parameters<T>) {
-			return target.apply(thisArg, transform(...args))
-		},
-	}) as T
+	const fct = function flavorWrapper(this: any, ...args: Parameters<T>) {
+		return fn.apply(this, transform(...args))
+	}
+	if (name) named(name, fct)
+
+	return flavored(fct as any as T, (fn as any).flavors || {})
 }
 
 /**
@@ -82,16 +89,18 @@ export function createFlavor<T extends (...args: any[]) => any>(
  */
 export function flavorOptions<T extends (...args: any[]) => any>(
 	fn: T,
-	defaultOptions: Record<string, any>
+	defaultOptions: Record<string, any>,
+	name?: string
 ): T {
-	return new Proxy(fn, {
-		apply(target, thisArg, args) {
-			const lastArg = args[args.length - 1]
-			const mergedArgs =
-				lastArg !== undefined && typeof lastArg === 'object'
-					? [...args.slice(0, -1), { ...defaultOptions, ...lastArg }]
-					: [...args, defaultOptions]
-			return target.apply(thisArg, mergedArgs)
-		},
-	}) as T
+	const fct = function flavorOptionsWrapper(this: any, ...args: any[]) {
+		const lastArg = args[args.length - 1]
+		const mergedArgs =
+			lastArg !== undefined && typeof lastArg === 'object'
+				? [...args.slice(0, -1), { ...defaultOptions, ...lastArg }]
+				: [...args, defaultOptions]
+		return fn.apply(this, mergedArgs)
+	}
+	if (name) named(name, fct)
+
+	return flavored(fct as any as T, (fn as any).flavors || {})
 }

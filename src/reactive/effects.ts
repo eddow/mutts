@@ -2,6 +2,7 @@ import { decorator } from '../decorator'
 import { flavorOptions, flavored } from '../flavored'
 import { IterableWeakSet } from '../iterableWeak'
 import { getTriggerChain, isDevtoolsEnabled, registerEffectForDebug } from './debug'
+import { getStackFrame, type StackFrame } from './lineage'
 import {
 	effectAggregator,
 	effectHistory,
@@ -25,6 +26,7 @@ import {
 	EffectTrigger,
 	type Evolution,
 	forwardThrow,
+	optionCall,
 	options,
 	ReactiveError,
 	ReactiveErrorCode,
@@ -205,7 +207,7 @@ const causesClosure = new WeakMap<Function, IterableWeakSet<Function>>()
 const consequencesClosure = new WeakMap<Function, IterableWeakSet<Function>>()
 
 // Debug: Capture where an effect was created
-export const effectCreationStacks = new WeakMap<Function, string>()
+export const effectCreationStacks = new WeakMap<Function, StackFrame[]>()
 
 /**
  * Gets or creates an IterableWeakSet for a closure map
@@ -953,14 +955,12 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 					// If we want to keep that behavior: if (immediate) break
 				}
 			}
-			return firstReturn.value
-		} catch (error) {
-			console.error('Effects are broken')
-			throw error
-		} finally {
 			activationRegistry = undefined
 			batchQueue = undefined
-			options.endChain()
+			optionCall('endChain')
+			return firstReturn.value
+		} catch (error) {
+			throw error
 		}
 	}
 }
@@ -1008,20 +1008,17 @@ const fr = new FinalizationRegistry<() => void>((f) => f())
  * @param options - Options for effect execution
  * @returns A cleanup function to stop the effect
  */
-export const effect = flavored((
-	//biome-ignore lint/suspicious/noConfusingVoidType: We have to
+export const effect = flavored(function effect(
 	fn: (access: EffectAccess) => EffectCloser | undefined | void | Promise<any>,
 	effectOptions?: EffectOptions
-): EffectCleanup=> {
+): EffectCleanup {
 	if (effectOptions?.name) Object.defineProperty(fn, 'name', { value: effectOptions.name })
 	// Use per-effect asyncMode or fall back to global option
 	const asyncMode = effectOptions?.asyncMode ?? options.asyncMode ?? 'cancel'
 	if (options.introspection.enableHistory) {
-		const stack = new Error().stack
-		if (stack) {
-			// Clean up the stack trace to remove internal frames
-			const cleanStack = stack.split('\n').slice(2).join('\n')
-			effectCreationStacks.set(getRoot(fn), cleanStack)
+		const stack = getStackFrame() // Robustly skips internal mutts frames
+		if (stack.length > 0) {
+			effectCreationStacks.set(getRoot(fn), stack)
 		}
 	}
 
@@ -1209,10 +1206,10 @@ export const effect = flavored((
 		registerEffectForDebug(runEffect)
 	}
 
-	batch(runEffect, 'immediate')
-
 	// Store parent relationship for hierarchy traversal
 	effectParent.set(runEffect, parent)
+
+	batch(runEffect, 'immediate')
 	// Only ROOT effects are registered for GC cleanup and zone tracking
 	const isRootEffect = !parent
 
@@ -1263,10 +1260,10 @@ export const effect = flavored((
 
 , {
 	get opaque() {
-		return flavorOptions(this, { opaque: true })
+		return flavorOptions(this, { opaque: true }, 'opaque')
 	},
 	named(name: string) {
-		return flavorOptions(this, { name })
+		return flavorOptions(this, { name }, 'named')
 	},
 })
 

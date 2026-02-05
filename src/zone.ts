@@ -70,7 +70,7 @@ export class ZoneHistory<T> extends AZone<HistoryValue<T>> {
 					controlled.active = value
 				},
 				enter(value?: T) {
-					//TODO: re-enable: if(value && self.history.has(value)) throw new Error('ZoneHistory: re-entering historical zone')
+					if(value && self.history.has(value)) throw new Error('ZoneHistory: re-entering historical zone')
 					if(value !== undefined) self.history.add(value)
 					return { added: value, entered: isu(controlled).enter(value) }
 				},
