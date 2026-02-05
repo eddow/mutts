@@ -12,7 +12,7 @@
 		"sourceMap": true,
 		"outDir": "./dist",
 		"declarationDir": "./dist",
-		"rootDir": "./src",
+		"rootDir": ".",
 		"experimentalDecorators": false,
 		"emitDecoratorMetadata": false,
 		"strict": false,
@@ -41,6 +41,7 @@
 	},
 	"include": [
 		"src/**/*",
+		"debug/**/*",
 		"package.json"
 	],
 	"exclude": [

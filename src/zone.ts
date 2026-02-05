@@ -49,6 +49,8 @@ export type FunctionWrapper = <R>(fn: () => R) => R
 export class Zone<T> extends AZone<T> {
 	active: T | undefined
 }
+
+// TODO!!! When zones are managed in async cases, they only enter and never leave!
 type HistoryValue<T> = {present: T | undefined, history: Set<T>}
 export class ZoneHistory<T> extends AZone<HistoryValue<T>> {
 	private	history = new Set<T>()

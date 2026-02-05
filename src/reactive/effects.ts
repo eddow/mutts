@@ -1,8 +1,8 @@
 import { decorator } from '../decorator'
 import { flavorOptions, flavored } from '../flavored'
 import { IterableWeakSet } from '../iterableWeak'
-import { getTriggerChain, isDevtoolsEnabled, registerEffectForDebug } from './debug'
-import { getStackFrame, type StackFrame } from './lineage'
+import { getTriggerChain, isDevtoolsEnabled, registerEffectForDebug } from '../../debug/debug'
+import { getStackFrame, type StackFrame } from '../../debug/lineage'
 import {
 	effectAggregator,
 	effectHistory,
@@ -63,7 +63,7 @@ function formatRoots(roots: Function[], limit = 20): string {
 	return `${start.join(' → ')} ... (${names.length - 15} more) ... ${end.join(' → ')}`
 }
 
-type EffectTracking = (obj: any, evolution: Evolution, prop: any) => void
+type EffectTracking = (obj: any, evolution: Evolution, prop: any, effect: EffectTrigger) => void
 
 export interface ActivationRecord {
 	effect: EffectTrigger
@@ -181,7 +181,7 @@ const effectTrackers = new WeakMap<EffectTrigger, EffectTracking[]>()
 export function raiseEffectTrigger(effect: EffectTrigger, obj: any, evolution: Evolution, prop: any) {
 	const trackers = effectTrackers.get(effect)
 	if (trackers) {
-		for (const tracker of trackers) tracker(obj, evolution, prop)
+		for (const tracker of trackers) tracker(obj, evolution, prop, effect)
 		//trackers.delete(effect)
 	}
 }
@@ -960,6 +960,10 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 			optionCall('endChain')
 			return firstReturn.value
 		} catch (error) {
+			// TODO: find a way to send messages from `thrower:self` to `catcher:self` without losing the batch content
+			activationRegistry = undefined
+			batchQueue = undefined
+			optionCall('endChain')
 			throw error
 		}
 	}
@@ -1052,6 +1056,7 @@ export const effect = flavored(function effect(
 		let result: any
 		let caught = 0
 		thrower = (error: any) => {
+			// thrower:self
 			throw error
 		}
 		let errorToThrow: Error | undefined
@@ -1096,7 +1101,7 @@ export const effect = flavored(function effect(
 				reactionCleanup = result as undefined | EffectCloser
 			}
 		} catch (error) {
-			console.error('Effect caught:', error)
+			// catcher:self`
 			errorToThrow = error
 		} finally {
 			access.reaction = true

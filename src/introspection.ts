@@ -14,7 +14,7 @@ import {
 	type MutationRecord,
 	type ObjectNode,
 	type ReactivityGraph,
-} from './reactive/debug'
+} from '../debug/debug'
 import { options, type ReactiveDebugInfo, ReactiveErrorCode } from './reactive/types'
 
 export {

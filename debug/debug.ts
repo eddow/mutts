@@ -5,10 +5,11 @@
  * - Provides graph data for tooling (DevTools panel, etc.)
  */
 
-import { raiseEffectTrigger } from './effects'
-import { effectParent, effectToReactiveObjects, getRoot } from './registry'
-import { allProps, EffectCleanup, EffectTrigger, type Evolution, options, type ScopedCallback } from './types'
-import { getStackFrame, getLineage, formatLineage } from './lineage'
+import { raiseEffectTrigger } from '../src/reactive/effects'
+import { effectParent, effectToReactiveObjects, getRoot } from '../src/reactive/registry'
+import { allProps, EffectCleanup, EffectTrigger, type Evolution, options, type ScopedCallback } from '../src/reactive/types'
+import { getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter } from './lineage'
+import { showLineagePanel } from './lineage-panel'
 
 const EXTERNAL_SOURCE = Symbol('external-source')
 type SourceEffect = EffectTrigger | typeof EXTERNAL_SOURCE
@@ -424,15 +425,23 @@ export function enableDevTools() {
 	globalScope.__MUTTS_DEVTOOLS__ = {
 		getGraph: buildReactivityGraph,
 		get lineage() {
-			return formatLineage(getLineage())
+			return wrapLineageForDebug(getLineage())
 		},
 		getLineage,
 		captureLineage: getStackFrame,
 		formatLineage,
+		showLineagePanel,
 		setEffectName,
 		setObjectName,
 		registerEffect: registerEffectForDebug,
 		registerObject: registerObjectForDebug,
+	}
+
+	// @ts-ignore - devtoolsFormatters is a Chrome-specific array
+	if (globalScope.devtoolsFormatters) {
+		globalScope.devtoolsFormatters.push(lineageFormatter)
+	} else {
+		globalScope.devtoolsFormatters = [lineageFormatter]
 	}
 }
 
@@ -531,4 +540,51 @@ function addToMutationHistory(
  */
 export function getMutationHistory(): MutationRecord[] {
 	return [...mutationHistory]
+}
+
+// --- Auto DevTools Initialization ---
+// Automatically enable devtools in development environments
+
+/**
+ * Checks if we're in a development environment
+ * Detection order:
+ * 1. process.env.NODE_ENV (Node.js)
+ * 2. import.meta.env.DEV (Vite)
+ * 3. import.meta.env.PROD === false (Vite alternative)
+ * 4. Assumes development if none of the above are set (safe default)
+ */
+function isDevelopmentMode(): boolean {
+	// Check for explicit production flag first
+	if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production') {
+		return false
+	}
+	
+	// Check for Vite's DEV flag
+	if (typeof import.meta !== 'undefined') {
+		const meta = import.meta as any
+		if (meta.env?.PROD === true) {
+			return false
+		}
+		if (meta.env?.DEV === true) {
+			return true
+		}
+	}
+	
+	// Check for custom global override
+	if (typeof globalThis !== 'undefined' && '__MUTTS_DEV_MODE__' in globalThis) {
+		return (globalThis as any).__MUTTS_DEV_MODE__ !== false
+	}
+	
+	// Default to development (safer to enable in dev than disable in prod)
+	return true
+}
+
+// Auto-enable devtools when the module loads in development
+if (isDevelopmentMode() && !devtoolsEnabled) {
+	enableDevTools()
+	
+	// Optional: Log that devtools were enabled (only in development)
+	if (typeof console !== 'undefined' && console.info) {
+		console.info('🦴 Mutts DevTools enabled automatically in development mode')
+	}
 }

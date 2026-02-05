@@ -51,6 +51,11 @@
     "./src/node": {
       "types": "./src/entry-node.ts",
       "import": "./src/entry-node.ts"
+    },
+    "./debug": {
+      "types": "./dist/debug.d.ts",
+      "import": "./dist/debug.esm.js",
+      "require": "./dist/debug.cjs"
     }
   },
   "files": [

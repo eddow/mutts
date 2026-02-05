@@ -4,6 +4,7 @@
 
 - `flavored`: shortcut to give "flavors" to functions
 - events now accept the `button.on.click(cb)` syntax
+- lineage debugging
 
 ### Reactive
 - `effect` now has a `named` and `opaque` "flavored" property

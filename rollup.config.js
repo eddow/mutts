@@ -43,7 +43,8 @@ const umdPlugins = [
 // Single entry with multiple inputs for efficient chunking
 const input = {
   browser: 'src/entry-browser.ts',
-  node: 'src/entry-node.ts'
+  node: 'src/entry-node.ts',
+  debug: 'debug/index.ts'
 }
 
 const config = [

@@ -1,5 +1,5 @@
 import { FoolProof } from '../utils'
-import { setEffectName } from './debug'
+import { setEffectName } from '../../debug/debug'
 import { cleanedBy, getActiveEffect } from './effect-context'
 import { effect, untracked } from './effects'
 import { reactive } from './proxy'

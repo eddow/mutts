@@ -1,7 +1,7 @@
-import { getActiveEffect } from './effect-context'
-import { effectCreationStacks } from './effects'
-import { effectParent, getRoot } from './registry'
-import { type EffectTrigger } from './types'
+import { getActiveEffect } from '../src/reactive/effect-context'
+import { effectCreationStacks } from '../src/reactive/effects'
+import { effectParent, getRoot } from '../src/reactive/registry'
+import { type EffectTrigger } from '../src/reactive/types'
 
 /**
  * Structured stack frame
@@ -71,11 +71,13 @@ export function getStackFrame(skipFrames = 0, error?: Error): StackFrame[] {
 
 	// Determine the "base" directory of the library to skip other internal files
 	// We look for "src" or "dist" to be more specific than just the project root
-	const srcIndex = internalFile?.lastIndexOf('/src/')
-	const distIndex = internalFile?.lastIndexOf('/dist/')
-	const libraryBase = srcIndex !== -1 ? internalFile?.substring(0, srcIndex + 5) : 
-	                   (distIndex !== -1 ? internalFile?.substring(0, distIndex + 6) : 
-					   internalFile?.substring(0, internalFile.lastIndexOf('/') + 1))
+	const srcIndex = internalFile ? internalFile.lastIndexOf('/src/') : -1
+	const distIndex = internalFile ? internalFile.lastIndexOf('/dist/') : -1
+	const libraryBase = internalFile ? (
+		srcIndex !== -1 ? internalFile.substring(0, srcIndex + 5) : 
+		(distIndex !== -1 ? internalFile.substring(0, distIndex + 6) : 
+		internalFile.substring(0, internalFile.lastIndexOf('/') + 1))
+	) : undefined
 
 	let foundExternal = false
 	for (const line of stackLines) {
@@ -201,4 +203,54 @@ export function formatLineage(segments: LineageSegment[]): string {
 
 export function captureLineage(): string {
 	return formatLineage(getLineage())
+}
+
+/**
+ * Custom formatter for Chrome DevTools to render lineage data nicely.
+ */
+export const lineageFormatter = {
+	header: (obj: any) => {
+		if (obj && obj.__isLineage__) {
+			return [
+				'span',
+				{ style: 'color: #704214; font-weight: bold;' },
+				`🦴 Effect Lineage (${obj.segments.length} segments)`,
+			]
+		}
+		return null
+	},
+	hasBody: (obj: any) => obj && obj.__isLineage__,
+	body: (obj: any) => {
+		if (!obj || !obj.__isLineage__) return null
+		const segments: LineageSegment[] = obj.segments
+		const children = segments.map((segment, i) => {
+			const frames = segment.stack.map((frame) => [
+				'div',
+				{ style: 'margin-left: 20px; color: #555; font-family: monospace; font-size: 11px;' },
+				['span', { style: 'color: #222;' }, `at ${frame.functionName} `],
+				['span', { style: 'color: #005cc5; cursor: pointer; text-decoration: underline;' }, `(${frame.fileName}:${frame.lineNumber}:${frame.columnNumber})`],
+			])
+
+			const segmentHeader = [
+				'div',
+				{ style: 'margin-top: 5px; padding: 2px 5px; background: #eee; border-radius: 3px; font-weight: bold;' },
+				i === 0 ? `📍 Current: ${segment.effectName}` : `↖ Triggered by: ${segment.effectName}`,
+			]
+
+			return ['div', {}, segmentHeader, ...frames]
+		})
+
+		return ['div', { style: 'padding: 5px; line-height: 1.4;' }, ...children]
+	},
+}
+
+/**
+ * Wraps lineage data in a way that the Chrome Formatter can recognize.
+ */
+export function wrapLineageForDebug(segments: LineageSegment[]) {
+	return {
+		__isLineage__: true,
+		segments,
+		toString: () => formatLineage(segments),
+	}
 }

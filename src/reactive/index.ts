@@ -1,15 +1,5 @@
 // TODO: "effect stack", knowing the stack of effects, to know when we are in a re-evaluation the stack like if we just entered from first effect execution of all effects in lineage
 export { getState, touched, touched1 } from './change'
-export type { ReactivityGraph } from './debug'
-export {
-	buildReactivityGraph,
-	enableDevTools,
-	isDevtoolsEnabled,
-	registerEffectForDebug,
-	registerObjectForDebug,
-	setEffectName,
-	setObjectName,
-} from './debug'
 export { deepWatch } from './deep-watch'
 export {
 	addBatchCleanup,

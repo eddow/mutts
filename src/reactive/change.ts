@@ -1,4 +1,4 @@
-import { recordTriggerLink } from './debug'
+import { recordTriggerLink } from '../../debug/debug'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { getActiveEffect, isRunning } from './effect-context'
 import { batch, hasBatched, opaqueEffects, recordActivation } from './effects'
