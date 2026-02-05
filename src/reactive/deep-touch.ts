@@ -4,7 +4,7 @@ import { batch } from './effects'
 import { isNonReactive } from './non-reactive-state'
 import { unwrap } from './proxy-state'
 import { effectParent, watchers } from './registry'
-import { allProps, type Evolution, options, type ScopedCallback } from './types'
+import { allProps, type Evolution, options, type EffectTrigger, type EffectCleanup } from './types'
 
 function isObject(value: any): value is object {
 	return typeof value === 'object' && value !== null
@@ -196,31 +196,31 @@ function diffObjectProperties(
 /**
  * Checks if an effect or any of its ancestors is in the allowed set
  */
-function hasAncestorInSet(effect: ScopedCallback, allowedSet: Set<ScopedCallback>): boolean {
-	let current: ScopedCallback | undefined = effect
-	const visited = new WeakSet<ScopedCallback>()
+function hasAncestorInSet(effect: EffectTrigger | EffectCleanup, allowedSet: Set<EffectTrigger | EffectCleanup>): boolean {
+	let current: EffectTrigger | EffectCleanup | undefined = effect
+	const visited = new WeakSet<EffectTrigger | EffectCleanup>()
 	while (current && !visited.has(current)) {
 		visited.add(current)
 		if (allowedSet.has(current)) return true
-		current = effectParent.get(current)
+		current = effectParent.get(current as EffectTrigger)
 	}
 	return false
 }
 
 export function dispatchNotifications(notifications: PendingNotification[]) {
 	if (!notifications.length) return
-	const combinedEffects = new Set<ScopedCallback>()
+	const combinedEffects = new Set<EffectTrigger>()
 
 	// Extract origin from first notification (all should have the same origin from a single deep touch)
 	const origin = notifications[0]?.origin
-	let allowedEffects: Set<ScopedCallback> | undefined
+	let allowedEffects: Set<EffectTrigger> | undefined
 
 	// If origin exists, compute allowed effects (those that depend on origin.obj[origin.prop])
 	if (origin) {
-		allowedEffects = new Set<ScopedCallback>()
+		allowedEffects = new Set<EffectTrigger>()
 		const originWatchers = watchers.get(origin.obj)
 		if (originWatchers) {
-			const originEffects = new Set<ScopedCallback>()
+			const originEffects = new Set<EffectTrigger>()
 			collectEffects(
 				origin.obj,
 				{ type: 'set', prop: origin.prop },
@@ -240,16 +240,16 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 		const obj = unwrap(target)
 		addState(obj, evolution)
 		const objectWatchers = watchers.get(obj)
-		let currentEffects: Set<ScopedCallback> | undefined
+		let currentEffects: Set<EffectTrigger> | undefined
 		const propsArray = [prop]
 		if (objectWatchers) {
-			currentEffects = new Set<ScopedCallback>()
+			currentEffects = new Set<EffectTrigger>()
 			collectEffects(obj, evolution, currentEffects, objectWatchers, [allProps], propsArray)
 
 			// Filter effects by ancestor chain if origin exists
 			// Include effects that either directly depend on origin or have an ancestor that does
 			if (origin && allowedEffects) {
-				const filteredEffects = new Set<ScopedCallback>()
+				const filteredEffects = new Set<EffectTrigger>()
 				for (const effect of currentEffects) {
 					// Check if effect itself is allowed OR has an ancestor that is allowed
 					if (allowedEffects.has(effect) || hasAncestorInSet(effect, allowedEffects)) {

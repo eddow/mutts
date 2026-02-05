@@ -23,7 +23,7 @@ export {
 	onEffectThrow,
 	untracked,
 } from './effects'
-export { cleanedBy, cleanup, derived, unreactive, watch } from './interface'
+export { unreactive, watch } from './watch'
 export { type Memoizable, memoize } from './memoize'
 export { immutables, isNonReactive, registerNativeReactivity } from './non-reactive'
 export { getActiveProjection, project } from './project'
@@ -31,7 +31,7 @@ export { isReactive, ReactiveBase, reactive, unwrap } from './proxy'
 export { organize, organized } from './record'
 export { scan, type ScanResult, lift } from './buffer'
 export { Register, register } from './register'
-export { getActiveEffect, effectAggregator } from './effect-context'
+export { getActiveEffect, effectAggregator, cleanedBy, derived } from './effect-context'
 export {
 	type EffectAccess as DependencyAccess,
 	type EffectOptions,
@@ -40,6 +40,9 @@ export {
 	ReactiveError,
 	ReactiveErrorCode,
 	type ScopedCallback,
+	type EffectTrigger,
+	type EffectCleanup,
+	cleanup
 } from './types'
 
 import { ReactiveArray } from './array'

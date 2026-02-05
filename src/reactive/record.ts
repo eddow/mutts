@@ -1,9 +1,9 @@
 import { FoolProof } from '../utils'
 import { touched1 } from './change'
+import { cleanedBy } from './effect-context'
 import { effect } from './effects'
-import { cleanedBy, cleanup } from './interface'
 import { reactive } from './proxy'
-import { type ScopedCallback } from './types'
+import { type ScopedCallback, type EffectCleanup, type EffectCloser, stopped, cleanup } from './types'
 
 /**
  * Provides type-safe access to a source object's property within the organized callback.
@@ -50,7 +50,7 @@ export type OrganizedCallback<Source extends Record<PropertyKey, any>, Target ex
 	 * The target object where organized data will be stored
 	 */
 	target: Target
-) => ScopedCallback | undefined
+) => EffectCloser | undefined
 
 /**
  * The result type of the organized function, combining the target object with cleanup capability.
@@ -125,7 +125,7 @@ export function organized<
 ): OrganizedResult<Target> {
 	const observedSource = reactive(source) as Source
 	const target = reactive(baseTarget) as Target
-	const keyEffects = new Map<PropertyKey, ScopedCallback>()
+	const keyEffects = new Map<PropertyKey, EffectCleanup>()
 
 	function disposeKey(key: PropertyKey) {
 		const stopEffect = keyEffects.get(key)
@@ -166,10 +166,18 @@ export function organized<
 		for (const key of Array.from(keyEffects.keys())) if (!keys.has(key)) disposeKey(key)
 	})
 
-	return cleanedBy(target, () => {
-		cleanupKeys()
-		for (const key of Array.from(keyEffects.keys())) disposeKey(key)
-	}) as OrganizedResult<Target>
+	return cleanedBy(
+		target,
+		Object.defineProperties(
+			() => {
+				cleanupKeys()
+				for (const key of Array.from(keyEffects.keys())) disposeKey(key)
+			},
+			{
+				[stopped]: { get: () => cleanupKeys[stopped] },
+			}
+		) as EffectCleanup
+	) as OrganizedResult<Target>
 }
 
 /**

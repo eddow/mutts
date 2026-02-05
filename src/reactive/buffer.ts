@@ -1,15 +1,15 @@
+import { cleanedBy } from '.'
 import { FoolProof } from '../utils'
 import { effect, untracked } from './effects'
-import { cleanedBy, cleanup } from './interface'
 import { memoize } from './memoize'
 import { reactive } from './proxy'
-import type { EffectAccess, EffectCleanup, EffectCleanupS } from './types'
+import type { cleanup, EffectAccess, EffectCleanup, ScopedCallback } from './types'
 
 /**
  * Result of a reactive scan, which is a reactive array of accumulated values
  * with an attached cleanup function.
  */
-export type ScanResult<Output> = readonly Output[] & { [cleanup]: EffectCleanup }
+export type ScanResult<Output> = readonly Output[] & { [cleanup]: ScopedCallback }
 
 /**
  * Perform a reactive scan over an array of items.
@@ -50,7 +50,7 @@ export function scan<Input extends object, Output>(
 	const result = reactive([] as Output[])
 	
 	// Track effects for each index to dispose them when the array shrinks
-	const indexEffects = new Map<number, EffectCleanupS>()
+	const indexEffects = new Map<number, EffectCleanup>()
 	// Mapping from index to its current intermediate object
 	const indexToIntermediate = reactive([] as Intermediate[])
 	const intermediaries = new WeakMap<Input, Intermediate[]>()
@@ -178,7 +178,7 @@ export function scan<Input extends object, Output>(
  * @param cb Callback function that returns an array
  * @returns A reactive array synchronized with the callback's result, with a [cleanup] property to stop tracking
  */
-export function lift<Output>(cb: (access: EffectAccess) => Output[]): Output[] & { [cleanup]: EffectCleanup } {
+export function lift<Output>(cb: (access: EffectAccess) => Output[]): Output[] & { [cleanup]: ScopedCallback } {
 	const result = reactive([] as Output[])
 	return cleanedBy(result, effect((access) => {
 		const source = cb(access)

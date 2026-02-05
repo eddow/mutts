@@ -20,7 +20,7 @@ export abstract class AZone<T> {
 	}
 	with<R>(value: T | undefined, fn: () => R): R {
 		const entered = this.enter(value)
-        let res: R;
+        let res: R
 		try {
 			res = fn()
 		} finally {
@@ -70,7 +70,7 @@ export class ZoneHistory<T> extends AZone<HistoryValue<T>> {
 					controlled.active = value
 				},
 				enter(value?: T) {
-					if(value && self.history.has(value)) throw new Error('ZoneHistory: re-entering historical zone')
+					//TODO: re-enable: if(value && self.history.has(value)) throw new Error('ZoneHistory: re-entering historical zone')
 					if(value !== undefined) self.history.add(value)
 					return { added: value, entered: isu(controlled).enter(value) }
 				},

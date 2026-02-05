@@ -879,7 +879,7 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 		}
 
 		const caller = getActiveEffect()
-		const effectuatedRoots: ScopedCallback[] = []
+		const effectuatedRoots: Function[] = []
 		const firstReturn: { value?: any } = {}
 
 		try {
@@ -1053,23 +1053,11 @@ export const effect = flavored((
 		options.enter(getRoot(fn))
 		let reactionCleanup: EffectCloser | undefined
 		let result: any
-		let caught = -1
+		let caught = 0
 		thrower = (error: any) => {
-			++caught
-			const catches = effectCatchers.get(runEffect)
-			if(catches) while (caught < catches.length) {
-				reactionCleanup?.(error)
-				reactionCleanup = undefined
-				try {
-					reactionCleanup = catches[caught](error) as EffectCloser | undefined
-					return
-				} catch (e) {
-					caught++
-				}
-			}
-			if(parent) parent[forwardThrow](error)
-			else throw error
+			throw error
 		}
+		let errorToThrow: Error | undefined
 		try {
 			result = tracked(() => fn(access))
 			options.leave(fn)
@@ -1108,10 +1096,11 @@ export const effect = flavored((
 				// through the zone-wrapped .then()/.catch() handlers
 			} else {
 				// Synchronous result - treat as cleanup function
-				reactionCleanup = result as undefined | ScopedCallback
+				reactionCleanup = result as undefined | EffectCloser
 			}
 		} catch (error) {
-			thrower?.(error)
+			console.error('Effect caught:', error)
+			errorToThrow = error
 		} finally {
 			access.reaction = true
 		}
@@ -1149,6 +1138,24 @@ export const effect = flavored((
 				effectChildren.delete(runEffect)
 			}
 		}
+
+		thrower = (error: any) => {
+			const catches = effectCatchers.get(runEffect)
+			if(catches) while (caught < catches.length) {
+				reactionCleanup?.(error)
+				reactionCleanup = undefined
+				try {
+					reactionCleanup = catches[caught](error) as EffectCloser | undefined
+					return
+				} catch (e) {
+					caught++
+				}
+			}
+			if(parent) parent[forwardThrow](error)
+			else throw error
+		}
+
+		if(errorToThrow) thrower(errorToThrow)
 	}, {
 		[forwardThrow]: {
 			get: ()=> thrower,
@@ -1185,7 +1192,7 @@ export const effect = flavored((
 	}
 	// Mark the runEffect callback with the original function as its root
 	markWithRoot(runEffect, fn)
-	function augmentedRv(rv: ScopedCallback) {
+	function augmentedRv(rv: ScopedCallback): EffectCleanup {
 		return Object.defineProperties(rv, {
 			[stopped]: {
 				get: ()=> effectStopped,

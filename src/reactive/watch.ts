@@ -10,14 +10,10 @@ import {
 	nonReactiveMark,
 	type EffectCleanup,
 	type ScopedCallback,
+	stopped,
 	unreactiveProperties,
-	cleanup as cleanupSymbol,
+	cleanup,
 } from './types'
-
-/**
- * Symbol for accessing the cleanup function on cleaned objects
- */
-export const cleanup = cleanupSymbol
 
 //#region watch
 
@@ -43,7 +39,7 @@ export function watch<T>(
 	value: (dep: EffectAccess) => T,
 	changed: (value: T, oldValue?: T) => void,
 	options?: Omit<WatchOptions, 'deep'> & { deep?: false }
-): ScopedCallback
+): EffectCleanup
 /**
  * Watches a reactive value with deep watching enabled
  * @param value - Function that returns the value to watch
@@ -55,7 +51,7 @@ export function watch<T extends object | any[]>(
 	value: (dep: EffectAccess) => T,
 	changed: (value: T, oldValue?: T) => void,
 	options?: Omit<WatchOptions, 'deep'> & { deep: true }
-): ScopedCallback
+): EffectCleanup
 /**
  * Watches a reactive object directly
  * @param value - The reactive object to watch
@@ -67,7 +63,7 @@ export function watch<T extends object | any[]>(
 	value: T,
 	changed: (value: T) => void,
 	options?: WatchOptions
-): ScopedCallback
+): EffectCleanup
 
 export function watch(
 	value: any, //object | ((dep: DependencyAccess) => object),
@@ -87,7 +83,7 @@ function watchObject(
 	value: object,
 	changed: (value: object) => void,
 	{ immediate = false, deep = false } = {}
-): ScopedCallback {
+): EffectCleanup {
 	if (deep) return deepWatch(value, changed, { immediate })!
 	return effect(function watchObjectEffect() {
 		dependant(value)
@@ -100,9 +96,9 @@ function watchCallBack<T>(
 	value: (dep: EffectAccess) => T,
 	changed: (value: T, oldValue?: T) => void,
 	{ immediate = false, deep = false } = {}
-): ScopedCallback {
+): EffectCleanup {
 	let oldValue: T | typeof unsetYet = unsetYet
-	let deepCleanup: ScopedCallback | undefined
+	let deepCleanup: EffectCleanup | undefined
 	const cbCleanup = effect(
 		markWithRoot(function watchCallBackEffect(access) {
 			const newValue = value(access)
@@ -117,10 +113,12 @@ function watchCallBack<T>(
 				}
 		}, value)
 	)
-	return () => {
+	return Object.defineProperties(() => {
 		cbCleanup()
 		if (deepCleanup) deepCleanup()
-	}
+	}, {
+		[stopped]: { get: () => cbCleanup[stopped] }
+	}) as EffectCleanup
 }
 
 //#endregion
@@ -179,46 +177,3 @@ export const unreactive = decorator({
 })
 
 //#endregion
-
-/**
- * ADD a cleanup function to an object using the cleanup symbol.
- * The cleanup function will be called when the object needs to be disposed.
- * 
- * Note: most of the time, you don't need to use this function directly.
- * The main use if for the cleanup function to be stored with the object, as GC calls the cleanup function when the *function* is garbage collected.
- * 
- * @param obj - The object to attach the cleanup function to
- * @param cleanupFn - The cleanup function to attach
- * @returns The object with the cleanup function attached
- */
-export function cleanedBy<T extends object>(obj: T, cleanupFn: ScopedCallback) {
-	const oldCleanup = obj[cleanup]
-	return Object.defineProperty(obj, cleanup, {
-		value: oldCleanup ? () => { oldCleanup(); cleanupFn() } : cleanupFn,
-		writable: false,
-		enumerable: false,
-		configurable: true,
-	}) as T & { [cleanup]: ScopedCallback }
-}
-
-//#region greedy caching
-
-/**
- * Creates a derived value that automatically recomputes when dependencies change
- * @param compute - Function that computes the derived value
- * @returns Object with value and cleanup function
- */
-export function derived<T>(compute: (dep: EffectAccess) => T): {
-	value: T
-	[cleanup]: ScopedCallback
-} {
-	const rv = { value: undefined as unknown as T }
-	return cleanedBy(
-		rv,
-		untracked(() =>
-			effect(function derivedEffect(access) {
-				rv.value = compute(access)
-			})
-		)
-	)
-}

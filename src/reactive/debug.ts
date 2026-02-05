@@ -10,16 +10,16 @@ import { effectParent, effectToReactiveObjects, getRoot } from './registry'
 import { allProps, EffectCleanup, EffectTrigger, type Evolution, options, type ScopedCallback } from './types'
 
 const EXTERNAL_SOURCE = Symbol('external-source')
-type SourceEffect = EffectCleanup | typeof EXTERNAL_SOURCE
+type SourceEffect = EffectTrigger | typeof EXTERNAL_SOURCE
 
 let devtoolsEnabled = false
 
 // Registry for debugging (populated lazily when DevTools are enabled)
-const debugEffectRegistry = new Set<EffectCleanup>()
+const debugEffectRegistry = new Set<EffectTrigger>()
 const debugObjectRegistry = new Set<object>()
 
 // Human-friendly names
-const effectNames = new WeakMap<EffectCleanup, string>()
+const effectNames = new WeakMap<EffectTrigger | EffectCleanup, string>()
 const objectNames = new WeakMap<object, string>()
 let effectCounter = 0
 let objectCounter = 0
@@ -34,7 +34,7 @@ interface TriggerRecord {
 	lastTriggered: number
 }
 
-const triggerGraph = new Map<SourceEffect, Map<EffectCleanup, Map<string, TriggerRecord>>>()
+const triggerGraph = new Map<SourceEffect, Map<EffectTrigger, Map<string, TriggerRecord>>>()
 
 export type NodeKind = 'effect' | 'external' | 'state'
 export type EdgeKind = 'cause' | 'dependency' | 'trigger'
@@ -73,7 +73,7 @@ export interface ReactivityGraph {
 	}
 }
 
-function ensureEffectName(effect: EffectCleanup): string {
+function ensureEffectName(effect: EffectTrigger | EffectCleanup): string {
 	let name = effectNames.get(effect)
 	if (!name) {
 		const root = getRoot(effect)
@@ -101,7 +101,7 @@ function describeProp(obj: object, prop: any): string {
 	return `${objectName}.${String(prop)}`
 }
 
-function addEffectToRegistry(effect: EffectCleanup) {
+function addEffectToRegistry(effect: EffectTrigger) {
 	if (!effect || debugEffectRegistry.has(effect)) return
 	debugEffectRegistry.add(effect)
 	const deps = effectToReactiveObjects.get(effect)
@@ -123,7 +123,7 @@ function dbRegisterObject(obj: object) {
 	ensureObjectName(obj)
 }
 
-function ensureParentChains(effects: Set<EffectCleanup>) {
+function ensureParentChains(effects: Set<EffectTrigger>) {
 	const queue = Array.from(effects)
 	for (let i = 0; i < queue.length; i++) {
 		const effect = queue[i]
@@ -169,7 +169,7 @@ function ensureTriggerRecord(
 /**
  * Assign a debug-friendly name to an effect (shown in DevTools)
  */
-export function setEffectName(effect: EffectCleanup, name: string) {
+export function setEffectName(effect: EffectTrigger | EffectCleanup, name: string) {
 	effectNames.set(effect, name)
 }
 
@@ -245,7 +245,7 @@ export function getTriggerChain(effect: EffectTrigger, limit = 5): string[] {
 		// Find who triggered 'current'
 		// We need to reverse search the triggerGraph (source -> target)
 		// This is expensive O(Edges) but okay for error reporting
-		let foundSource: EffectCleanup | undefined
+		let foundSource: EffectTrigger | undefined
 		let foundReason = ''
 
 		search: for (const [source, targetMap] of triggerGraph) {
@@ -257,7 +257,7 @@ export function getTriggerChain(effect: EffectTrigger, limit = 5): string[] {
 						if (record.lastTriggered > lastTime) {
 							lastTime = record.lastTriggered
 							foundReason = record.label
-							foundSource = source === EXTERNAL_SOURCE ? undefined : (source as EffectCleanup)
+							foundSource = source === EXTERNAL_SOURCE ? undefined : (source as EffectTrigger)
 						}
 					}
 					if (foundSource || foundReason) break search
@@ -329,7 +329,7 @@ function buildEffectNodes(allEffects: Set<EffectTrigger>) {
 export function buildReactivityGraph(): ReactivityGraph {
 	const nodes: Array<EffectNode | ObjectNode> = []
 	const edges: GraphEdge[] = []
-	const nodeIds = new Map<ScopedCallback | object | SourceEffect, string>()
+	const nodeIds = new Map<EffectTrigger | EffectCleanup | object | SourceEffect, string>()
 
 	const allEffects = new Set<EffectTrigger>(debugEffectRegistry)
 	ensureParentChains(allEffects)

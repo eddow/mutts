@@ -2,7 +2,7 @@ import type { FunctionWrapper } from '../zone'
 import { ArrayReadForward, forwardArray, getAt, Indexable, setAt } from '../indexable'
 import { effect } from './effects'
 import { Eventful } from '../eventful'
-import { unreactive } from './interface'
+import { unreactive } from './watch'
 import { reactive } from './proxy'
 import type { EffectCleanup, EffectTrigger } from './types'
 
