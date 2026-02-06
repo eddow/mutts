@@ -141,7 +141,7 @@ export function showLineagePanel() {
 				marginBottom: '6px',
 				color: colors.titleText,
 			})
-			title.innerText = i === 0 ? `📍 Current: ${segment.effectName}` : `↖ Triggered by: ${segment.effectName}`
+			title.innerText = i === 0 ? `📍 Current: ${segment.effectName}` : `↖ Effect: ${segment.effectName}`
 			segDiv.appendChild(title)
 
 			segment.stack.forEach(frame => {

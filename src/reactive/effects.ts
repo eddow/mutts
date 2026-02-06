@@ -1,5 +1,6 @@
+import { named } from '../utils'
 import { getTriggerChain, isDevtoolsEnabled, registerEffectForDebug } from '../../debug/debug'
-import { getStackFrame, type StackFrame } from '../../debug/lineage'
+import { effectMarker, getStackFrame, type StackFrame } from '../../debug/lineage'
 import { decorator } from '../decorator'
 import { flavored, flavorOptions } from '../flavored'
 import { IterableWeakSet } from '../iterableWeak'
@@ -1013,7 +1014,7 @@ const fr = new FinalizationRegistry<() => void>((f) => f())
  * @param options - Options for effect execution
  * @returns A cleanup function to stop the effect
  */
-export const effect = flavored(
+export const effect = named(effectMarker.leave, flavored(
 	function effect(
 		fn: (access: EffectAccess) => EffectCloser | undefined | void | Promise<any>,
 		effectOptions?: EffectOptions
@@ -1021,7 +1022,7 @@ export const effect = flavored(
 		if (effectOptions?.name) Object.defineProperty(fn, 'name', { value: effectOptions.name })
 		// Use per-effect asyncMode or fall back to global option
 		const asyncMode = effectOptions?.asyncMode ?? options.asyncMode ?? 'cancel'
-		if (options.introspection.enableHistory) {
+		if (isDevtoolsEnabled()) {
 			const stack = getStackFrame() // Robustly skips internal mutts frames
 			if (stack.length > 0) {
 				effectCreationStacks.set(getRoot(fn), stack)
@@ -1064,7 +1065,7 @@ export const effect = flavored(
 				}
 				let errorToThrow: Error | undefined
 				try {
-					result = tracked(() => fn(access))
+					result = tracked(named(effectMarker.enter, () => fn.call(null, access)))
 					options.leave(fn)
 					if (
 						result &&
@@ -1186,14 +1187,15 @@ export const effect = flavored(
 			}
 		) as EffectTrigger
 		let cleanup: (() => void) | null = null
-		const tracked = effectHistory.present.with(runEffect, () => effectAggregator.zoned)
-		const ascend = effectHistory.zoned
+		const tracked = named(effectMarker.leave, effectHistory.present.with(runEffect, () => named(effectMarker.leave, effectAggregator.zoned)))
+		const ascended = named(effectMarker.leave, effectHistory.zoned)
 		const parent = effectHistory.present.active
 		let thrower: CatchFunction | undefined
 		let effectStopped = false
 		const access: EffectAccess = {
 			tracked,
-			ascend,
+			ascend: named(effectMarker.leave, (fn) => ascended(named(effectMarker.enter, ()=> fn.call(null)))),
+			//named(effectMarker.enter, (fn) => ascended(fn)),
 			reaction: false,
 		}
 		let runningPromise: Promise<any> | null = null
@@ -1281,7 +1283,7 @@ export const effect = flavored(
 			return flavorOptions(this, { name }, 'named')
 		},
 	}
-)
+))
 
 /**
  * Executes a function without tracking dependencies but maintains parent cleanup relationship

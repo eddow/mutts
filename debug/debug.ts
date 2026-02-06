@@ -7,8 +7,8 @@
 
 import { raiseEffectTrigger } from '../src/reactive/effects'
 import { effectParent, effectToReactiveObjects, getRoot } from '../src/reactive/registry'
-import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, options, type ScopedCallback } from '../src/reactive/types'
-import { getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter } from './lineage'
+import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, options } from '../src/reactive/types'
+import { getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter, nodeLineage } from './lineage'
 import { showLineagePanel } from './lineage-panel'
 
 const EXTERNAL_SOURCE = Symbol('external-source')
@@ -424,7 +424,12 @@ export function enableDevTools() {
 
 	globalScope.__MUTTS_DEVTOOLS__ = {
 		getGraph: buildReactivityGraph,
-		get lineage() {
+		nodeLineage() {
+			console.groupCollapsed("🔍 Current Stack Trace");
+			console.log(nodeLineage(getLineage()))
+			console.groupEnd();
+		},
+		get browserLineage() {
 			return wrapLineageForDebug(getLineage())
 		},
 		getLineage,

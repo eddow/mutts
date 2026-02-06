@@ -115,8 +115,9 @@ function projectArray<SourceValue, ResultValue>(
 		const existing = Array.from(indexEffects.keys())
 		for (let i = 0; i < length; i++) {
 			if (indexEffects.has(i)) continue
-			ascend(() => {
+			ascend(function projectArrayIndexAscend() {
 				const index = i
+				// TODO: name = `source.tag [ index ]`
 				const stop = effect(function projectArrayIndexEffect({ reaction }) {
 					if (!reaction) setActiveProjection({ source, key: index, target, depth, parent })
 					const previous = untracked(() => target[index])

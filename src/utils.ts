@@ -294,7 +294,7 @@ export function named<T extends Function>(name: string, fn: T): T {
 	Object.defineProperty(fn, 'name', {
 		value: fn.name ? `${fn.name}::${name}` : name,
 		writable: false,
-		configurable: false,
+		configurable: true,
 	})
 	return fn
 }

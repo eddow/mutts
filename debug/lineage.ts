@@ -3,6 +3,11 @@ import { effectCreationStacks } from '../src/reactive/effects'
 import { effectParent, getRoot } from '../src/reactive/registry'
 import { type EffectTrigger } from '../src/reactive/types'
 
+export const effectMarker ={
+	enter: 'effect:enter',
+	leave: 'effect:leave'
+}
+
 /**
  * Structured stack frame
  */
@@ -48,62 +53,51 @@ let internalFile: string | undefined
  * @param skipFrames - Number of frames to skip
  * @param error - Optional error to use as source of stack
  */
-export function getStackFrame(skipFrames = 0, error?: Error): StackFrame[] {
-	if (!error) {
-		error = new Error()
-		skipFrames++
-	}
+export function getStackFrame(error = new Error()): StackFrame[] {
 	if (!error.stack) return []
 
 	const lines = error.stack.split('\n')
 
-	// Dynamically identify the library's internal files if not already done
-	if (!internalFile && lines[1]) {
-		const selfFrame = parseStackLine(lines[1])
-		if (selfFrame) {
-			internalFile = selfFrame.fileName
-		}
-	}
-
-	// Skip "Error" line and requested frames
-	const stackLines = lines.slice(skipFrames)
-	const frames: StackFrame[] = []
-
-	// Determine the "base" directory of the library to skip other internal files
-	// We look for "src" or "dist" to be more specific than just the project root
-	const srcIndex = internalFile ? internalFile.lastIndexOf('/src/') : -1
-	const distIndex = internalFile ? internalFile.lastIndexOf('/dist/') : -1
-	const libraryBase = internalFile ? (
-		srcIndex !== -1 ? internalFile.substring(0, srcIndex + 5) : 
-		(distIndex !== -1 ? internalFile.substring(0, distIndex + 6) : 
-		internalFile.substring(0, internalFile.lastIndexOf('/') + 1))
-	) : undefined
-
-	let foundExternal = false
-	for (const line of stackLines) {
-		const frame = parseStackLine(line)
-		if (!frame) continue
-
-		// Robust skipping: if we are still in the internal area, skip it.
-		if (!foundExternal) {
-			const isInternal =
-				frame.functionName === 'captureLineage' ||
-				frame.fileName === internalFile ||
-				(libraryBase && frame.fileName.startsWith(libraryBase)) ||
-				// Heuristic for built mode: index.js in a mutts folder
-				(frame.fileName.includes('/mutts/') && (frame.fileName.endsWith('.js') || frame.fileName.endsWith('.ts')))
-
-			// We only want to skip if it's REALLY internal. If we find something that looks like user code, stop skipping.
-			if (isInternal && !frame.fileName.includes('/tests/') && !frame.fileName.includes('/example/')) {
-				continue
+	const lastLine = lines.findIndex((line) => line.includes(effectMarker.enter))
+	if (lastLine !== -1) lines.splice(lastLine)
+	const firstLine = lines.findLastIndex((line) => line.includes(effectMarker.leave))
+	if (firstLine !== -1) lines.splice(0, firstLine+1)
+	else {
+		// Dynamically identify the library's internal files if not already done
+		if (!internalFile && lines[1]) {
+			const selfFrame = parseStackLine(lines[1])
+			if (selfFrame) {
+				internalFile = selfFrame.fileName
 			}
-			foundExternal = true
 		}
 
-		frames.push(frame)
+		// Skip "Error" line and requested frames
+		const frames: StackFrame[] = []
+
+		// Determine the "base" directory of the library to skip other internal files
+		// We look for "src" or "dist" to be more specific than just the project root
+		const srcIndex = internalFile ? internalFile.lastIndexOf('/src/') : -1
+		const distIndex = internalFile ? internalFile.lastIndexOf('/dist/') : -1
+		const libraryBase = internalFile ? (
+			srcIndex !== -1 ? internalFile.substring(0, srcIndex + 5) : 
+			(distIndex !== -1 ? internalFile.substring(0, distIndex + 6) : 
+			internalFile.substring(0, internalFile.lastIndexOf('/') + 1))
+		) : undefined
+		let l
+		for (l = 1; l < lines.length; l++) {
+			const frame = parseStackLine(lines[l])
+			if (!frame) continue
+
+			// Robust skipping: if we are still in the internal area, skip it.
+			const isInternal = /Lineage$/.test(frame.functionName) ||
+				[`getStackFrame`, `captureLineage`].includes(frame.functionName)
+
+			if (!isInternal) break
+		}
+		lines.splice(0, l)
 	}
 
-	return frames
+	return lines.map(parseStackLine).filter(Boolean)
 }
 
 /**
@@ -126,7 +120,7 @@ export function getLineage(effect?: EffectTrigger): LineageSegment[] {
 	if (!currentEffect) {
 		segments.push({
 			effectName: 'root',
-			stack: currentStack,
+			stack: filterNodeModules(currentStack),
 		})
 		return segments
 	}
@@ -136,16 +130,18 @@ export function getLineage(effect?: EffectTrigger): LineageSegment[] {
 
 	while (current) {
 		const rootFn = getRoot(current)
+		if(!rootFn.name) debugger
 		const effectName = rootFn.name || 'anonymous'
 		
 		// Find where this effect starts in the current stack
 		// This is tricky because the stack might have internal "runEffect" frames
 		// We look for the first frame that might be the effect function itself
 		let effectEntryIndex = -1
-		for (let i = 0; i < lastStack.length; i++) {
+		const filteredStack = filterNodeModules(lastStack)
+		for (let i = 0; i < filteredStack.length; i++) {
 			// We compare function names. Not perfect but often works.
-			if (lastStack[i].functionName === effectName) {
-				effectEntryIndex = i
+			if (filteredStack[i].functionName === effectMarker.enter) {
+				effectEntryIndex = i-1
 				break
 			}
 		}
@@ -153,13 +149,13 @@ export function getLineage(effect?: EffectTrigger): LineageSegment[] {
 		if (effectEntryIndex !== -1) {
 			segments.push({
 				effectName,
-				stack: lastStack.slice(0, effectEntryIndex + 1),
+				stack: filteredStack.slice(0, effectEntryIndex + 1),
 			})
 		} else {
 			// If we can't find the entry point, just take the whole stack segment
 			segments.push({
 				effectName,
-				stack: lastStack,
+				stack: filteredStack,
 			})
 		}
 
@@ -173,7 +169,7 @@ export function getLineage(effect?: EffectTrigger): LineageSegment[] {
 		} else if (creationStack) {
 			segments.push({
 				effectName: 'root',
-				stack: creationStack,
+				stack: filterNodeModules(creationStack),
 			})
 			break
 		} else {
@@ -183,6 +179,41 @@ export function getLineage(effect?: EffectTrigger): LineageSegment[] {
 
 	return segments
 }
+/**
+ * Filters out node_modules frames and groups them
+ * @param frames - Array of stack frames
+ */
+function filterNodeModules(frames: StackFrame[]): StackFrame[] {
+	const result: StackFrame[] = []
+	let inNodeModules = false
+	
+	for (const frame of frames) {
+		const isNodeModule = frame.fileName.includes('/node_modules/')
+		
+		if (isNodeModule && !inNodeModules) {
+			// Start of node_modules block
+			inNodeModules = true
+			result.push({
+				functionName: '...node_modules...',
+				fileName: '[filtered]',
+				lineNumber: 0,
+				columnNumber: 0,
+				raw: '    at ...node_modules...'
+			})
+		} else if (!isNodeModule && inNodeModules) {
+			// End of node_modules block
+			inNodeModules = false
+			result.push(frame)
+		} else if (!isNodeModule) {
+			// Regular frame
+			result.push(frame)
+		}
+		// Skip frames inside node_modules
+	}
+	
+	return result
+}
+
 /**
  * Formats lineage segments into a single stack-like string
  * @param segments - Lineage segments
@@ -201,8 +232,85 @@ export function formatLineage(segments: LineageSegment[]): string {
 	return result.join('\n')
 }
 
-export function captureLineage(): string {
-	return formatLineage(getLineage())
+/**
+ * Formats lineage segments for Node.js console output with colors and styling
+ * @param segments - Lineage segments
+ */
+export function nodeLineage(segments: LineageSegment[]): string {
+	// ANSI color codes for Node.js terminal
+	const colors = {
+		reset: '\x1b[0m',
+		bright: '\x1b[1m',
+		dim: '\x1b[2m',
+		red: '\x1b[31m',
+		green: '\x1b[32m',
+		yellow: '\x1b[33m',
+		blue: '\x1b[34m',
+		magenta: '\x1b[35m',
+		cyan: '\x1b[36m',
+		white: '\x1b[37m',
+		gray: '\x1b[90m',
+		bgRed: '\x1b[41m',
+		bgGreen: '\x1b[42m',
+		bgYellow: '\x1b[43m',
+		bgBlue: '\x1b[44m',
+		bgMagenta: '\x1b[45m',
+		bgCyan: '\x1b[46m',
+		bgWhite: '\x1b[47m',
+	}
+	
+	const result: string[] = []
+	
+	// Add header
+	result.push('')
+	result.push(`${colors.bright}${colors.cyan}╭─────────────────────────────────────${colors.reset}`)
+	result.push(`${colors.bright}${colors.cyan}│${colors.reset} ${colors.bright}${colors.yellow}🦴 Effect Lineage Trace${colors.reset} ${colors.gray}(${segments.length} segment${segments.length === 1 ? '' : 's'})${colors.reset}`)
+	result.push(`${colors.bright}${colors.cyan}╰─────────────────────────────────────${colors.reset}`)
+	result.push('')
+	
+	for (let i = 0; i < segments.length; i++) {
+		const segment = segments[i]
+		
+		// Add segment header
+		const isLast = i === segments.length - 1
+		const prefix = i === 0 ? '📍' : isLast ? '└─' : '├─'
+		const connector = isLast ? '  ' : '│ '
+		
+		result.push(`${colors.gray}${connector}${colors.reset}${colors.bright}${colors.magenta}${prefix} Effect: ${segment.effectName}${colors.reset}`)
+		
+		// Add stack frames
+		for (let j = 0; j < segment.stack.length; j++) {
+			const frame = segment.stack[j]
+			const isLastFrame = j === segment.stack.length - 1
+			const framePrefix = isLast && isLast ? '   └─' : isLast ? '   ├─' : '   │'
+			
+			if (frame.functionName === '...node_modules...') {
+				// Special formatting for node_modules placeholder
+				result.push(`${colors.gray}   ${connector}${colors.reset}${colors.dim}${framePrefix} ${colors.yellow}${frame.functionName}${colors.reset}`)
+			} else {
+				// Regular frame
+				const fnColor = frame.functionName === 'anonymous' ? colors.gray : colors.green
+				const fileColor = colors.blue
+				const lineColor = colors.cyan
+				
+				result.push(`${colors.gray}   ${connector}${colors.reset}${colors.dim}${framePrefix}${colors.reset} ${fnColor}${frame.functionName}${colors.reset} ${colors.gray}(${colors.reset}${fileColor}${frame.fileName}:${frame.lineNumber}:${frame.columnNumber}${colors.reset}${colors.gray})${colors.reset}`)
+			}
+		}
+		
+		// Add separator between segments
+		if (i < segments.length - 1) {
+			result.push('')
+		}
+	}
+	
+	return result.join('\n')
+}
+
+/**
+ * Captures and formats lineage for Node.js console output
+ */
+export function captureNodeLineage(): string {
+	return nodeLineage(getLineage())
 }
 
 /**
@@ -249,13 +357,13 @@ export const lineageFormatter = {
 				'div',
 				{ style: `margin-left: 20px; color: ${colors.frameText}; font-family: monospace; font-size: 11px;` },
 				['span', { style: `color: ${colors.functionName};` }, `at ${frame.functionName} `],
-				['span', { style: `color: ${colors.fileLink}; cursor: pointer; text-decoration: underline;` }, `(${frame.fileName}:${frame.lineNumber}:${frame.columnNumber})`],
+				['span', {}, `${frame.fileName}:${frame.lineNumber}:${frame.columnNumber}`],
 			])
 
 			const segmentHeader = [
 				'div',
 				{ style: `margin-top: 5px; padding: 2px 5px; background: ${colors.segmentBg}; border-radius: 3px; font-weight: bold;` },
-				i === 0 ? `📍 Current: ${segment.effectName}` : `↖ Triggered by: ${segment.effectName}`,
+				i === 0 ? `📍 Current: ${segment.effectName}` : `↖ Effect: ${segment.effectName}`,
 			]
 
 			return ['div', {}, segmentHeader, ...frames]

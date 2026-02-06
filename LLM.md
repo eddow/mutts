@@ -103,7 +103,6 @@ Tools are built-in in order to catch common reactivity-related issues.
 Track the creation history of effects intertwined with JS stack traces. This is particularly useful for debugging complex chains of effects.
 
 - `getLineage()`: Returns a structured lineage (`LineageSegment[]`) of the current execution.
-- `captureLineage()`: Returns a formatted string representation of the full lineage (ideal for logging).
 - `showLineagePanel()`: Displays a floating real-time visualization panel in the browser.
 - **Rich Console**: In Chrome, `mutate.lineage` (via DevTools) provides an interactive, expandable view with clickable source links.
 - To enable lineage tracking, set `reactiveOptions.introspection.enableHistory = true`.
