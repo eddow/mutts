@@ -1,4 +1,5 @@
 import { decorator, type GenericClassDecorator } from './decorator'
+import { flavored } from './flavored'
 
 // In order to avoid async re-entrance, we could use zone.js or something like that.
 const syncCalculating: { object: object; prop: PropertyKey }[] = []
@@ -56,26 +57,64 @@ export function cache(object: Object, propertyKey: PropertyKey, value: any) {
  * @param descriptor - The descriptor properties to apply
  * @returns A class decorator that applies the descriptor to specified properties
  */
-export function describe(descriptor: {
-	enumerable?: boolean
-	configurable?: boolean // Not modifiable once the property has been defined ?
-	writable?: boolean
-}) {
-	return <T>(...properties: (keyof T)[]): GenericClassDecorator<T> =>
-		(Base) => {
-			return class extends Base {
-				constructor(...args: any[]) {
-					super(...args)
-					for (const key of properties) {
-						Object.defineProperty(this, key, {
-							...Object.getOwnPropertyDescriptor(this, key),
-							...descriptor,
-						})
+export const descriptor = flavored(
+	function descriptor(descriptor: {
+		enumerable?: boolean
+		configurable?: boolean // Not modifiable once the property has been defined
+		writable?: boolean
+	}) {
+		return <T>(...properties: (keyof T)[]): GenericClassDecorator<T> =>
+			(Base) => {
+				return class extends Base {
+					constructor(...args: any[]) {
+						super(...args)
+						for (const key of properties) {
+							const existing = Object.getOwnPropertyDescriptor(this, key)
+							Object.defineProperty(this, key, Object.assign(existing || {}, descriptor))
+						}
 					}
 				}
 			}
-		}
-}
+	},
+	{
+		/**
+		 * enumerable: true
+		 */
+		get enumerable() {
+			return descriptor({ enumerable: true })
+		},
+		/**
+		 * enumerable: false
+		 */
+		get hidden() {
+			return descriptor({ enumerable: false })
+		},
+		/**
+		 * configurable: true
+		 */
+		get configurable() {
+			return descriptor({ configurable: true })
+		},
+		/**
+		 * configurable: false
+		 */
+		get frozen() {
+			return descriptor({ configurable: false })
+		},
+		/**
+		 * writable: true
+		 */
+		get writable() {
+			return descriptor({ writable: true })
+		},
+		/**
+		 * writable: false
+		 */
+		get readonly() {
+			return descriptor({ writable: false })
+		},
+	}
+)
 
 /**
  * Decorator that marks methods, properties, or classes as deprecated

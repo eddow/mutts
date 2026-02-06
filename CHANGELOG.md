@@ -11,6 +11,7 @@
 - `effect` now has a `named` and `opaque` "flavored" property
 - `onEffectThrow` - effect throw/catch feature
 - typings: `ScopedCallback` became `EffectTrigger` and `EffectCleanup`
+- `describe` - reactive property definition
 
 ## Refactoring
 

@@ -3,7 +3,8 @@ import {
 	cached,
 	debounce,
 	deprecated,
-	describe as describeDecorator,
+	descriptor as describeDecorator,
+	descriptor,
 	isCached,
 	throttle,
 } from 'mutts'
@@ -105,11 +106,9 @@ describe('isCached', () => {
 	})
 })
 
-describe('describe decorator', () => {
-	it('should make properties readonly', () => {
-		const readonly = describeDecorator({ writable: false })
-
-		@readonly('id', 'createdAt')
+describe('descriptor decorator', () => {
+	it('should make properties readonly using flavor', () => {
+		@descriptor.readonly('id', 'createdAt')
 		class User {
 			id: string = 'user-123'
 			name: string = 'John'
@@ -132,10 +131,8 @@ describe('describe decorator', () => {
 		expect(user.name).toBe('Jane')
 	})
 
-	it('should make properties non-enumerable', () => {
-		const hidden = describeDecorator({ enumerable: false })
-
-		@hidden('_private', '_cache')
+	it('should make properties non-enumerable using flavor', () => {
+		@descriptor.hidden('_private', '_cache')
 		class DataStore {
 			public data: any[] = []
 			_private: string = 'secret'
@@ -152,14 +149,10 @@ describe('describe decorator', () => {
 		expect(Object.getOwnPropertyNames(store)).toContain('_cache')
 	})
 
-	it('should combine multiple descriptor properties', () => {
-		const readonlyHidden = describeDecorator({
-			writable: false,
-			enumerable: false,
-			configurable: false,
-		})
-
-		@readonlyHidden('secret')
+	it('should combine multiple descriptor properties using flavors', () => {
+		@descriptor.frozen('secret')
+		@descriptor.readonly('secret')
+		@descriptor.hidden('secret')
 		class SecureData {
 			public info: string = 'public'
 			secret: string = 'top secret'
@@ -181,10 +174,8 @@ describe('describe decorator', () => {
 		}).toThrow()
 	})
 
-	it('should work with multiple properties', () => {
-		const readonly = describeDecorator({ writable: false })
-
-		@readonly('id', 'version', 'createdAt')
+	it('should work with multiple properties using flavor', () => {
+		@descriptor.readonly('id', 'version', 'createdAt')
 		class Document {
 			id: string = 'doc-1'
 			title: string = 'My Document'
@@ -210,31 +201,27 @@ describe('describe decorator', () => {
 		expect(doc.title).toBe('Updated Title')
 	})
 
-	it('should preserve existing property descriptors', () => {
-		const readonly = describeDecorator({ writable: false })
-
-		@readonly('value')
+	it('should preserve existing property descriptors using flavor', () => {
+		@descriptor.readonly('value')
 		class Test {
 			value: string = 'test'
 		}
 
 		const obj = new Test()
-		const descriptor = Object.getOwnPropertyDescriptor(obj, 'value')
+		const propDescriptor = Object.getOwnPropertyDescriptor(obj, 'value')
 
 		// Should preserve enumerable and configurable, only change writable
-		expect(descriptor?.writable).toBe(false)
-		expect(descriptor?.enumerable).toBe(true) // Default for class fields
-		expect(descriptor?.configurable).toBe(true) // Default for class fields
+		expect(propDescriptor?.writable).toBe(false)
+		expect(propDescriptor?.enumerable).toBe(true) // Default for class fields
+		expect(propDescriptor?.configurable).toBe(true) // Default for class fields
 	})
 
-	it('should work with inheritance', () => {
-		const readonly = describeDecorator({ writable: false })
-
+	it('should work with inheritance using flavor', () => {
 		class Base {
 			baseValue: string = 'base'
 		}
 
-		@readonly('baseValue', 'derivedValue')
+		@descriptor.readonly('baseValue', 'derivedValue')
 		class Derived extends Base {
 			derivedValue: string = 'derived'
 		}
@@ -249,6 +236,39 @@ describe('describe decorator', () => {
 			obj.derivedValue = 'new derived'
 		}).toThrow()
 	})
+
+	it('should support all flavor variants', () => {
+		// Test enumerable/hidden
+		@descriptor.enumerable('publicProp')
+		@descriptor.hidden('privateProp')
+		class TestClass {
+			publicProp: string = 'public'
+			privateProp: string = 'private'
+			normalProp: string = 'normal'
+		}
+
+		const obj = new TestClass()
+		expect(Object.keys(obj)).toContain('publicProp')
+		expect(Object.keys(obj)).not.toContain('privateProp')
+		expect(Object.keys(obj)).toContain('normalProp')
+
+		// Test writable/readonly
+		@descriptor.writable('writableProp')
+		@descriptor.readonly('readOnlyProp')
+		class WriteTest {
+			writableProp: string = 'can write'
+			readOnlyProp: string = 'read only'
+		}
+
+		const writeObj = new WriteTest()
+		expect(() => {
+			writeObj.writableProp = 'changed'
+		}).not.toThrow()
+		expect(() => {
+			writeObj.readOnlyProp = 'changed'
+		}).toThrow()
+	})
+
 	/* Once a proper
 	it('should create reusable descriptor configurations', () => {
 		// Create reusable configurations

@@ -1,5 +1,5 @@
-import { effect, onEffectTrigger } from '../src/reactive/effects'
-import { getLineage, type LineageSegment } from './lineage'
+import { effect } from '../src/reactive/effects'
+import type { LineageSegment } from './lineage'
 import { reactive } from '../src/reactive/proxy'
 
 /**
@@ -8,15 +8,47 @@ import { reactive } from '../src/reactive/proxy'
 export function showLineagePanel() {
 	if (typeof document === 'undefined') return
 
+	// Detect color scheme preference
+	const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+	
+	// Color schemes
+	const colors = isDarkMode ? {
+		panelBg: 'rgba(30, 30, 30, 0.95)',
+		panelBorder: '#444',
+		headerBg: '#8B4513',
+		headerText: '#ffffff',
+		closeBtn: '#ffffff',
+		placeholderText: '#999',
+		segmentBorder: '#8B4513',
+		titleText: '#ffffff',
+		frameText: '#ccc',
+		atText: '#888',
+		linkText: '#58a6ff',
+	} : {
+		panelBg: 'rgba(255, 255, 255, 0.95)',
+		panelBorder: '#ddd',
+		headerBg: '#704214',
+		headerText: '#ffffff',
+		closeBtn: '#ffffff',
+		placeholderText: '#666',
+		segmentBorder: '#704214',
+		titleText: '#222',
+		frameText: '#555',
+		atText: '#999',
+		linkText: '#005cc5',
+	}
+
 	const state = reactive({
 		activeLineage: [] as LineageSegment[],
 		isVisible: true,
 	})
 
 	// Track the last triggered effect
+	/* TODO: this is really not how effect triggers work - `onEffectTrigger` is called when "this effect" (here nothing) is triggered
+	What we could try is to add events or such in zones... but it's really cosmetic and the whole panel is buggy - not worth doing yet (260206).
 	onEffectTrigger((_obj, _evol, _prop, effectTrigger) => {
 		state.activeLineage = getLineage(effectTrigger)
-	})
+	})*/
 
 	// UI Creation
 	const panel = document.createElement('div')
@@ -27,9 +59,9 @@ export function showLineagePanel() {
 		right: '20px',
 		width: '400px',
 		maxHeight: '80vh',
-		backgroundColor: 'rgba(255, 255, 255, 0.95)',
+		backgroundColor: colors.panelBg,
 		backdropFilter: 'blur(10px)',
-		border: '1px solid #ddd',
+		border: `1px solid ${colors.panelBorder}`,
 		borderRadius: '12px',
 		boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
 		zIndex: '999999',
@@ -44,8 +76,8 @@ export function showLineagePanel() {
 	const header = document.createElement('div')
 	Object.assign(header.style, {
 		padding: '12px 16px',
-		background: '#704214',
-		color: 'white',
+		background: colors.headerBg,
+		color: colors.headerText,
 		fontWeight: '600',
 		display: 'flex',
 		justifyContent: 'space-between',
@@ -59,7 +91,7 @@ export function showLineagePanel() {
 	Object.assign(closeBtn.style, {
 		background: 'none',
 		border: 'none',
-		color: 'white',
+		color: colors.closeBtn,
 		fontSize: '20px',
 		cursor: 'pointer',
 		padding: '0 5px',
@@ -90,7 +122,7 @@ export function showLineagePanel() {
 	// Reactivity: Update Content
 	effect(() => {
 		if (state.activeLineage.length === 0) {
-			content.innerHTML = '<div style="color: #666; font-style: italic; text-align: center; margin-top: 20px;">No effect triggered yet...</div>'
+			content.innerHTML = `<div style="color: ${colors.placeholderText}; font-style: italic; text-align: center; margin-top: 20px;">No effect triggered yet...</div>`
 			return
 		}
 
@@ -99,7 +131,7 @@ export function showLineagePanel() {
 			const segDiv = document.createElement('div')
 			Object.assign(segDiv.style, {
 				marginBottom: '16px',
-				borderLeft: '2px solid #704214',
+				borderLeft: `2px solid ${colors.segmentBorder}`,
 				paddingLeft: '12px',
 			})
 
@@ -107,7 +139,7 @@ export function showLineagePanel() {
 			Object.assign(title.style, {
 				fontWeight: 'bold',
 				marginBottom: '6px',
-				color: '#222',
+				color: colors.titleText,
 			})
 			title.innerText = i === 0 ? `📍 Current: ${segment.effectName}` : `↖ Triggered by: ${segment.effectName}`
 			segDiv.appendChild(title)
@@ -115,7 +147,7 @@ export function showLineagePanel() {
 			segment.stack.forEach(frame => {
 				const frameDiv = document.createElement('div')
 				Object.assign(frameDiv.style, {
-					color: '#555',
+					color: colors.frameText,
 					marginBottom: '3px',
 					fontSize: '11px',
 					whiteSpace: 'nowrap',
@@ -124,7 +156,7 @@ export function showLineagePanel() {
 					cursor: 'pointer',
 				})
 				frameDiv.title = frame.raw
-				frameDiv.innerHTML = `<span style="color: #999">at</span> ${frame.functionName} <span style="color: #005cc5; text-decoration: underline;">(${frame.fileName.split('/').pop()}:${frame.lineNumber})</span>`
+				frameDiv.innerHTML = `<span style="color: ${colors.atText}">at</span> ${frame.functionName} <span style="color: ${colors.linkText}; text-decoration: underline;">(${frame.fileName.split('/').pop()}:${frame.lineNumber})</span>`
 				segDiv.appendChild(frameDiv)
 			})
 

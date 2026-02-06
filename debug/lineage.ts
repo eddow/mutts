@@ -211,9 +211,14 @@ export function captureLineage(): string {
 export const lineageFormatter = {
 	header: (obj: any) => {
 		if (obj && obj.__isLineage__) {
+			// Try to detect DevTools theme - default to dark colors if uncertain
+			const isDark = typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches
+			
+			const headerColor = isDark ? '#cd9d5d' : '#704214'
+			
 			return [
 				'span',
-				{ style: 'color: #704214; font-weight: bold;' },
+				{ style: `color: ${headerColor}; font-weight: bold;` },
 				`🦴 Effect Lineage (${obj.segments.length} segments)`,
 			]
 		}
@@ -223,17 +228,33 @@ export const lineageFormatter = {
 	body: (obj: any) => {
 		if (!obj || !obj.__isLineage__) return null
 		const segments: LineageSegment[] = obj.segments
+		
+		// Try to detect DevTools theme
+		const isDark = typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches
+		
+		const colors = isDark ? {
+			frameText: '#ccc',
+			functionName: '#ffffff',
+			fileLink: '#58a6ff',
+			segmentBg: '#2d2d2d',
+		} : {
+			frameText: '#555',
+			functionName: '#222',
+			fileLink: '#005cc5',
+			segmentBg: '#eee',
+		}
+		
 		const children = segments.map((segment, i) => {
 			const frames = segment.stack.map((frame) => [
 				'div',
-				{ style: 'margin-left: 20px; color: #555; font-family: monospace; font-size: 11px;' },
-				['span', { style: 'color: #222;' }, `at ${frame.functionName} `],
-				['span', { style: 'color: #005cc5; cursor: pointer; text-decoration: underline;' }, `(${frame.fileName}:${frame.lineNumber}:${frame.columnNumber})`],
+				{ style: `margin-left: 20px; color: ${colors.frameText}; font-family: monospace; font-size: 11px;` },
+				['span', { style: `color: ${colors.functionName};` }, `at ${frame.functionName} `],
+				['span', { style: `color: ${colors.fileLink}; cursor: pointer; text-decoration: underline;` }, `(${frame.fileName}:${frame.lineNumber}:${frame.columnNumber})`],
 			])
 
 			const segmentHeader = [
 				'div',
-				{ style: 'margin-top: 5px; padding: 2px 5px; background: #eee; border-radius: 3px; font-weight: bold;' },
+				{ style: `margin-top: 5px; padding: 2px 5px; background: ${colors.segmentBg}; border-radius: 3px; font-weight: bold;` },
 				i === 0 ? `📍 Current: ${segment.effectName}` : `↖ Triggered by: ${segment.effectName}`,
 			]
 

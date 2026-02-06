@@ -11,7 +11,7 @@ import {
 	projectionInfo,
 	type ScopedCallback,
 } from './types'
-
+// TODO: project/scan/describe/... -> stands on a `forEach`-like?
 /**
  * Maps projection effects (item effects) to their projection context
  */

@@ -35,6 +35,7 @@ export {
 	type ScopedCallback,
 } from './types'
 export { unreactive, watch } from './watch'
+export { describe } from './describe'
 
 import { ReactiveArray } from './array'
 import {

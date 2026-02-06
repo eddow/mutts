@@ -145,7 +145,7 @@ A powerful mixin system that allows you to create reusable functionality that ca
 
 A collection of standard decorators that shouldn't be implemented a 101-th time.
 
-In extenso: cached, describe(enumerable, configurable, writable), deprecated, debounce, throttle
+In extenso: cached, descriptor(enumerable, configurable, writable) with flavors (.enumerable, .hidden, .configurable, .frozen, .writable, .readonly), deprecated, debounce, throttle
 
 ## [Decorator System](./docs/decorator.md)
 

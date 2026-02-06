@@ -20,6 +20,7 @@
 - [Non-Reactive System](./advanced.md#non-reactive-system)
 - [Array Mapping](./advanced.md#array-mapping)
 - [Projection](./advanced.md#projection)
+- [Reactive Property Description](./describe.md)
 - [Record Organization](./advanced.md#record-organization)
 - [Memoization](./advanced.md#memoization)
 - [Debugging and Development](./advanced.md#debugging-and-development)
@@ -110,6 +111,19 @@ const doubled = project(source, ({ value }) => value * 2)
 // [2, 4, 6]
 
 source.push(4)  // doubled automatically becomes [2, 4, 6, 8]
+```
+
+**6. Define properties reactively:**
+```typescript
+const target = {}
+const descriptors = reactive({
+  foo: { value: 1, enumerable: true }
+})
+describe(descriptors, target)
+// target.foo is 1
+
+descriptors.bar = { value: 2, enumerable: true }
+// target.bar is 2 automatically
 ```
 
 **Ready to go!** Continue reading for advanced features.
@@ -204,6 +218,19 @@ reactiveObj.count = 5 // Triggers effect
 - Class instances: `reactive(new MyClass())`
 
 See [Prototype Chains and Pure Objects](#prototype-chains-and-pure-objects) for detailed information about prototype chain handling.
+
+### `describe()`
+
+Reactively defines properties on a target object based on a descriptors record.
+
+```typescript
+function describe<T extends object>(
+    descriptors: Record<PropertyKey, PropertyDescriptor>,
+    target: T = Object.create(null) as T
+): T
+```
+
+See the [Reactive Property Description](./describe.md) guide for details.
 
 ### `effect()`
 

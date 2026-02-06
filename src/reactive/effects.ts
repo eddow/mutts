@@ -32,6 +32,12 @@ import {
 	stopped,
 } from './types'
 
+class InternalCommunicationError extends Error {
+	constructor(public readonly wrappedError: Error) {
+		super('Internal communication error')
+	}
+}
+
 /**
  * Finds a cycle in a sequence of functions by looking for the first repetition
  */
@@ -954,10 +960,11 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 			optionCall('endChain')
 			return firstReturn.value
 		} catch (error) {
-			// TODO: find a way to send messages from `thrower:self` to `catcher:self` without losing the batch content
-			activationRegistry = undefined
-			batchQueue = undefined
-			optionCall('endChain')
+			if (!(error instanceof InternalCommunicationError)) {
+				activationRegistry = undefined
+				batchQueue = undefined
+				optionCall('endChain')
+			}
 			throw error
 		}
 	}
@@ -1053,7 +1060,7 @@ export const effect = flavored(
 				let caught = 0
 				thrower = (error: any) => {
 					// thrower:self
-					throw error
+					throw new InternalCommunicationError(error)
 				}
 				let errorToThrow: Error | undefined
 				try {
@@ -1100,7 +1107,7 @@ export const effect = flavored(
 					}
 				} catch (error) {
 					// catcher:self`
-					errorToThrow = error
+					errorToThrow = error instanceof InternalCommunicationError ? error.wrappedError : error
 				} finally {
 					access.reaction = true
 				}

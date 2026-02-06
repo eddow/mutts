@@ -189,13 +189,13 @@ When the decorator is applied to a non-getter method:
 3. **Memory overhead**: Cached values are stored indefinitely
 4. **Getter-only**: Can only be applied to getter methods, not setters or regular methods
 
-## Describe
+## Descriptor
 
-The `describe` decorator provides a clean, reusable way to configure property descriptors (enumerable, configurable, writable) for class properties. This decorator uses a functional approach that makes it easy to create reusable descriptor configurations.
+The `descriptor` decorator provides a clean, reusable way to configure property descriptors (enumerable, configurable, writable) for class properties. This decorator uses a functional approach that makes it easy to create reusable descriptor configurations.
 
 ## API Reference
 
-### `describe(descriptor: PropertyDescriptor): <T>(...properties: (keyof T)[]) => GenericClassDecorator<T>`
+### `descriptor(descriptor: PropertyDescriptor): <T>(...properties: (keyof T)[]) => GenericClassDecorator<T>`
 
 A function that creates a decorator to configure property descriptors for specified properties.
 
@@ -207,29 +207,68 @@ A function that creates a decorator to configure property descriptors for specif
 
 **Returns:** A function that takes property names and returns a class decorator
 
+**Flavors:**
+The `descriptor` function is flavored with the following chainable properties:
+- `.enumerable` - Sets enumerable to true
+- `.hidden` - Sets enumerable to false
+- `.configurable` - Sets configurable to true
+- `.frozen` - Sets configurable to false
+- `.writable` - Sets writable to true
+- `.readonly` - Sets writable to false
+
 **Usage Pattern:**
 ```typescript
-const readonly = describe({ writable: false })
-const hidden = describe({ enumerable: false })
-const locked = describe({ configurable: false })
-
-@readonly('id', 'createdAt')
-@hidden('_private')
-@locked('critical')
+// Using flavors for single properties
+@descriptor.readonly('id', 'createdAt')
+@descriptor.hidden('_private')
 class MyClass { }
+
+// For multiple descriptor properties on the same property, use object syntax
+@descriptor({ writable: false, enumerable: false, configurable: false })('secret')
+class MyClass { }
+
+// Note: Stacking multiple flavored decorators on the same property is not recommended
+// as each decorator creates a new subclass and only the last applied takes effect
 ```
 
 ## Usage Examples
 
+### Using Flavors
+
+```typescript
+import { descriptor } from 'mutts/std-decorators'
+
+// Use flavors directly for cleaner syntax
+@descriptor.readonly('id', 'createdAt')
+@descriptor.hidden('_private', '_cache')
+@descriptor.frozen('critical')
+class User {
+  id: string = 'user-123'
+  name: string = 'John'
+  _private: string = 'secret'
+  _cache: Map<string, any> = new Map()
+  createdAt: Date = new Date()
+  critical: string = 'locked'
+  
+  constructor(name: string) {
+    this.name = name
+  }
+}
+
+const user = new User('Alice')
+console.log(Object.keys(user)) // ['name', 'createdAt'] - only enumerable properties
+// user.id = 'new-id' // TypeError: Cannot assign to read only property 'id'
+```
+
 ### Creating Reusable Decorators
 
 ```typescript
-import { describe } from 'mutts/std-decorators'
+import { descriptor } from 'mutts/std-decorators'
 
 // Create reusable descriptor configurations
-const readonly = describe({ writable: false })
-const hidden = describe({ enumerable: false })
-const locked = describe({ configurable: false })
+const readonly = descriptor.readonly
+const hidden = descriptor.hidden
+const locked = descriptor.frozen
 
 // Use them on classes
 @readonly('id', 'createdAt')
@@ -255,11 +294,10 @@ console.log(Object.keys(user)) // ['id', 'name', 'createdAt', 'critical'] - only
 ### Making Properties Non-Enumerable
 
 ```typescript
-import { describe } from 'mutts/std-decorators'
+import { descriptor } from 'mutts/std-decorators'
 
-const hidden = describe({ enumerable: false })
-
-@hidden('_internal', '_cache', 'debug')
+// Use the hidden flavor directly
+@descriptor.hidden('_internal', '_cache', 'debug')
 class CacheManager {
   public data: any[] = []
   _internal: Map<string, any> = new Map()
@@ -280,13 +318,10 @@ console.log(Object.getOwnPropertyNames(cache)) // ['data', '_internal', '_cache'
 ### Read-Only Properties
 
 ```typescript
-import { describe } from 'mutts/std-decorators'
+import { descriptor } from 'mutts/std-decorators'
 
-const readonly = describe({ writable: false })
-const readonlyLocked = describe({ writable: false, configurable: false })
-
-@readonly('createdAt', 'version')
-@readonlyLocked('id')
+// Use flavors for read-only properties
+@descriptor.readonly('createdAt', 'version')
 class Document {
   id: string
   title: string
@@ -306,25 +341,41 @@ class Document {
 }
 
 const doc = new Document('doc-1', 'My Document')
-// doc.id = 'new-id' // TypeError: Cannot assign to read only property 'id'
 // doc.createdAt = new Date() // TypeError: Cannot assign to read only property 'createdAt'
+// doc.version = 2 // TypeError: Cannot assign to read only property 'version'
 doc.updateTitle('Updated Title') // This works
+```
+
+### Combining Multiple Flavors
+
+```typescript
+import { descriptor } from 'mutts/std-decorators'
+
+// Stack multiple flavored decorators
+@descriptor.readonly('secret')
+@descriptor.hidden('secret')
+@descriptor.frozen('secret')
+class SecureData {
+  public info: string = 'public'
+  secret: string = 'top secret'
+}
+
+const data = new SecureData()
+// data.secret = 'leaked' // TypeError: Cannot assign to read only property 'secret'
+console.log(Object.keys(data)) // ['info'] - secret is not enumerable
+// Object.defineProperty(data, 'secret', { value: 'new' }) // TypeError: Cannot redefine property
 ```
 
 ### Configuration Control
 
 ```typescript
-import { describe } from 'mutts/std-decorators'
+import { descriptor } from 'mutts/std-decorators'
 
-const locked = describe({ configurable: false })
-const frozen = describe({ configurable: false, writable: false })
-
-@locked('_sealed')
-@frozen('_frozen')
+// Use flavors for configuration control
+@descriptor.frozen('_sealed')
 class SecureObject {
   public data: any
   _sealed: string = 'cannot be reconfigured'
-  _frozen: string = 'cannot be changed or reconfigured'
   
   constructor(data: any) {
     this.data = data
@@ -333,23 +384,23 @@ class SecureObject {
 
 const obj = new SecureObject({ key: 'value' })
 // Object.defineProperty(obj, '_sealed', { value: 'new' }) // TypeError: Cannot redefine property
-// Object.defineProperty(obj, '_frozen', { value: 'new' }) // TypeError: Cannot redefine property
 ```
 
 ## Implementation Details
 
 ### Functional Approach
 
-The `describe` decorator uses a functional approach that separates descriptor configuration from property selection:
+The `descriptor` function uses a flavored approach that provides direct access to common configurations:
 
 ```typescript
-// Create reusable configurations once
-const readonly = describe({ writable: false })
-const hidden = describe({ enumerable: false })
-
-// Apply to multiple classes with different properties
-@readonly('id', 'createdAt')
+// Use flavors directly for cleaner syntax
+@descriptor.readonly('id', 'createdAt')
+@descriptor.hidden('internal')
 class User { }
+
+// Or create reusable aliases
+const readonly = descriptor.readonly
+const hidden = descriptor.hidden
 
 @readonly('version', 'buildDate')  
 class Package { }
@@ -357,17 +408,17 @@ class Package { }
 
 ### Common Decorator Patterns
 
-The functional approach makes it easy to create common decorator patterns:
+The flavored approach makes it easy to create common decorator patterns:
 
 ```typescript
-import { describe } from './std-decorators'
+import { descriptor } from './std-decorators'
 
-// Common reusable decorators
-export const readonly = describe({ writable: false })
-export const hidden = describe({ enumerable: false })
-export const locked = describe({ configurable: false })
-export const frozen = describe({ writable: false, configurable: false })
-export const private = describe({ enumerable: false, configurable: false })
+// Common reusable decorators using flavors
+export const readonly = descriptor.readonly
+export const hidden = descriptor.hidden
+export const locked = descriptor.frozen
+export const frozen = (() => descriptor.readonly.frozen)()
+export const private = (() => descriptor.hidden.frozen)()
 
 // Usage examples
 @readonly('id', 'createdAt')
@@ -389,7 +440,7 @@ The decorator merges the provided descriptor configuration with the existing pro
 
 ```typescript
 // Original property might have { enumerable: true, writable: true, configurable: true }
-// After @readonly('prop') where readonly = describe({ writable: false })
+// After @descriptor.readonly('prop')
 // Final descriptor: { enumerable: true, writable: false, configurable: true }
 ```
 
@@ -399,9 +450,9 @@ The property descriptor configuration is applied in the constructor after callin
 
 ## Best Practices
 
-1. **Create reusable configurations**: Define descriptor configurations once and reuse them
-2. **Use descriptive names**: Name your descriptor configurations clearly (`readonly`, `hidden`, `locked`)
-3. **Combine multiple decorators**: Stack multiple `describe` decorators for complex configurations
+1. **Use flavors directly**: Prefer `descriptor.readonly` over creating aliases for simple cases
+2. **Create reusable aliases**: For complex or frequently used combinations, create aliases
+3. **Combine multiple decorators**: Stack multiple flavored decorators for complex configurations
 4. **Use for encapsulation**: Hide internal properties from enumeration
 5. **Control immutability**: Make critical properties read-only
 6. **Prevent reconfiguration**: Lock important properties from being modified
