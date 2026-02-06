@@ -7,16 +7,16 @@ export const hooks = new Set<Hook>()
 export const asyncHooks = {
 	addHook(hook: Hook): () => void {
 		hooks.add(hook)
-        return () => hooks.delete(hook)
+		return () => hooks.delete(hook)
 	},
-    /** 
-     * [Hack] Sanitize a promise (or value) to prevent context leaks. 
-     * Default: Identity function.
-     * Browser: Uses Macrotask wrapping to break microtask chains.
-     */
-    sanitizePromise(p: any): any {
-        return p
-    }
+	/**
+	 * [Hack] Sanitize a promise (or value) to prevent context leaks.
+	 * Default: Identity function.
+	 * Browser: Uses Macrotask wrapping to break microtask chains.
+	 */
+	sanitizePromise(p: any): any {
+		return p
+	},
 }
 
 /**

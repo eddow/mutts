@@ -1,10 +1,10 @@
-import type { FunctionWrapper } from '../zone'
-import { ArrayReadForward, forwardArray, getAt, Indexable, setAt } from '../indexable'
-import { effect } from './effects'
 import { Eventful } from '../eventful'
-import { unreactive } from './watch'
+import { ArrayReadForward, forwardArray, getAt, Indexable, setAt } from '../indexable'
+import type { FunctionWrapper } from '../zone'
+import { effect } from './effects'
 import { reactive } from './proxy'
-import type { EffectCleanup, EffectTrigger } from './types'
+import type { EffectCleanup } from './types'
+import { unreactive } from './watch'
 
 type KeyFunction<T, K extends PropertyKey> = (item: T) => K
 
@@ -511,22 +511,22 @@ export const Register = RegisterClass as new <T, K extends PropertyKey = Propert
 
 /**
  * Creates a reactive Register - an ordered, array-like collection with stable key-based identity.
- * 
+ *
  * Register combines array semantics (indexable access, ordering, iteration) with Map-like
  * key-based lookups. Items with the same key share the same value instance, making it ideal
  * for UI lists keyed by IDs or when you need to preserve identity across reorders.
- * 
+ *
  * @param keyFn - Function that extracts the key from each item
  * @param initial - Optional initial items to populate the register
  * @returns A reactive Register instance
- * 
+ *
  * @example
  * ```typescript
  * const users = register(
  *   (user: User) => user.id,
  *   [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }]
  * )
- * 
+ *
  * users.push({ id: 3, name: 'Charlie' })
  * const bob = users.get(2) // Get by key
  * ```

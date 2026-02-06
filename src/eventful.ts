@@ -48,16 +48,20 @@ const eventBehavior = {
 		const callbacks = this[events].get(event)
 		if (callbacks) for (const cb of callbacks) cb.apply(this, args)
 		for (const cb of this[hooks]) cb.call(this, event, ...args)
-	}
+	},
 }
 
-function perEvent(eventful: Eventful<any>, fct: (event: string, ...args: any[]) => void, use?: 'use') {
+function perEvent(
+	eventful: Eventful<any>,
+	fct: (event: string, ...args: any[]) => void,
+	use?: 'use'
+) {
 	const cache = new Map<string, (...args: any[]) => any>()
 	return new Proxy(fct, {
 		get(target, prop: PropertyKey) {
 			if (typeof prop !== 'string') return target[prop]
 			if (use && !eventful[events].has(prop) && !eventful[hooks].size) return () => {}
-			
+
 			// Return cached function or create and cache
 			let cached = cache.get(prop)
 			if (!cached) {
@@ -65,7 +69,7 @@ function perEvent(eventful: Eventful<any>, fct: (event: string, ...args: any[]) 
 				cache.set(prop, cached)
 			}
 			return cached
-		}
+		},
 	})
 }
 
@@ -89,22 +93,18 @@ export class Eventful<Events extends EventsBase> {
 		}
 	}
 
-	public on = perEvent(this, eventBehavior.on) as (
-		& ((events: Partial<Events>)=> void)
-		& (<EventType extends keyof Events>(event: EventType, cb: Events[EventType])=> (() => void))
-		& { [event in keyof Events]: (cb: Events[event]) => (() => void) }
-	)
-	public off = perEvent(this, eventBehavior.off) as (
-		& ((events: Partial<Events>)=> void)
-		& (<EventType extends keyof Events>(event: EventType, cb?: Events[EventType])=> void)
-		& { [event in keyof Events]: (cb?: Events[event]) => void }
-	)
-	
-	public emit = perEvent(this, eventBehavior.emit, 'use') as (
-		& (<EventType extends keyof Events>(
-			event: EventType,
-			...args: Parameters<Events[EventType]>
-		)=> void)
-		& Events
-	)
+	public on = perEvent(this, eventBehavior.on) as ((events: Partial<Events>) => void) &
+		(<EventType extends keyof Events>(event: EventType, cb: Events[EventType]) => () => void) & {
+			[event in keyof Events]: (cb: Events[event]) => () => void
+		}
+	public off = perEvent(this, eventBehavior.off) as ((events: Partial<Events>) => void) &
+		(<EventType extends keyof Events>(event: EventType, cb?: Events[EventType]) => void) & {
+			[event in keyof Events]: (cb?: Events[event]) => void
+		}
+
+	public emit = perEvent(this, eventBehavior.emit, 'use') as (<EventType extends keyof Events>(
+		event: EventType,
+		...args: Parameters<Events[EventType]>
+	) => void) &
+		Events
 }

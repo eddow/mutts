@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noConfusingVoidType: Type 'void' is not assignable to type 'ScopedCallback | undefined'.
 // Argument of type '() => void' is not assignable to parameter of type '(dep: DependencyFunction) => ScopedCallback | undefined'.
 
-import type { FunctionWrapper } from "../zone"
+import type { FunctionWrapper } from '../zone'
 
 export type EffectAccessEvents = {
 	triggered(event: string, ...args: any[]): void
@@ -112,7 +112,7 @@ export interface EffectOptions {
 	/**
 	 * Used for debugging purpose. Provides a callback to be called every time a dependency is created.
 	 */
-	dependencyHook?: (obj: any, prop: any)=> void
+	dependencyHook?: (obj: any, prop: any) => void
 	/**
 	 * Used for debugging purpose. Provides a name for the effect.
 	 */
@@ -180,7 +180,6 @@ export const forwardThrow = Symbol('throw')
 export type EffectCloser = (error?: any) => void
 //biome-ignore lint/suspicious/noConfusingVoidType: We have to
 export type CatchFunction = (error: any) => EffectCloser | undefined | void
-
 
 /**
  * Context for a running projection item effect

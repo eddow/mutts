@@ -1,5 +1,5 @@
 import { createHook } from 'node:async_hooks'
-import { Restorer, hooks } from '.'
+import { hooks, type Restorer } from '.'
 
 // 1. Generic async_hooks implementation for Hooks
 // This maintains support for 'asyncHooks.addHook' for generic use cases.
@@ -39,7 +39,7 @@ function wrap<Args extends any[], R>(fn: ((...args: Args) => R) | null | undefin
 }
 
 const hook = createHook({
-	init(asyncId, type, triggerId, resource) {
+	init(asyncId, _type, _triggerId, _resource) {
 		// Used for native resources like Timers
 		const restorers = captureRestorers()
 		if (restorers.length > 0) contexts.set(asyncId, restorers)
@@ -81,14 +81,12 @@ const originalMethods = {
 }
 
 // Patch prototype
-OriginalPromise.prototype.then = function(onFulfilled, onRejected) {
+OriginalPromise.prototype.then = function (onFulfilled, onRejected) {
 	return originalMethods.then.call(this, wrap(onFulfilled), wrap(onRejected))
 } as any
-OriginalPromise.prototype.catch = function(onRejected) {
+OriginalPromise.prototype.catch = function (onRejected) {
 	return originalMethods.catch.call(this, wrap(onRejected))
 } as any
-OriginalPromise.prototype.finally = function(onFinally) {
+OriginalPromise.prototype.finally = function (onFinally) {
 	return originalMethods.finally.call(this, wrap(onFinally))
 } as any
-
-

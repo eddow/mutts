@@ -1,6 +1,9 @@
 // TODO: "effect stack", knowing the stack of effects, to know when we are in a re-evaluation the stack like if we just entered from first effect execution of all effects in lineage
+
+export { lift, type ScanResult, scan } from './buffer'
 export { getState, touched, touched1 } from './change'
 export { deepWatch } from './deep-watch'
+export { cleanedBy, derived, effectAggregator, getActiveEffect } from './effect-context'
 export {
 	addBatchCleanup,
 	atomic,
@@ -8,32 +11,30 @@ export {
 	defer,
 	effect,
 	getActivationLog,
-	root,
-	onEffectTrigger,
 	onEffectThrow,
+	onEffectTrigger,
+	root,
 	untracked,
 } from './effects'
-export { unreactive, watch } from './watch'
 export { type Memoizable, memoize } from './memoize'
 export { immutables, isNonReactive, registerNativeReactivity } from './non-reactive'
 export { getActiveProjection, project } from './project'
 export { isReactive, ReactiveBase, reactive, unwrap } from './proxy'
 export { organize, organized } from './record'
-export { scan, type ScanResult, lift } from './buffer'
 export { Register, register } from './register'
-export { getActiveEffect, effectAggregator, cleanedBy, derived } from './effect-context'
 export {
+	cleanup,
 	type EffectAccess as DependencyAccess,
+	type EffectCleanup,
 	type EffectOptions,
+	type EffectTrigger,
 	type Evolution,
 	options as reactiveOptions,
 	ReactiveError,
 	ReactiveErrorCode,
 	type ScopedCallback,
-	type EffectTrigger,
-	type EffectCleanup,
-	cleanup
 } from './types'
+export { unreactive, watch } from './watch'
 
 import { ReactiveArray } from './array'
 import {

@@ -1,5 +1,5 @@
 import { batch } from './effects'
-import type { Evolution, EffectTrigger } from './types'
+import type { EffectTrigger, Evolution } from './types'
 
 // Track which objects contain which other objects (back-references)
 export const objectParents = new WeakMap<object, Set<{ parent: object; prop: PropertyKey }>>()

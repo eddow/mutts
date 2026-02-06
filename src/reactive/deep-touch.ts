@@ -4,7 +4,7 @@ import { batch } from './effects'
 import { isNonReactive } from './non-reactive-state'
 import { unwrap } from './proxy-state'
 import { effectParent, watchers } from './registry'
-import { allProps, type Evolution, options, type EffectTrigger, type EffectCleanup } from './types'
+import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, options } from './types'
 
 function isObject(value: any): value is object {
 	return typeof value === 'object' && value !== null
@@ -196,7 +196,10 @@ function diffObjectProperties(
 /**
  * Checks if an effect or any of its ancestors is in the allowed set
  */
-function hasAncestorInSet(effect: EffectTrigger | EffectCleanup, allowedSet: Set<EffectTrigger | EffectCleanup>): boolean {
+function hasAncestorInSet(
+	effect: EffectTrigger | EffectCleanup,
+	allowedSet: Set<EffectTrigger | EffectCleanup>
+): boolean {
 	let current: EffectTrigger | EffectCleanup | undefined = effect
 	const visited = new WeakSet<EffectTrigger | EffectCleanup>()
 	while (current && !visited.has(current)) {

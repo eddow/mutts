@@ -4,7 +4,7 @@ import { getActiveEffect, isRunning } from './effect-context'
 import { batch, hasBatched, opaqueEffects, recordActivation } from './effects'
 import { unwrap } from './proxy-state'
 import { watchers } from './registry'
-import { allProps, type Evolution, options, type State, type EffectTrigger } from './types'
+import { allProps, type EffectTrigger, type Evolution, options, type State } from './types'
 
 const states = new WeakMap<object, State>()
 

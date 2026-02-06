@@ -1,5 +1,5 @@
-import { cleanedBy } from '.'
 import { FoolProof } from '../utils'
+import { cleanedBy } from '.'
 import { effect, untracked } from './effects'
 import { memoize } from './memoize'
 import { reactive } from './proxy'
@@ -15,22 +15,22 @@ export type ScanResult<Output> = readonly Output[] & { [cleanup]: ScopedCallback
  * Perform a reactive scan over an array of items.
  *
  * This implementation is highly optimized for performance and fine-grained reactivity:
- * - **Incremental Updates**: Changes to an item only trigger re-computation from that 
+ * - **Incremental Updates**: Changes to an item only trigger re-computation from that
  *   point onwards in the result chain.
- * - **Move Optimization**: If items are moved within the array, their accumulated 
+ * - **Move Optimization**: If items are moved within the array, their accumulated
  *   values are reused as long as their predecessor remains the same.
- * - **Duplicate Support**: Correctly handles multiple occurrences of the same object 
+ * - **Duplicate Support**: Correctly handles multiple occurrences of the same object
  *   instance using an internal occurrence tracking mechanism.
- * - **Memory Efficient**: Uses `WeakMap` for caching intermediates, which are 
+ * - **Memory Efficient**: Uses `WeakMap` for caching intermediates, which are
  *   automatically cleared when source items are garbage collected.
  *
  * @example
  * ```typescript
  * const source = reactive([{ val: 1 }, { val: 2 }, { val: 3 }])
  * const sum = scan(source, (acc, item) => acc + item.val, 0)
- * 
+ *
  * expect([...sum]).toEqual([1, 3, 6])
- * 
+ *
  * // Modifying an item only re-computes subsequent sums
  * source[1].val = 10
  * expect([...sum]).toEqual([1, 11, 14])
@@ -48,7 +48,7 @@ export function scan<Input extends object, Output>(
 ): ScanResult<Output> {
 	const observedSource = reactive(source)
 	const result = reactive([] as Output[])
-	
+
 	// Track effects for each index to dispose them when the array shrinks
 	const indexEffects = new Map<number, EffectCleanup>()
 	// Mapping from index to its current intermediate object
@@ -57,7 +57,10 @@ export function scan<Input extends object, Output>(
 
 	class Intermediate {
 		public prev: Intermediate | undefined
-		constructor(public val: Input, prev: Intermediate | undefined) {
+		constructor(
+			public val: Input,
+			prev: Intermediate | undefined
+		) {
 			this.prev = prev
 		}
 
@@ -83,12 +86,14 @@ export function scan<Input extends object, Output>(
 	const mainEffect = effect(function scanMainEffect({ ascend }) {
 		const length = observedSource.length
 		const occurrenceCount = new Map<Input, number>()
-		let prev: Intermediate | undefined = undefined
+		let prev: Intermediate | undefined
 
 		for (let i = 0; i < length; i++) {
 			const val = FoolProof.get(observedSource as any, i, observedSource) as Input
-			
-			if (!(val && (typeof val === 'object' || typeof val === 'function' || typeof val === 'symbol'))) {
+
+			if (
+				!(val && (typeof val === 'object' || typeof val === 'function' || typeof val === 'symbol'))
+			) {
 				throw new Error('scan: items must be objects (WeakKey) for intermediate caching')
 			}
 
@@ -106,7 +111,7 @@ export function scan<Input extends object, Output>(
 				intermediate = reactive(new Intermediate(val, prev))
 				list[count] = intermediate
 			} else {
-				// Update the link. 
+				// Update the link.
 				if (untracked(() => intermediate.prev) !== prev) {
 					intermediate.prev = prev
 				}
@@ -141,7 +146,7 @@ export function scan<Input extends object, Output>(
 		for (const index of Array.from(indexEffects.keys())) {
 			if (index >= length) disposeIndex(index)
 		}
-		
+
 		// Ensure result length matches source length
 		untracked(() => {
 			if (result.length !== length) {
@@ -160,30 +165,83 @@ export function scan<Input extends object, Output>(
 /**
  * Lifts a callback that returns an array into a reactive array that automatically
  * synchronizes with the source array returned by the callback.
- * 
+ *
  * The returned reactive array will update whenever the callback's dependencies change,
  * efficiently syncing only the elements that differ from the previous result.
- * 
+ *
  * @example
  * ```typescript
  * const items = reactive([1, 2, 3])
  * const doubled = lift(() => items.map(x => x * 2))
- * 
+ *
  * console.log([...doubled]) // [2, 4, 6]
- * 
+ *
  * items.push(4)
  * console.log([...doubled]) // [2, 4, 6, 8]
  * ```
- * 
+ *
  * @param cb Callback function that returns an array
  * @returns A reactive array synchronized with the callback's result, with a [cleanup] property to stop tracking
  */
-export function lift<Output>(cb: (access: EffectAccess) => Output[]): Output[] & { [cleanup]: ScopedCallback } {
-	const result = reactive([] as Output[])
-	return cleanedBy(result, effect((access) => {
+export function lift<Output extends any[]>(
+	cb: (access: EffectAccess) => Output
+): Output & { [cleanup]: ScopedCallback }
+
+/**
+ * Lifts a callback that returns an object into a reactive object that automatically
+ * synchronizes with the source object returned by the callback.
+ *
+ * The returned reactive object will update whenever the callback's dependencies change,
+ * efficiently syncing only the properties that differ from the previous result using
+ * Object.assign(). Properties that no longer exist in the source are automatically removed.
+ *
+ * @example
+ * ```typescript
+ * const user = reactive({ name: 'John', age: 30 })
+ * const profile = lift(() => ({
+ *   displayName: user.name.toUpperCase(),
+ *   isAdult: user.age >= 18,
+ *   description: `${user.name} is ${user.age} years old`
+ * }))
+ *
+ * console.log(profile.displayName) // JOHN
+ * console.log(profile.isAdult) // true
+ *
+ * user.name = 'Jane'
+ * console.log(profile.displayName) // JANE
+ * console.log(profile.description) // Jane is 30 years old
+ * ```
+ *
+ * @param cb Callback function that returns an object
+ * @returns A reactive object synchronized with the callback's result, with a [cleanup] property to stop tracking
+ */
+export function lift<Output extends object>(
+	cb: (access: EffectAccess) => Output
+): Output & { [cleanup]: ScopedCallback }
+export function lift<Output extends any[] | object>(
+	cb: (access: EffectAccess) => Output
+): Output & { [cleanup]: ScopedCallback } {
+	let result: Output
+	const liftCleanup = effect((access) => {
 		const source = cb(access)
-		if (result.length !== source.length) result.length = source.length
-		for (let i = 0; i < source.length; i++)
-			if (result[i] !== source[i]) result[i] = source[i]
-	}))
+		if (!source || typeof source !== 'object')
+			throw new Error('lift callback must return an array or object')
+		if (!result) {
+			if (Array.isArray(source)) {
+				result = reactive([]) as Output
+			} else {
+				result = reactive({}) as Output
+			}
+		}
+		if (Array.isArray(source) && Array.isArray(result)) {
+			if (result.length !== source.length) result.length = source.length
+			for (let i = 0; i < source.length; i++) if (result[i] !== source[i]) result[i] = source[i]
+		} else if (!Array.isArray(source) && !Array.isArray(result)) {
+			Object.assign(result, source)
+			for (const key of Object.keys(result)) if (!(key in source)) delete result[key]
+		} else {
+			throw new Error('lift callback must return the same type as the previous result')
+		}
+	})
+	return cleanedBy(result as Output, liftCleanup)
 }

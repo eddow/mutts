@@ -81,13 +81,15 @@ result[cleanup]()
 
 # Lift
 
-The `lift` function transforms a callback that returns an array into a reactive array that automatically synchronizes with the source array whenever dependencies change.
+The `lift` function transforms a callback that returns an array or object into a reactive array/object that automatically synchronizes with the source whenever dependencies change.
 
 ## Overview
 
-`lift` is useful when you have a reactive computation that produces an array, and you want that array to be reactive itself. It efficiently syncs only the elements that differ from the previous result, minimizing DOM updates and downstream effects.
+`lift` is useful when you have a reactive computation that produces an array or object, and you want that result to be reactive itself. It efficiently syncs only the elements that differ from the previous result, minimizing DOM updates and downstream effects.
 
 ## Basic Usage
+
+### Array Example
 
 ```typescript
 import { reactive, lift } from 'mutts/reactive'
@@ -101,39 +103,60 @@ items.push(4)
 console.log([...doubled]) // [2, 4, 6, 8]
 ```
 
+### Object Example
+
+```typescript
+import { reactive, lift } from 'mutts/reactive'
+
+const user = reactive({ name: 'John', age: 30 })
+const profile = lift(() => ({
+  displayName: user.name.toUpperCase(),
+  isAdult: user.age >= 18,
+  description: `${user.name} is ${user.age} years old`
+}))
+
+console.log(profile.displayName) // JOHN
+console.log(profile.isAdult) // true
+
+user.name = 'Jane'
+console.log(profile.displayName) // JANE
+console.log(profile.description) // Jane is 30 years old
+```
+
 ## How it Works
 
-`lift` creates a reactive array and sets up an effect that:
-1. Calls the provided callback to get the source array
-2. Compares the source with the current reactive array
-3. Updates only the elements that have changed
-4. Adjusts the length if needed
+`lift` creates a reactive array or object and sets up an effect that:
+1. Calls the provided callback to get the source array or object
+2. Compares the source with the current reactive result
+3. Updates only the elements/properties that have changed
+4. Adjusts the structure if needed (array length or object properties)
 
-This approach is more efficient than replacing the entire array, as it preserves references to unchanged elements and triggers minimal reactive updates.
+For arrays, this approach preserves references to unchanged elements and triggers minimal reactive updates. For objects, it uses `Object.assign()` to merge changes and removes properties that no longer exist in the source.
 
 ## API Reference
 
 ```typescript
-function lift<Output>(
-    cb: () => Output[]
-): Output[] & { [cleanup]: ScopedCallback }
+function lift<Output extends (any[] | object)>(
+    cb: (access: EffectAccess) => Output
+): Output & { [cleanup]: ScopedCallback }
 ```
 
 ### Parameters
-- `cb`: A callback function that returns an array. The callback is tracked reactively, so accessing reactive values inside it will cause the array to update when those values change.
+- `cb`: A callback function that returns an array or object. The callback is tracked reactively, so accessing reactive values inside it will cause the result to update when those values change. The callback receives an `EffectAccess` parameter for advanced use cases.
 
 ### Returns
-A reactive array that stays synchronized with the callback's result. The array includes a `[cleanup]` symbol that can be called to stop tracking.
+A reactive array or object that stays synchronized with the callback's result. The result includes a `[cleanup]` symbol that can be called to stop tracking.
 
 ```typescript
 import { cleanup } from 'mutts/reactive'
 // ...
 doubled[cleanup]()
+profile[cleanup]()
 ```
 
 ## Use Cases
 
-### Dynamic Filtering
+### Dynamic Filtering (Arrays)
 
 ```typescript
 const allItems = reactive([
@@ -149,7 +172,7 @@ allItems[1].active = true
 console.log(activeItems.length) // 3
 ```
 
-### Computed Transformations
+### Computed Transformations (Arrays)
 
 ```typescript
 const numbers = reactive([1, 2, 3, 4, 5])
@@ -177,18 +200,94 @@ showExtras.value = true
 // displayItems is now ['A', 'B', 'C', 'Extra 1', 'Extra 2']
 ```
 
+### Computed Object Properties
+
+```typescript
+const user = reactive({ firstName: 'John', lastName: 'Doe', age: 30 })
+const settings = reactive({ theme: 'dark', language: 'en' })
+
+const userProfile = lift(() => ({
+  fullName: `${user.firstName} ${user.lastName}`,
+  isMinor: user.age < 18,
+  displayTheme: settings.theme === 'dark' ? 'Dark Mode' : 'Light Mode',
+  locale: settings.language.toUpperCase()
+}))
+
+user.firstName = 'Jane'
+// userProfile.fullName is now 'Jane Doe'
+
+settings.theme = 'light'
+// userProfile.displayTheme is now 'Light Mode'
+```
+
+### Dynamic Object Composition
+
+```typescript
+const baseConfig = reactive({ api: 'https://api.example.com', timeout: 5000 })
+const userPrefs = reactive({ retries: 3, logging: false })
+const envVars = reactive({ debug: true, version: '1.0.0' })
+
+const fullConfig = lift(() => ({
+  ...baseConfig,
+  ...userPrefs,
+  environment: envVars.debug ? 'development' : 'production',
+  version: envVars.version,
+  logging: envVars.debug || userPrefs.logging
+}))
+
+envVars.debug = false
+// fullConfig.environment becomes 'production'
+
+userPrefs.logging = true
+// fullConfig.logging becomes true
+```
+
+### Conditional Object Properties
+
+```typescript
+const user = reactive({ role: 'admin', permissions: ['read', 'write'] })
+const showAdvanced = reactive({ value: true })
+
+const userInterface = lift(() => {
+  const base = {
+    canEdit: user.permissions.includes('write'),
+    userName: user.role
+  }
+  
+  return showAdvanced.value ? {
+    ...base,
+    isAdmin: user.role === 'admin',
+    permissionCount: user.permissions.length
+  } : base
+})
+
+showAdvanced.value = false
+// userInterface no longer has isAdmin and permissionCount properties
+```
+
 ## Comparison with `scan`
 
 | Feature | `lift` | `scan` |
 | :--- | :--- | :--- |
-| **Purpose** | Synchronize with a computed array | Accumulate values with intermediates |
-| **Input** | Callback returning array | Source array + accumulator function |
-| **Optimization** | Element-wise sync | Intermediate caching + move optimization |
-| **Use Case** | Derived arrays (map, filter) | Cumulative operations (sum, reduce) |
+| **Purpose** | Synchronize with computed arrays/objects | Accumulate values with intermediates |
+| **Input** | Callback returning array/object | Source array + accumulator function |
+| **Output** | Reactive array/object | Reactive array of accumulated values |
+| **Optimization** | Element-wise/property-wise sync | Intermediate caching + move optimization |
+| **Use Case** | Derived arrays/objects (map, filter, computed properties) | Cumulative operations (sum, reduce) |
+| **Data Types** | Arrays and objects | Arrays only (object items required) |
 
 ## Performance Considerations
 
+### Arrays
 - **Efficient Updates**: Only changed elements are updated, not the entire array
 - **Length Adjustments**: Array length changes are handled separately from element updates
 - **Reference Stability**: Unchanged elements maintain their references
-- **Cleanup**: Remember to call the cleanup function when the lifted array is no longer needed to prevent memory leaks
+
+### Objects
+- **Property-wise Updates**: Only changed properties are updated using `Object.assign()`
+- **Property Addition/Removal**: Properties are added or removed as needed when the source object structure changes
+- **Reference Stability**: The reactive object maintains its identity while properties are updated
+
+### General
+- **Cleanup**: Remember to call the cleanup function when the lifted array/object is no longer needed to prevent memory leaks
+- **Type Consistency**: The callback must return the same type (array or object) on subsequent calls

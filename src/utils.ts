@@ -260,7 +260,6 @@ export function deepCompare(a: any, b: any, cache = new Map<object, Set<object>>
 	return true
 }
 
-
 const contentRefs = new WeakMap<object, any>()
 export function contentRef(container: object) {
 	if (!contentRefs.has(container))

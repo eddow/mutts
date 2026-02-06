@@ -1,5 +1,5 @@
 import { effect, onEffectTrigger } from '../src/reactive/effects'
-import { getLineage, LineageSegment } from './lineage'
+import { getLineage, type LineageSegment } from './lineage'
 import { reactive } from '../src/reactive/proxy'
 
 /**

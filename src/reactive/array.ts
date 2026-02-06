@@ -140,7 +140,7 @@ export abstract class ReactiveArray extends Array {
 		const length = this.length
 		let i = fromIndex === undefined ? 0 : fromIndex
 		if (i < 0) i = Math.max(length + i, 0)
-		
+
 		const unwrappedSearch = unwrap(searchElement)
 
 		for (; i < length; i++) {
@@ -171,7 +171,7 @@ export abstract class ReactiveArray extends Array {
 			}
 		}
 
-		// If we scanned the whole relevant part and didn't find it, we depend on length 
+		// If we scanned the whole relevant part and didn't find it, we depend on length
 		// (because adding elements might shift indices or add the element)
 		// Actually for lastIndexOf, if we start from end, length dependency is implicit in the start index calculation?
 		// But if we return -1, it means we didn't find it.
@@ -495,13 +495,8 @@ export abstract class ReactiveArray extends Array {
 			const count = Math.min(final - from, len - to)
 
 			if (count > 0) {
-				touched(
-					this,
-					{ type: 'bunch', method: 'copyWithin' },
-					range(to, to + count - 1)
-				)
+				touched(this, { type: 'bunch', method: 'copyWithin' }, range(to, to + count - 1))
 			}
-
 		}
 	}
 }

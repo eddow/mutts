@@ -1,18 +1,16 @@
 import { decorator, type GenericClassDecorator } from '../decorator'
 import { deepWatch } from './deep-watch'
-import { effect, untracked } from './effects'
+import { effect } from './effects'
 import { isNonReactive, nonReactiveClass, nonReactiveObjects } from './non-reactive-state'
 import { unwrap } from './proxy-state'
 import { markWithRoot } from './registry'
 import { dependant } from './tracking'
 import {
 	type EffectAccess,
-	nonReactiveMark,
 	type EffectCleanup,
-	type ScopedCallback,
+	nonReactiveMark,
 	stopped,
 	unreactiveProperties,
-	cleanup,
 } from './types'
 
 //#region watch
@@ -106,19 +104,22 @@ function watchCallBack<T>(
 				if (oldValue === unsetYet) {
 					if (immediate) changed(newValue)
 				} else changed(newValue, oldValue)
-				oldValue = newValue
-				if (deep) {
-					if (deepCleanup) deepCleanup()
-					deepCleanup = deepWatch(newValue as object, (value) => changed(value as T, value as T))
-				}
+			oldValue = newValue
+			if (deep) {
+				if (deepCleanup) deepCleanup()
+				deepCleanup = deepWatch(newValue as object, (value) => changed(value as T, value as T))
+			}
 		}, value)
 	)
-	return Object.defineProperties(() => {
-		cbCleanup()
-		if (deepCleanup) deepCleanup()
-	}, {
-		[stopped]: { get: () => cbCleanup[stopped] }
-	}) as EffectCleanup
+	return Object.defineProperties(
+		() => {
+			cbCleanup()
+			if (deepCleanup) deepCleanup()
+		},
+		{
+			[stopped]: { get: () => cbCleanup[stopped] },
+		}
+	) as EffectCleanup
 }
 
 //#endregion

@@ -1,4 +1,4 @@
-import { EffectCleanup, EffectTrigger, rootFunction } from './types'
+import { type EffectCleanup, type EffectTrigger, rootFunction } from './types'
 
 // Track which effects are watching which reactive objects for cleanup
 export const effectToReactiveObjects = new WeakMap<EffectTrigger, Set<object>>()

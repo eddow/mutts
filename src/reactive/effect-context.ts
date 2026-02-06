@@ -1,8 +1,14 @@
 import { tag } from '../utils'
 import { asyncZone, ZoneAggregator, ZoneHistory } from '../zone'
-import { untracked, effect } from './effects'
+import { effect, untracked } from './effects'
 import { getRoot } from './registry'
-import { cleanup, EffectAccess, ScopedCallback, stopped, type EffectTrigger } from './types'
+import {
+	cleanup,
+	type EffectAccess,
+	type EffectTrigger,
+	type ScopedCallback,
+	stopped,
+} from './types'
 
 export const effectHistory = tag('effectHistory', new ZoneHistory<EffectTrigger>())
 tag('effectHistory.present', effectHistory.present)
@@ -23,14 +29,13 @@ export function getActiveEffect() {
 	return effectHistory.present.active
 }
 
-
 /**
  * ADD a cleanup function to an object using the cleanup symbol.
  * The cleanup function will be called when the object needs to be disposed.
- * 
+ *
  * Note: most of the time, you don't need to use this function directly.
  * The main use if for the cleanup function to be stored with the object, as GC calls the cleanup function when the *function* is garbage collected.
- * 
+ *
  * @param obj - The object to attach the cleanup function to
  * @param cleanupFn - The cleanup function to attach
  * @returns The object with the cleanup function attached

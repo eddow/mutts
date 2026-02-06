@@ -1,5 +1,5 @@
-import { asyncHooks } from "./async"
-import { named, tag } from "./utils"
+import { asyncHooks } from './async'
+import { named, tag } from './utils'
 
 interface InternalZoneUse<T> {
 	enter(value?: T): unknown
@@ -20,18 +20,18 @@ export abstract class AZone<T> {
 	}
 	with<R>(value: T | undefined, fn: () => R): R {
 		const entered = this.enter(value)
-        let res: R
+		let res: R
 		try {
 			res = fn()
 		} finally {
 			this.leave(entered)
 		}
-        // [HACK]: Sanitization
-        // See BROWSER_ASYNC_POLYFILL.md
-        return asyncHooks.sanitizePromise(res) as R
+		// [HACK]: Sanitization
+		// See BROWSER_ASYNC_POLYFILL.md
+		return asyncHooks.sanitizePromise(res) as R
 	}
 	root<R>(fn: () => R): R {
-		let prev = this.enter()
+		const prev = this.enter()
 		try {
 			return fn()
 		} finally {
@@ -51,40 +51,44 @@ export class Zone<T> extends AZone<T> {
 }
 
 // TODO!!! When zones are managed in async cases, they only enter and never leave!
-type HistoryValue<T> = {present: T | undefined, history: Set<T>}
+type HistoryValue<T> = { present: T | undefined; history: Set<T> }
 export class ZoneHistory<T> extends AZone<HistoryValue<T>> {
-	private	history = new Set<T>()
+	private history = new Set<T>()
 	public readonly present: AZone<T>
 	public has(value: T): boolean {
 		return this.history.has(value)
 	}
 	public some(predicate: (value: T) => boolean): boolean {
-		for(const value of this.history) if(predicate(value)) return true
+		for (const value of this.history) if (predicate(value)) return true
 		return false
 	}
 	constructor(private controlled: AZone<T> = new Zone<T>()) {
 		super()
 		const self = this
-		this.present = Object.create(controlled,
+		this.present = Object.create(
+			controlled,
 			Object.getOwnPropertyDescriptors({
-				get active() { return controlled.active },
+				get active() {
+					return controlled.active
+				},
 				set active(value: T | undefined) {
 					controlled.active = value
 				},
 				enter(value?: T) {
-					if(value && self.history.has(value)) throw new Error('ZoneHistory: re-entering historical zone')
-					if(value !== undefined) self.history.add(value)
+					if (value && self.history.has(value))
+						throw new Error('ZoneHistory: re-entering historical zone')
+					if (value !== undefined) self.history.add(value)
 					return { added: value, entered: isu(controlled).enter(value) }
 				},
-				leave(entered: { added: T | undefined, entered: unknown }) {
-					if(entered.added !== undefined) self.history.delete(entered.added)
+				leave(entered: { added: T | undefined; entered: unknown }) {
+					if (entered.added !== undefined) self.history.delete(entered.added)
 					return isu(controlled).leave(entered.entered)
-				}
+				},
 			})
 		)
 	}
 	get active() {
-		return {present: this.controlled.active, history: new Set(this.history)}
+		return { present: this.controlled.active, history: new Set(this.history) }
 	}
 	set active(value: HistoryValue<T> | undefined) {
 		this.history = this.history && new Set(this.history)
@@ -100,8 +104,7 @@ export class ZoneAggregator extends AZone<Map<AZone<unknown>, unknown>> {
 	}
 	get active(): Map<AZone<unknown>, unknown> | undefined {
 		const rv = new Map<AZone<unknown>, unknown>()
-		for (const z of this.#zones)
-			if (z.active !== undefined) rv.set(z, z.active)
+		for (const z of this.#zones) if (z.active !== undefined) rv.set(z, z.active)
 		return rv
 	}
 	set active(value: Map<AZone<unknown>, unknown> | undefined) {
@@ -135,6 +138,6 @@ asyncHooks.addHook(() => {
 	return () => {
 		const prev = asyncZone.active
 		asyncZone.active = zone
-		return () => asyncZone.active = prev
+		return () => (asyncZone.active = prev)
 	}
 })

@@ -1,10 +1,16 @@
-import { FoolProof } from '../utils'
 import { setEffectName } from '../../debug/debug'
+import { FoolProof } from '../utils'
 import { cleanedBy, getActiveEffect } from './effect-context'
 import { effect, untracked } from './effects'
 import { reactive } from './proxy'
 import { Register } from './register'
-import { type ProjectionContext, projectionInfo, type ScopedCallback, type EffectTrigger, cleanup } from './types'
+import {
+	cleanup,
+	type EffectTrigger,
+	type ProjectionContext,
+	projectionInfo,
+	type ScopedCallback,
+} from './types'
 
 /**
  * Maps projection effects (item effects) to their projection context
@@ -112,14 +118,13 @@ function projectArray<SourceValue, ResultValue>(
 			ascend(() => {
 				const index = i
 				const stop = effect(function projectArrayIndexEffect({ reaction }) {
-					if(!reaction) setActiveProjection({ source, key: index, target, depth, parent })
+					if (!reaction) setActiveProjection({ source, key: index, target, depth, parent })
 					const previous = untracked(() => target[index])
 					const accessBase = {
 						key: index,
 						source,
 						get: () => FoolProof.get(source as any, index, source),
-						set: (value: SourceValue) =>
-							FoolProof.set(source as any, index, value, source),
+						set: (value: SourceValue) => FoolProof.set(source as any, index, value, source),
 						old: previous,
 					} as ProjectAccess<SourceValue, number, readonly SourceValue[], ResultValue[]>
 					defineAccessValue(accessBase)
@@ -176,7 +181,7 @@ function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
 			if (keyEffects.has(key)) continue
 			ascend(() => {
 				const stop = effect(function projectRegisterKeyEffect({ reaction }) {
-					if(!reaction) setActiveProjection({ source, key, target, depth, parent })
+					if (!reaction) setActiveProjection({ source, key, target, depth, parent })
 					const previous = untracked(() => target.get(key))
 					const accessBase = {
 						key,
@@ -245,7 +250,7 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 			if (keyEffects.has(key)) continue
 			ascend(() => {
 				const stop = effect(function projectRecordKeyEffect({ reaction }) {
-					if(!reaction) setActiveProjection({ source, key, target, depth, parent })
+					if (!reaction) setActiveProjection({ source, key, target, depth, parent })
 					const sourceKey = key as keyof Source
 					const previous = untracked(
 						() => (target as Record<PropertyKey, ResultValue | undefined>)[key]
@@ -313,7 +318,7 @@ function projectMap<Key, Value, ResultValue>(
 			if (keyEffects.has(key)) continue
 			ascend(() => {
 				const stop = effect(function projectMapKeyEffect({ reaction }) {
-					if(!reaction) setActiveProjection({ source, key, target, depth, parent })
+					if (!reaction) setActiveProjection({ source, key, target, depth, parent })
 					const previous = untracked(() => target.get(key))
 					const accessBase = {
 						key,

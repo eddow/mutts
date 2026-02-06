@@ -7,7 +7,7 @@ import { effect } from './effects'
 import { isNonReactive } from './non-reactive-state'
 import { reactive, unwrap } from './proxy'
 import { markWithRoot } from './registry'
-import { options, type EffectTrigger, type EffectCleanup } from './types'
+import { type EffectCleanup, type EffectTrigger, options } from './types'
 
 function isObject(value: any): value is object {
 	return typeof value === 'object' && value !== null
@@ -46,7 +46,10 @@ export function deepWatch<T extends object>(
 	if (target === null || target === undefined) return undefined
 	if (typeof target !== 'object') throw new Error('Target of deep watching must be an object')
 	// Create a wrapper callback that matches EffectTrigger signature
-	const wrappedCallback: EffectTrigger = markWithRoot((() => callback(target)) as EffectTrigger, callback)
+	const wrappedCallback: EffectTrigger = markWithRoot(
+		(() => callback(target)) as EffectTrigger,
+		callback
+	)
 
 	// Use the existing effect system to register dependencies
 	return effect(() => {

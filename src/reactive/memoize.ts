@@ -110,12 +110,12 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 
 /**
  * Decorator and function wrapper for memoizing computed values based on reactive dependencies.
- * 
+ *
  * When used as a decorator on getters or methods, it caches the result and automatically
  * invalidates the cache when reactive dependencies change.
- * 
+ *
  * When used as a function wrapper, it memoizes based on object arguments (WeakMap-based cache).
- * 
+ *
  * @example
  * ```typescript
  * class User {
@@ -124,7 +124,7 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
  *     return `${this.firstName} ${this.lastName}`
  *   }
  * }
- * 
+ *
  * // Or as a function wrapper
  * const expensive = memoize((obj: SomeObject) => {
  *   return heavyComputation(obj)

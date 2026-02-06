@@ -1,7 +1,7 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.0.6/schema.json",
 	"files": {
-		"includes": ["src/**/*.ts", "sandbox/**/*.ts"]
+		"includes": ["src/**/*.ts", "debug/**/*.ts", "sandbox/**/*.ts"]
 	},
 	"javascript": {
 		"formatter": {
@@ -16,16 +16,13 @@
 		"rules": {
 			"style": {
 				"noNonNullAssertion": "off",
-				"useSingleVarDeclarator": {
-					"level": "warn",
-					"fix": "safe"
-				},
+				"useSingleVarDeclarator": { "level": "warn", "fix": "safe" },
 				"useTemplate": {
 					"level": "warn",
 					"fix": "safe"
 				},
 				"noParameterAssign": "off",
-				"useImportType": "off"
+				"useImportType": { "level": "warn", "fix": "safe" }
 			},
 			"suspicious": {
 				"noExplicitAny": "off",

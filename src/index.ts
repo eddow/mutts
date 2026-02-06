@@ -1,7 +1,8 @@
+export * from './async'
 export * from './decorator'
 export * from './destroyable'
 export * from './eventful'
-export { flavored, createFlavor, flavorOptions } from './flavored'
+export { createFlavor, flavored, flavorOptions } from './flavored'
 export * from './indexable'
 export * from './iterableWeak'
 export * from './mixins'
@@ -10,7 +11,6 @@ export * from './reactive'
 export * from './std-decorators'
 export * from './utils'
 export * from './zone'
-export * from './async'
 
 import pkg from '../package.json'
 
@@ -32,7 +32,6 @@ if (globalScope) {
 	let source = 'mutts/index'
 	const viteEval = eval
 	try {
-		// @ts-ignore
 		if (typeof __filename !== 'undefined') source = __filename
 		else {
 			// Using eval to avoid SyntaxError in CJS environments where import.meta is not allowed

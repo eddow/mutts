@@ -3,7 +3,13 @@ import { touched1 } from './change'
 import { cleanedBy } from './effect-context'
 import { effect } from './effects'
 import { reactive } from './proxy'
-import { type ScopedCallback, type EffectCleanup, type EffectCloser, stopped, cleanup } from './types'
+import {
+	cleanup,
+	type EffectCleanup,
+	type EffectCloser,
+	type ScopedCallback,
+	stopped,
+} from './types'
 
 /**
  * Provides type-safe access to a source object's property within the organized callback.

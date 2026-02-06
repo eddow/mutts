@@ -7,7 +7,7 @@
 
 import { raiseEffectTrigger } from '../src/reactive/effects'
 import { effectParent, effectToReactiveObjects, getRoot } from '../src/reactive/registry'
-import { allProps, EffectCleanup, EffectTrigger, type Evolution, options, type ScopedCallback } from '../src/reactive/types'
+import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, options, type ScopedCallback } from '../src/reactive/types'
 import { getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter } from './lineage'
 import { showLineagePanel } from './lineage-panel'
 
