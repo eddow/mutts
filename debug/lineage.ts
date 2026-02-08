@@ -90,6 +90,7 @@ export function getStackFrame(error = new Error()): StackFrame[] {
 
 			// Robust skipping: if we are still in the internal area, skip it.
 			const isInternal = /Lineage$/.test(frame.functionName) ||
+				frame.functionName === 'eval' ||
 				[`getStackFrame`, `captureLineage`].includes(frame.functionName)
 
 			if (!isInternal) break
@@ -132,32 +133,11 @@ export function getLineage(effect?: EffectTrigger): LineageSegment[] {
 		const rootFn = getRoot(current)
 		if(!rootFn.name) debugger
 		const effectName = rootFn.name || 'anonymous'
-		
-		// Find where this effect starts in the current stack
-		// This is tricky because the stack might have internal "runEffect" frames
-		// We look for the first frame that might be the effect function itself
-		let effectEntryIndex = -1
 		const filteredStack = filterNodeModules(lastStack)
-		for (let i = 0; i < filteredStack.length; i++) {
-			// We compare function names. Not perfect but often works.
-			if (filteredStack[i].functionName === effectMarker.enter) {
-				effectEntryIndex = i-1
-				break
-			}
-		}
-
-		if (effectEntryIndex !== -1) {
-			segments.push({
-				effectName,
-				stack: filteredStack.slice(0, effectEntryIndex + 1),
-			})
-		} else {
-			// If we can't find the entry point, just take the whole stack segment
-			segments.push({
-				effectName,
-				stack: filteredStack,
-			})
-		}
+		segments.push({
+			effectName,
+			stack: filteredStack,
+		})
 
 		// Move to parent
 		const parent = effectParent.get(current)
@@ -233,10 +213,54 @@ export function formatLineage(segments: LineageSegment[]): string {
 }
 
 /**
- * Formats lineage segments for Node.js console output with colors and styling
+ * Logs lineage segments to console with grouping
  * @param segments - Lineage segments
  */
-export function nodeLineage(segments: LineageSegment[]): string {
+export function nodeLineage(segments: LineageSegment[]): void {
+	console.groupCollapsed(`🦴 Effect Lineage Trace (${segments.length} segment${segments.length === 1 ? '' : 's'})`)
+	
+	for (let i = 0; i < segments.length; i++) {
+		const segment = segments[i]
+		
+		// Add segment header
+		const isLast = i === segments.length - 1
+		const prefix = i === 0 ? '📍' : isLast ? '└─' : '├─'
+		
+		console.groupCollapsed(`${prefix} Effect: ${segment.effectName}`)
+		
+		// Add stack frames
+		for (let j = 0; j < segment.stack.length; j++) {
+			const frame = segment.stack[j]
+			const isLastFrame = j === segment.stack.length - 1
+			const framePrefix = isLastFrame ? '└─' : '├─'
+			
+			if (frame.functionName === '...node_modules...') {
+				console.log(`%c${framePrefix} ${frame.functionName}`, 'color: #888; font-style: italic;')
+			} else {
+				const fnStyle = frame.functionName === 'anonymous' ? 'color: #888;' : 'color: #1a7f37; font-weight: bold;'
+				const fileStyle = 'color: #0550ae;'
+				
+				console.log(
+					`%c${framePrefix} %c${frame.functionName} %c(${frame.fileName}:${frame.lineNumber}:${frame.columnNumber})`,
+					'color: #888;',
+					fnStyle,
+					fileStyle
+				)
+			}
+		}
+		
+		console.groupEnd()
+	}
+	
+	console.groupEnd()
+}
+
+/**
+ * Legacy version of nodeLineage that returns a formatted string (useful for comparison or logs)
+ * @param segments - Lineage segments
+ * @deprecated TODO: remove me and all the code running around
+ */
+export function nodeLineageLegacy(segments: LineageSegment[]): string {
 	// ANSI color codes for Node.js terminal
 	const colors = {
 		reset: '\x1b[0m',
@@ -250,67 +274,42 @@ export function nodeLineage(segments: LineageSegment[]): string {
 		cyan: '\x1b[36m',
 		white: '\x1b[37m',
 		gray: '\x1b[90m',
-		bgRed: '\x1b[41m',
-		bgGreen: '\x1b[42m',
-		bgYellow: '\x1b[43m',
-		bgBlue: '\x1b[44m',
-		bgMagenta: '\x1b[45m',
-		bgCyan: '\x1b[46m',
-		bgWhite: '\x1b[47m',
 	}
 	
 	const result: string[] = []
 	
-	// Add header
-	result.push('')
-	result.push(`${colors.bright}${colors.cyan}╭─────────────────────────────────────${colors.reset}`)
-	result.push(`${colors.bright}${colors.cyan}│${colors.reset} ${colors.bright}${colors.yellow}🦴 Effect Lineage Trace${colors.reset} ${colors.gray}(${segments.length} segment${segments.length === 1 ? '' : 's'})${colors.reset}`)
-	result.push(`${colors.bright}${colors.cyan}╰─────────────────────────────────────${colors.reset}`)
-	result.push('')
+	result.push(`${colors.bright}${colors.cyan}🦴 Effect Lineage Trace (${segments.length} segments)${colors.reset}`)
 	
 	for (let i = 0; i < segments.length; i++) {
 		const segment = segments[i]
-		
-		// Add segment header
 		const isLast = i === segments.length - 1
 		const prefix = i === 0 ? '📍' : isLast ? '└─' : '├─'
 		const connector = isLast ? '  ' : '│ '
 		
 		result.push(`${colors.gray}${connector}${colors.reset}${colors.bright}${colors.magenta}${prefix} Effect: ${segment.effectName}${colors.reset}`)
 		
-		// Add stack frames
 		for (let j = 0; j < segment.stack.length; j++) {
 			const frame = segment.stack[j]
-			const isLastFrame = j === segment.stack.length - 1
-			const framePrefix = isLast && isLast ? '   └─' : isLast ? '   ├─' : '   │'
+			const framePrefix = j === segment.stack.length - 1 ? '   └─' : '   ├─'
 			
 			if (frame.functionName === '...node_modules...') {
-				// Special formatting for node_modules placeholder
 				result.push(`${colors.gray}   ${connector}${colors.reset}${colors.dim}${framePrefix} ${colors.yellow}${frame.functionName}${colors.reset}`)
 			} else {
-				// Regular frame
 				const fnColor = frame.functionName === 'anonymous' ? colors.gray : colors.green
-				const fileColor = colors.blue
-				const lineColor = colors.cyan
-				
-				result.push(`${colors.gray}   ${connector}${colors.reset}${colors.dim}${framePrefix}${colors.reset} ${fnColor}${frame.functionName}${colors.reset} ${colors.gray}(${colors.reset}${fileColor}${frame.fileName}:${frame.lineNumber}:${frame.columnNumber}${colors.reset}${colors.gray})${colors.reset}`)
+				result.push(`${colors.gray}   ${connector}${colors.reset}${colors.dim}${framePrefix}${colors.reset} ${fnColor}${frame.functionName}${colors.reset} ${colors.gray}(${colors.reset}${colors.blue}${frame.fileName}:${frame.lineNumber}:${frame.columnNumber}${colors.reset}${colors.gray})${colors.reset}`)
 			}
 		}
-		
-		// Add separator between segments
-		if (i < segments.length - 1) {
-			result.push('')
-		}
+		if (i < segments.length - 1) result.push('')
 	}
 	
 	return result.join('\n')
 }
 
 /**
- * Captures and formats lineage for Node.js console output
+ * Captures and logs lineage to console
  */
-export function captureNodeLineage(): string {
-	return nodeLineage(getLineage())
+export function captureNodeLineage(): void {
+	nodeLineage(getLineage())
 }
 
 /**

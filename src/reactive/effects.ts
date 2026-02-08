@@ -33,12 +33,6 @@ import {
 	stopped,
 } from './types'
 
-class InternalCommunicationError extends Error {
-	constructor(public readonly wrappedError: Error) {
-		super('Internal communication error')
-	}
-}
-
 /**
  * Finds a cycle in a sequence of functions by looking for the first repetition
  */
@@ -188,7 +182,7 @@ export function raiseEffectTrigger(
 	}
 }
 export function onEffectThrow(onThrow: CatchFunction, effect?: EffectTrigger) {
-	effect ??= getActiveEffect()
+	effect ??= getRoot(getActiveEffect())
 	if (!effect) throw new Error('Tracking an effect throw while not in an effect')
 	if (!effectCatchers.has(effect)) effectCatchers.set(effect, [onThrow])
 	else effectCatchers.get(effect).push(onThrow)
@@ -961,14 +955,16 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 			optionCall('endChain')
 			return firstReturn.value
 		} catch (error) {
-			if (!(error instanceof InternalCommunicationError)) {
-				activationRegistry = undefined
-				batchQueue = undefined
-				optionCall('endChain')
-			}
 			throw error
 		}
 	}
+}
+
+function panicThrow(error: Error) {
+	activationRegistry = undefined
+	batchQueue = undefined
+	optionCall('endChain')
+	throw error
 }
 
 // Inject batch function to allow atomic game loops in requestAnimationFrame/setTimeout/...
@@ -1061,7 +1057,7 @@ export const effect = named(effectMarker.leave, flavored(
 				let caught = 0
 				thrower = (error: any) => {
 					// thrower:self
-					throw new InternalCommunicationError(error)
+					throw error
 				}
 				let errorToThrow: Error | undefined
 				try {
@@ -1108,7 +1104,7 @@ export const effect = named(effectMarker.leave, flavored(
 					}
 				} catch (error) {
 					// catcher:self`
-					errorToThrow = error instanceof InternalCommunicationError ? error.wrappedError : error
+					errorToThrow = error
 				} finally {
 					access.reaction = true
 				}
@@ -1148,7 +1144,7 @@ export const effect = named(effectMarker.leave, flavored(
 				}
 
 				thrower = (error: any) => {
-					const catches = effectCatchers.get(runEffect)
+					const catches = effectCatchers.get(getRoot(runEffect))
 					if (catches)
 						while (caught < catches.length) {
 							reactionCleanup?.(error)

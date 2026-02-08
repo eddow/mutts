@@ -1,5 +1,5 @@
 import { setEffectName } from '../../debug/debug'
-import { FoolProof } from '../utils'
+import { FoolProof, named } from '../utils'
 import { cleanedBy, getActiveEffect } from './effect-context'
 import { effect, untracked } from './effects'
 import { reactive } from './proxy'
@@ -109,7 +109,7 @@ function projectArray<SourceValue, ResultValue>(
 	const parent = getActiveProjection()
 	const depth = parent ? parent.depth + 1 : 0
 
-	const cleanupLength = effect(function projectArrayLengthEffect({ ascend }) {
+	const cleanupLength = effect(named(`project:${source[Symbol.toStringTag]}.length`, ({ ascend }) => {
 		const length = source.length
 		normalizeTargetLength(length)
 		const existing = Array.from(indexEffects.keys())
@@ -117,8 +117,7 @@ function projectArray<SourceValue, ResultValue>(
 			if (indexEffects.has(i)) continue
 			ascend(function projectArrayIndexAscend() {
 				const index = i
-				// TODO: name = `source.tag [ index ]`
-				const stop = effect(function projectArrayIndexEffect({ reaction }) {
+				const stop = effect(named(`project:${source[Symbol.toStringTag]}[${index}]`, ({ reaction }) => {
 					if (!reaction) setActiveProjection({ source, key: index, target, depth, parent })
 					const previous = untracked(() => target[index])
 					const accessBase = {
@@ -130,13 +129,13 @@ function projectArray<SourceValue, ResultValue>(
 					} as ProjectAccess<SourceValue, number, readonly SourceValue[], ResultValue[]>
 					defineAccessValue(accessBase)
 					target[index] = apply(accessBase, target)
-				})
+				}))
 				setEffectName(stop, `project[${depth}]:${index}`)
 				indexEffects.set(i, stop)
 			})
 		}
 		for (const index of existing) if (index >= length) disposeIndex(index)
-	})
+	}))
 
 	return makeCleanup(target, indexEffects, () => cleanupLength(), {
 		source,

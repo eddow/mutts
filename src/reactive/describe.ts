@@ -14,7 +14,7 @@ import { reactive } from './proxy'
  */
 export function describe<T extends object>(
 	descriptors: Record<PropertyKey, PropertyDescriptor>,
-	target: T = {} as T
+	target: T = Object.create(null) as T
 ): T {
 	descriptors = reactive(descriptors)
 	const keyEffects = new Map<PropertyKey, () => void>()

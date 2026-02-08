@@ -10,6 +10,7 @@ export const watchers = new WeakMap<object, Map<any, Set<EffectTrigger>>>()
 export const effectChildren = new WeakMap<EffectTrigger, Set<EffectCleanup>>()
 
 // Track parent effect relationships for hierarchy traversal (used in deep touch filtering)
+// TODO: we finally have made `effect.parent` in Object.defineProperties - chose only one way to store parent
 export const effectParent = new WeakMap<EffectTrigger, EffectTrigger | undefined>()
 
 // Track reverse mapping to ensure unicity: One Root -> One Function

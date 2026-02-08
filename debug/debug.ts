@@ -8,8 +8,29 @@
 import { raiseEffectTrigger } from '../src/reactive/effects'
 import { effectParent, effectToReactiveObjects, getRoot } from '../src/reactive/registry'
 import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, options } from '../src/reactive/types'
-import { getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter, nodeLineage } from './lineage'
+import { getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter, nodeLineage, nodeLineageLegacy } from './lineage'
 import { showLineagePanel } from './lineage-panel'
+
+/**
+ * Log an error with detailed context if error logging is enabled
+ */
+export function logError(error: Error, context: 'throw' | 'catch', effect?: any) {
+	if (!debugOptions.logErrors) return
+	
+	const contextStr = context === 'throw' ? '🔴 Thrown' : '🟡 Caught'
+	
+	console.group(`${contextStr} Error: ${error.message}`)
+	console.error('Error:', error)
+	
+	// Try to get effect name if available
+	if (effect && typeof effect === 'object' && effect.name) {
+		console.log('Effect:', effect.name)
+	}
+	
+	console.groupEnd()
+}
+
+// Log initialization for debugging
 
 const EXTERNAL_SOURCE = Symbol('external-source')
 type SourceEffect = EffectTrigger | typeof EXTERNAL_SOURCE
@@ -25,6 +46,17 @@ const effectNames = new WeakMap<EffectTrigger | EffectCleanup, string>()
 const objectNames = new WeakMap<object, string>()
 let effectCounter = 0
 let objectCounter = 0
+
+// Debug options system
+export const debugOptions = {
+	/**
+	 * Whether DevTools are enabled
+	 */
+	get enabled() {
+		return devtoolsEnabled
+	},
+	logErrors: false
+}
 
 // Cause/consequence edges aggregated by (source, target, descriptor)
 interface TriggerRecord {
@@ -424,10 +456,14 @@ export function enableDevTools() {
 
 	globalScope.__MUTTS_DEVTOOLS__ = {
 		getGraph: buildReactivityGraph,
-		nodeLineage() {
-			console.groupCollapsed("🔍 Current Stack Trace");
-			console.log(nodeLineage(getLineage()))
-			console.groupEnd();
+		nodeLineage(tag?: string) {
+			nodeLineage(getLineage())
+			return '🦴 Effect Lineage Trace' + (tag ? ` (${tag})` : '')
+		},
+		nodeLineageLegacy() {
+			console.groupCollapsed('nodeLineageLegacy')
+			console.log(nodeLineageLegacy(getLineage()))
+			console.groupEnd()
 		},
 		get browserLineage() {
 			return wrapLineageForDebug(getLineage())
@@ -440,6 +476,8 @@ export function enableDevTools() {
 		setObjectName,
 		registerEffect: registerEffectForDebug,
 		registerObject: registerObjectForDebug,
+		// Debug options for controlling runtime behavior
+		debug: debugOptions
 	}
 
 	// @ts-ignore - devtoolsFormatters is a Chrome-specific array
