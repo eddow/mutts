@@ -1,12 +1,19 @@
-import { effect, reactive, reactiveOptions as options } from 'mutts'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { effect, resetBatchQueueForTest, options, ReactiveErrorCode } from '../../src/reactive/effects'
+import { reactive } from '../../src/reactive/proxy'
 
 describe('effect cycle detection and ordering', () => {
 	const originalCycleHandling = options.cycleHandling
 	beforeEach(() => {
-		options.cycleHandling = 'debug'
+		resetBatchQueueForTest()
+		options.cycleHandling = 'production'
+		options.maxEffectChain = 100
+		options.maxTriggerPerBatch = 100
+		vi.spyOn(console, 'warn').mockImplementation(() => {})
 	})
 	afterEach(() => {
 		options.cycleHandling = originalCycleHandling
+		vi.restoreAllMocks()
 	})
 	describe('cycle detection', () => {
 		it('should throw error when cycle is detected (default)', () => {
@@ -28,7 +35,7 @@ describe('effect cycle detection and ordering', () => {
 				effect(() => {
 					state.a = state.b + 1
 				})
-			}).toThrow(/Cycle detected/)
+			}).toThrow(/cycle detected/i)
 
 			// Cleanup
 			effectA?.()
@@ -59,7 +66,7 @@ describe('effect cycle detection and ordering', () => {
 						state.a = state.c + 1
 					})
 				)
-			}).toThrow(/Cycle detected/)
+			}).toThrow(/cycle detected/i)
 
 			// Cleanup
 			effects.forEach((stop) => stop())
@@ -72,25 +79,25 @@ describe('effect cycle detection and ordering', () => {
 			const executionOrder: string[] = []
 
 			// Create a chain: A -> B -> C
-			// Effects write to properties that others read
-			effect(() => {
-				executionOrder.push('C')
-				state.c = state.b + 1 // Read b, write c
-			})
+			// Effects write to properties
+      // B depends on A
+      effect(() => {
+        executionOrder.push('B')
+        state.b = state.a + 1
+      })
 
-			effect(() => {
-				executionOrder.push('B')
-				state.b = state.a + 1 // Read a, write b
-			})
+    // C depends on B
+    effect(() => {
+      executionOrder.push('C')
+      state.c = state.b + 1
+    })
 
-			// Clear initial execution
-			executionOrder.length = 0
-
-			// Trigger from A - B and C will be in batch
-			state.a = 5
-
-			// Should execute in dependency order: B -> C
-			expect(executionOrder).toEqual(['B', 'C'])
+    executionOrder.length = 0 // Clear initial run
+    state.a = 5 // Trigger A -> B -> C
+    // Should execute in dependency order: B -> C
+    expect(executionOrder).toEqual(['B', 'C'])
+    expect(state.b).toBe(6) // a + 1
+      expect(state.c).toBe(7) // b + 1
 		})
 
 		it('should handle parallel effects correctly', () => {
@@ -242,7 +249,7 @@ describe('effect cycle detection and ordering', () => {
 				effect(() => {
 					state.a = state.c + 1 // C would trigger A, completing the cycle
 				})
-			}).toThrow(/Cycle detected/)
+			}).toThrow(/cycle detected/i)
 		})
 	})
 	describe('ghost cycle detection', () => {

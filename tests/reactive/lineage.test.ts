@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { effect, reactiveOptions } from '../src/reactive'
-import { getLineage } from '../debug'
+import { effect, reactiveOptions } from '../../src/reactive'
+import { getLineage } from '../../debug'
 
 describe('Effect Lineage', () => {
 	beforeEach(() => {

@@ -7,9 +7,8 @@ import { IterableWeakSet } from '../iterableWeak'
 import { effectAggregator, effectHistory, getActiveEffect } from './effect-context'
 import { unwrap } from './proxy-state'
 import {
-	effectChildren,
-	effectParent,
 	effectToReactiveObjects,
+	getEffectNode,
 	getRoot,
 	markWithRoot,
 	watchers,
@@ -23,7 +22,6 @@ import {
 	type EffectOptions,
 	type EffectTrigger,
 	type Evolution,
-	forwardThrow,
 	optionCall,
 	options,
 	ReactiveError,
@@ -32,6 +30,8 @@ import {
 	type ScopedCallback,
 	stopped,
 } from './types'
+// TODO: don't import these from effects.ts
+export { options, ReactiveErrorCode }
 
 /**
  * Finds a cycle in a sequence of functions by looking for the first repetition
@@ -159,37 +159,36 @@ export function recordActivation(effect: EffectTrigger, obj: any, evolution: Evo
  * })
  *
  * state.count = 5
+ * ```
  */
 export function onEffectTrigger(onTouch: EffectTracking, effect?: EffectTrigger) {
 	effect ??= getActiveEffect()
 	if (!effect) throw new Error('Tracking an effect trigger while not in an effect')
-	if (!effectTrackers.has(effect)) effectTrackers.set(effect, [onTouch])
-	else effectTrackers.get(effect).push(onTouch)
+	const node = getEffectNode(effect)
+	if (!node.trackers) node.trackers = [onTouch]
+	else node.trackers.push(onTouch)
 }
 
-const effectTrackers = new WeakMap<EffectTrigger, EffectTracking[]>()
-
-export function raiseEffectTrigger(
+export function raiseEffectTrackers(
 	effect: EffectTrigger,
 	obj: any,
 	evolution: Evolution,
 	prop: any
 ) {
-	const trackers = effectTrackers.get(effect)
+	const node = getEffectNode(effect)
+	const trackers = node.trackers
 	if (trackers) {
 		for (const tracker of trackers) tracker(obj, evolution, prop, effect)
-		//trackers.delete(effect)
 	}
 }
 export function onEffectThrow(onThrow: CatchFunction, effect?: EffectTrigger) {
-	effect ??= getRoot(getActiveEffect())
+	effect ??= getActiveEffect()
 	if (!effect) throw new Error('Tracking an effect throw while not in an effect')
-	if (!effectCatchers.has(effect)) effectCatchers.set(effect, [onThrow])
-	else effectCatchers.get(effect).push(onThrow)
+	const node = getEffectNode(effect)
+	if (!node.catchers) node.catchers = [onThrow]
+	else node.catchers.push(onThrow)
+	console.log(`[DEBUG] onEffectThrow registered for ${effect.name || 'anonymous'}`, node)
 }
-const effectCatchers = new WeakMap<EffectTrigger, CatchFunction[]>()
-
-export const opaqueEffects = new WeakSet<EffectTrigger>()
 
 // Dependency graph: tracks which effects trigger which other effects
 // Uses roots (Function) as keys for consistency
@@ -231,8 +230,10 @@ function addGraphEdge(callerRoot: Function, targetRoot: Function) {
 	// Skip if edge already exists
 	const triggers = effectTriggers.get(callerRoot)
 	if (triggers?.has(targetRoot)) {
+		console.log(`[DEBUG] addGraphEdge: ${callerRoot.name} -> ${targetRoot.name} (already exists)`)
 		return // Edge already exists
 	}
+	console.log(`[DEBUG] addGraphEdge: ${callerRoot.name} -> ${targetRoot.name} (adding)`)
 
 	// Add to forward graph: callerRoot → targetRoot
 	if (!triggers) {
@@ -297,12 +298,14 @@ function addGraphEdge(callerRoot: Function, targetRoot: Function) {
 	}
 
 	// 4. Cross-product: for each X in causesClosure(U) and Y in consequencesClosure(V): X→Y
-	if (uCausesSet && vConsequencesSet) {
+	if (uCausesSet?.size && vConsequencesSet?.size) {
+		console.log(`[DEBUG] addGraphEdge: propagating transitive X -> Y. X count: ${uCausesSet.size}, Y count: ${vConsequencesSet.size}`)
 		for (const x of uCausesSet) {
 			const xConsequences = getOrCreateClosure(consequencesClosure, x)
 			for (const y of vConsequencesSet) {
 				// Skip if this would create a self-loop
 				if (x === y) continue
+				console.log(`[DEBUG] addGraphEdge: adding X(${x.name}) -> Y(${y.name}) transitive`)
 				xConsequences.add(y)
 				const yCauses = getOrCreateClosure(causesClosure, y)
 				yCauses.add(x)
@@ -476,6 +479,7 @@ const batchCleanups = new Set<EffectCleanup>()
  */
 function computeAllInDegrees(batch: BatchQueue): void {
 	if (options.cycleHandling === 'production') return
+	console.log(`[DEBUG] computeAllInDegrees: start`)
 	const activeEffect = getActiveEffect()
 	const activeRoot = activeEffect ? getRoot(activeEffect) : null
 
@@ -495,6 +499,7 @@ function computeAllInDegrees(batch: BatchQueue): void {
 		}
 		batch.inDegrees.set(root, inDegree)
 	}
+	console.log(`[DEBUG] computeAllInDegrees: done`)
 }
 
 /**
@@ -596,6 +601,7 @@ function wouldCreateCycle(callerRoot: Function, targetRoot: Function): boolean {
 	// This would create a cycle: callerRoot -> targetRoot -> ... -> callerRoot
 	// Using consequencesClosure: if targetRoot triggers callerRoot, then callerRoot is in consequencesClosure(targetRoot)
 	const targetConsequences = consequencesClosure.get(targetRoot)
+	console.log(`[DEBUG] wouldCreateCycle check: ${callerRoot.name} -> ${targetRoot.name}. targetConsequences has caller?`, targetConsequences?.has(callerRoot))
 	if (targetConsequences?.has(callerRoot)) {
 		return true // Cycle detected: targetRoot -> ... -> callerRoot, and we're adding callerRoot -> targetRoot
 	}
@@ -610,32 +616,48 @@ function wouldCreateCycle(callerRoot: Function, targetRoot: Function): boolean {
  * @param immediate - If true, don't create edges in the dependency graph
  */
 function addToBatch(effect: EffectTrigger, caller?: EffectTrigger, immediate?: boolean) {
-	;(effect as any)[cleanupSymbol]?.()
+	const node = getEffectNode(effect)
+	node.cleanup?.()
 	// If the effect was stopped during cleanup (e.g. lazy memoization), don't add it to the batch
-	if ((effect as any)[stopped]) return
+	if (node.stopped) {
+		// console.log(`[DEBUG] addToBatch: ${effect.name} is stopped`)
+		return
+	}
 
-	if (!batchQueue) return
+	if (!batchQueue) {
+		// console.log(`[DEBUG] addToBatch: no batchQueue`)
+		return
+	}
 
 	const root = getRoot(effect)
 
 	// 1. Add to batch first (needed for cycle detection)
-	if (options.cycleHandling === 'production' && batchQueue.all.has(root)) {
-		// If already present in flat mode, remove it so that the next set puts it at the end
-		batchQueue.all.delete(root)
+	if (options.cycleHandling === 'production') {
+		// Production mode: FIFO (delete and re-add to move to end)
+		if (batchQueue.all.has(root)) {
+			batchQueue.all.delete(root)
+		}
+		batchQueue.all.set(root, effect)
+	} else {
+		// Dev/Debug mode: Set if not present (preserve order?)
+		// actually, we might want to update it?
+		// For now, simple set
+		if (batchQueue.all.has(root)) {
+			// console.log(`[DEBUG] ${root.name} already in batch`)
+			return
+		}
+		batchQueue.all.set(root, effect)
+		// console.log(`[DEBUG] ${root.name} added to batch`)
 	}
 
-	batchQueue.all.set(root, effect)
-
-	// 2. Add to global graph (if caller exists and not immediate) - USE ROOTS ONLY
-	// When immediate is true, don't create edges - the effect is not considered as a consequence
+	// batchQueue.all.set(root, effect)
+	// console.log(`[DEBUG] addToBatch: ${root.name} added to batch`)
 	if (caller && !immediate && options.cycleHandling !== 'production') {
 		const callerRoot = getRoot(caller)
+		// const root = getRoot(effect) // Already have root
 
 		// Check for cycle BEFORE adding edge
-		// We check if adding callerRoot -> root would create a cycle
-		// This means checking if root already triggers callerRoot (directly or transitively)
 		if (wouldCreateCycle(callerRoot, root)) {
-			// Cycle detected! Get the full cycle path for debugging
 			const cyclePath = getCyclePathForEdge(callerRoot, root)
 			const cycleMessage =
 				cyclePath.length > 0
@@ -644,7 +666,7 @@ function addToBatch(effect: EffectTrigger, caller?: EffectTrigger, immediate?: b
 
 			batchQueue.all.delete(root)
 			const causalChain = getTriggerChain(effect)
-			const creationStack = effectCreationStacks.get(root)
+			const creationStack = getEffectNode(effect).creationStack
 
 			throw new ReactiveError(`[reactive] ${cycleMessage}`, {
 				code: ReactiveErrorCode.CycleDetected,
@@ -655,7 +677,7 @@ function addToBatch(effect: EffectTrigger, caller?: EffectTrigger, immediate?: b
 			})
 		}
 
-		addGraphEdge(callerRoot, root) // Add to persistent graph using roots
+		addGraphEdge(callerRoot, root)
 	}
 }
 
@@ -775,9 +797,11 @@ function executeNext(effectuatedRoots: Function[]): any {
 		// Using cached in-degrees for O(n) lookup instead of O(n²)
 		for (const [root, effect] of batchQueue!.all) {
 			const inDegree = batchQueue!.inDegrees.get(root) ?? 0
+			// console.log(`[DEBUG] executeNext: checking ${root.name}, inDegree: ${inDegree}`)
 			if (inDegree === 0) {
 				nextEffect = effect
 				nextRoot = root
+				console.log(`[DEBUG] executeNext: found next ${root.name}`)
 				break
 			}
 		}
@@ -843,6 +867,7 @@ function executeNext(effectuatedRoots: Function[]): any {
 // These are all the effects triggered under `activeEffect` and all their sub-effects
 export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'immediate') {
 	if (!Array.isArray(effect)) effect = [effect]
+	// console.log(`[DEBUG] batch starting with ${effect.length} effects: ${effect.map(e => e.name || 'anonymous').join(', ')}`)
 	const roots = effect.map(getRoot)
 
 	if (batchQueue) {
@@ -892,11 +917,14 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 				}
 			} else {
 				// Add initial effects to batch and compute dependencies
-				for (let i = 0; i < effect.length; i++) addToBatch(effect[i], caller, false)
+				const len = effect.length
+				for (let i = 0; i < len; i++) {
+					addToBatch(effect[i], caller, false)
+				}
 				computeAllInDegrees(batchQueue)
 			}
 
-			// Processing loop for all triggered effects and cleanups
+			// Process the batch
 			while (batchQueue.all.size > 0 || batchCleanups.size > 0) {
 				if (batchQueue.all.size > 0) {
 					if (effectuatedRoots.length > options.maxEffectChain) {
@@ -950,14 +978,20 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 					// If we want to keep that behavior: if (immediate) break
 				}
 			}
+		} finally {
 			activationRegistry = undefined
 			batchQueue = undefined
-			optionCall('endChain')
-			return firstReturn.value
-		} catch (error) {
-			throw error
+			batchCleanups.clear()
+			options.endChain()
 		}
+		return firstReturn.value
 	}
+}
+
+export function resetBatchQueueForTest() {
+    batchQueue = undefined
+    activationRegistry = undefined
+    batchCleanups.clear()
 }
 
 function panicThrow(error: Error) {
@@ -1018,175 +1052,188 @@ export const effect = named(effectMarker.leave, flavored(
 		if (effectOptions?.name) Object.defineProperty(fn, 'name', { value: effectOptions.name })
 		// Use per-effect asyncMode or fall back to global option
 		const asyncMode = effectOptions?.asyncMode ?? options.asyncMode ?? 'cancel'
+		
+		// Create the effect function - naming it for debug
+		const runEffect: EffectTrigger = () => {
+			const node = getEffectNode(runEffect)
+			// Clear previous dependencies
+			if (node.cleanup) {
+				const prevCleanup = node.cleanup
+				node.cleanup = undefined
+				try {
+					untracked(() => prevCleanup())
+				} catch (error) {
+					// If we want to report them, we could use options.warn or similar
+					options.warn('Error during effect cleanup', error)
+				}
+			}
+
+			// Handle async modes when effect is retriggered
+			if (runningPromise) {
+				if (asyncMode === 'cancel' && cancelPrevious) {
+					// Cancel previous execution
+					cancelPrevious()
+					cancelPrevious = null
+					runningPromise = null
+				} else if (asyncMode === 'ignore') {
+					// Ignore new execution while async work is running
+					return
+				}
+				// Note: 'queue' mode not yet implemented
+			}
+
+			// The effect has been stopped after having been planned
+			if (effectStopped) return
+
+			options.enter(getRoot(fn))
+			let reactionCleanup: EffectCloser | undefined
+			let result: any
+			let caught = 0
+			
+			// Default thrower (self)
+			let thrower: CatchFunction = (error: any) => {
+				throw error
+			}
+			node.forwardThrow = thrower
+
+			let errorToThrow: Error | undefined
+			try {
+				result = tracked(named(effectMarker.enter, () => fn.call(null, access)))
+				options.leave(fn)
+				if (
+					result &&
+					typeof result !== 'function' &&
+					(typeof result !== 'object' || !('then' in result))
+				)
+					throw new ReactiveError(`[reactive] Effect returned a non-function value: ${result}`)
+				// Check if result is a Promise (async effect)
+				if (result && typeof result === 'object' && typeof result.then === 'function') {
+					const originalPromise = result as Promise<any>
+
+					// Create a cancellation promise that we can reject
+					let cancelReject: ((reason: any) => void) | null = null
+					const cancelPromise = new Promise<never>((_, reject) => {
+						cancelReject = reject
+					})
+
+					const cancelError = new ReactiveError(
+						'[reactive] Effect canceled due to dependency change'
+					)
+
+					// Race between the actual promise and cancellation
+					// If canceled, the race rejects, which will propagate through any promise chain
+					runningPromise = Promise.race([originalPromise, cancelPromise])
+
+					// Store the cancellation function
+					cancelPrevious = () => {
+						if (cancelReject) {
+							cancelReject(cancelError)
+						}
+					}
+
+					// Wrap the original promise chain so cancellation propagates
+					// This ensures that when we cancel, the original promise's .catch() handlers are triggered
+					// We do this by rejecting the race promise, which makes the original promise chain see the rejection
+					// through the zone-wrapped .then()/.catch() handlers
+					runningPromise = runningPromise.catch((error) => {
+						// Propagate async errors to the effect's error handler
+						// This ensures onEffectThrow handlers are triggered for async errors
+						if (error !== cancelError) {
+							thrower(error)
+						}
+						// If thrower didn't throw (handled), we absorb the error.
+						// If thrower threw (unhandled), it propagates as a new unhandled rejection, which is correct.
+					})
+				} else {
+					// Synchronous result - treat as cleanup function
+					reactionCleanup = result as undefined | EffectCloser
+				}
+			} catch (error) {
+				// catcher:self`
+				errorToThrow = error
+			} finally {
+				access.reaction = true
+			}
+
+			// Create cleanup function for next run
+			node.cleanup = () => {
+				node.cleanup = undefined
+				reactionCleanup?.()
+				reactionCleanup = undefined
+				delete node.trackers
+				delete node.catchers
+				// Remove this effect from all reactive objects it's watching
+				const effectObjects = effectToReactiveObjects.get(runEffect)
+				if (effectObjects) {
+					for (const reactiveObj of effectObjects) {
+						const objectWatchers = watchers.get(reactiveObj)
+						if (objectWatchers) {
+							for (const [prop, deps] of objectWatchers.entries()) {
+								deps.delete(runEffect)
+								if (deps.size === 0) {
+									objectWatchers.delete(prop)
+								}
+							}
+							if (objectWatchers.size === 0) {
+								watchers.delete(reactiveObj)
+							}
+						}
+					}
+					effectToReactiveObjects.delete(runEffect)
+				}
+				// Invoke all child stops (recursive via subEffectCleanup calling its own mainCleanup)
+				const children = node.children
+				if (children) {
+					for (const childCleanup of children) childCleanup()
+					delete node.children
+				}
+			}
+
+			// Define bubbling thrower
+			thrower = (error: any) => {
+				const catches = node.catchers
+				if (catches)
+					while (caught < catches.length) {
+						reactionCleanup?.(error)
+						reactionCleanup = undefined
+						try {
+							reactionCleanup = catches[caught](error) as EffectCloser | undefined
+							return
+						} catch (e) {
+							caught++
+						}
+					}
+				if (parent) {
+					const parentNode = getEffectNode(parent)
+					if (parentNode.forwardThrow) parentNode.forwardThrow(error)
+					else throw error
+				}
+				else throw error
+			}
+			// Update the node's forwardThrow to the bubbling one
+			node.forwardThrow = thrower
+
+			if (errorToThrow) thrower(errorToThrow)
+		}
+		
+		// Initialize metadata node
+		const node = getEffectNode(runEffect)
+		
 		if (isDevtoolsEnabled()) {
 			const stack = getStackFrame() // Robustly skips internal mutts frames
 			if (stack.length > 0) {
-				effectCreationStacks.set(getRoot(fn), stack)
+				node.creationStack = stack
 			}
 		}
 
-		const runEffect = Object.defineProperties(
-			() => {
-				// Clear previous dependencies
-				if (cleanup) {
-					const prevCleanup = cleanup
-					cleanup = null
-					untracked(() => prevCleanup())
-				}
-
-				// Handle async modes when effect is retriggered
-				if (runningPromise) {
-					if (asyncMode === 'cancel' && cancelPrevious) {
-						// Cancel previous execution
-						cancelPrevious()
-						cancelPrevious = null
-						runningPromise = null
-					} else if (asyncMode === 'ignore') {
-						// Ignore new execution while async work is running
-						return
-					}
-					// Note: 'queue' mode not yet implemented
-				}
-
-				// The effect has been stopped after having been planned
-				if (effectStopped) return
-
-				options.enter(getRoot(fn))
-				let reactionCleanup: EffectCloser | undefined
-				let result: any
-				let caught = 0
-				thrower = (error: any) => {
-					// thrower:self
-					throw error
-				}
-				let errorToThrow: Error | undefined
-				try {
-					result = tracked(named(effectMarker.enter, () => fn.call(null, access)))
-					options.leave(fn)
-					if (
-						result &&
-						typeof result !== 'function' &&
-						(typeof result !== 'object' || !('then' in result))
-					)
-						throw new ReactiveError(`[reactive] Effect returned a non-function value: ${result}`)
-					// Check if result is a Promise (async effect)
-					if (result && typeof result === 'object' && typeof result.then === 'function') {
-						const originalPromise = result as Promise<any>
-
-						// Create a cancellation promise that we can reject
-						let cancelReject: ((reason: any) => void) | null = null
-						const cancelPromise = new Promise<never>((_, reject) => {
-							cancelReject = reject
-						})
-
-						const cancelError = new ReactiveError(
-							'[reactive] Effect canceled due to dependency change'
-						)
-
-						// Race between the actual promise and cancellation
-						// If canceled, the race rejects, which will propagate through any promise chain
-						runningPromise = Promise.race([originalPromise, cancelPromise])
-
-						// Store the cancellation function
-						cancelPrevious = () => {
-							if (cancelReject) {
-								cancelReject(cancelError)
-							}
-						}
-
-						// Wrap the original promise chain so cancellation propagates
-						// This ensures that when we cancel, the original promise's .catch() handlers are triggered
-						// We do this by rejecting the race promise, which makes the original promise chain see the rejection
-						// through the zone-wrapped .then()/.catch() handlers
-					} else {
-						// Synchronous result - treat as cleanup function
-						reactionCleanup = result as undefined | EffectCloser
-					}
-				} catch (error) {
-					// catcher:self`
-					errorToThrow = error
-				} finally {
-					access.reaction = true
-				}
-
-				// Create cleanup function for next run
-				cleanup = () => {
-					cleanup = null
-					reactionCleanup?.()
-					reactionCleanup = undefined
-					effectTrackers.delete(runEffect)
-					effectCatchers.delete(runEffect)
-					// Remove this effect from all reactive objects it's watching
-					const effectObjects = effectToReactiveObjects.get(runEffect)
-					if (effectObjects) {
-						for (const reactiveObj of effectObjects) {
-							const objectWatchers = watchers.get(reactiveObj)
-							if (objectWatchers) {
-								for (const [prop, deps] of objectWatchers.entries()) {
-									deps.delete(runEffect)
-									if (deps.size === 0) {
-										objectWatchers.delete(prop)
-									}
-								}
-								if (objectWatchers.size === 0) {
-									watchers.delete(reactiveObj)
-								}
-							}
-						}
-						effectToReactiveObjects.delete(runEffect)
-					}
-					// Invoke all child stops (recursive via subEffectCleanup calling its own mainCleanup)
-					const children = effectChildren.get(runEffect)
-					if (children) {
-						for (const childCleanup of children) childCleanup()
-						effectChildren.delete(runEffect)
-					}
-				}
-
-				thrower = (error: any) => {
-					const catches = effectCatchers.get(getRoot(runEffect))
-					if (catches)
-						while (caught < catches.length) {
-							reactionCleanup?.(error)
-							reactionCleanup = undefined
-							try {
-								reactionCleanup = catches[caught](error) as EffectCloser | undefined
-								return
-							} catch (e) {
-								caught++
-							}
-						}
-					if (parent) parent[forwardThrow](error)
-					else throw error
-				}
-
-				if (errorToThrow) thrower(errorToThrow)
-			},
-			{
-				[forwardThrow]: {
-					get: () => thrower,
-				},
-				[cleanupSymbol]: {
-					value: () => {
-						if (cleanup) {
-							try {
-								untracked(() => cleanup())
-							} finally {
-								cleanup = null
-							}
-						}
-					},
-				},
-				parent: {
-					get: () => parent,
-				},
-			}
-		) as EffectTrigger
 		let cleanup: (() => void) | null = null
 		const tracked = named(effectMarker.leave, effectHistory.present.with(runEffect, () => named(effectMarker.leave, effectAggregator.zoned)))
 		const ascended = named(effectMarker.leave, effectHistory.zoned)
 		const parent = effectHistory.present.active
-		let thrower: CatchFunction | undefined
+		// Set parent relationship in node
+		node.parent = parent
+		
+		// let thrower: CatchFunction | undefined // Moved inside runEffect
 		let effectStopped = false
 		const access: EffectAccess = {
 			tracked,
@@ -1197,9 +1244,7 @@ export const effect = named(effectMarker.leave, flavored(
 		let runningPromise: Promise<any> | null = null
 		let cancelPrevious: (() => void) | null = null
 		if (effectOptions?.dependencyHook) {
-			Object.defineProperty(runEffect, 'dependencyHook', {
-				value: effectOptions.dependencyHook,
-			})
+			node.dependencyHook = effectOptions.dependencyHook
 		}
 		// Mark the runEffect callback with the original function as its root
 		markWithRoot(runEffect, fn)
@@ -1213,15 +1258,14 @@ export const effect = named(effectMarker.leave, flavored(
 
 		// Register strict mode if enabled
 		if (effectOptions?.opaque) {
-			opaqueEffects.add(runEffect)
+			node.isOpaque = true
 		}
 
 		if (isDevtoolsEnabled()) {
 			registerEffectForDebug(runEffect)
 		}
 
-		// Store parent relationship for hierarchy traversal
-		effectParent.set(runEffect, parent)
+		// Store parent relationship for hierarchy traversal - ALREADY DONE ABOVE via getEffectNode
 
 		batch(runEffect, 'immediate')
 		// Only ROOT effects are registered for GC cleanup and zone tracking
@@ -1230,13 +1274,20 @@ export const effect = named(effectMarker.leave, flavored(
 		const stopEffect = (): void => {
 			if (effectStopped) return
 			effectStopped = true
+			node.stopped = true
 			// Cancel any running async work
 			if (cancelPrevious) {
 				cancelPrevious()
 				cancelPrevious = null
 				runningPromise = null
 			}
-			cleanup?.()
+			try {
+				node.cleanup?.()
+			} catch (error) {
+				// Cleanup errors should basically be ignored or at least not stop the world
+				// If we want to report them, we could use options.warn or similar
+				options.warn('Error during effect cleanup', error)
+			}
 			// Clean up dependency graph edges
 			cleanupEffectFromGraph(runEffect)
 			fr.unregister(stopEffect)
@@ -1254,22 +1305,23 @@ export const effect = named(effectMarker.leave, flavored(
 			return callIfCollected
 		}
 		// Register this effect to be stopped when the parent effect is cleaned up
-		let children = effectChildren.get(parent)
-		if (!children) {
-			children = new Set()
-			effectChildren.set(parent, children)
-		}
-		const subEffectCleanup = augmentedRv(() => {
-			children.delete(subEffectCleanup)
-			if (children.size === 0) {
-				effectChildren.delete(parent)
+		if (parent) {
+			const parentNode = getEffectNode(parent)
+			if (!parentNode.children) {
+				parentNode.children = new Set()
 			}
-			// Execute this child effect cleanup (which triggers its own mainCleanup)
-			stopEffect()
-		})
-		children.add(subEffectCleanup)
-
-		return subEffectCleanup
+			const children = parentNode.children
+			
+			const subEffectCleanup = augmentedRv(() => {
+				children.delete(subEffectCleanup)
+				// Execute this child effect cleanup (which triggers its own mainCleanup)
+				stopEffect()
+			})
+			children.add(subEffectCleanup)
+			return subEffectCleanup
+		}
+		// Should not be reachable given isRootEffect check, but for type safety
+		return augmentedRv(stopEffect)
 	},
 	{
 		get opaque() {

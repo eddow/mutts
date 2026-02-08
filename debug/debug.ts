@@ -5,8 +5,8 @@
  * - Provides graph data for tooling (DevTools panel, etc.)
  */
 
-import { raiseEffectTrigger } from '../src/reactive/effects'
-import { effectParent, effectToReactiveObjects, getRoot } from '../src/reactive/registry'
+import { effect, raiseEffectTrackers } from '../src/reactive/effects'
+import { effectToReactiveObjects, getEffectNode, getRoot, markWithRoot } from '../src/reactive/registry'
 import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, options } from '../src/reactive/types'
 import { getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter, nodeLineage, nodeLineageLegacy } from './lineage'
 import { showLineagePanel } from './lineage-panel'
@@ -161,7 +161,7 @@ function ensureParentChains(effects: Set<EffectTrigger>) {
 	const queue = Array.from(effects)
 	for (let i = 0; i < queue.length; i++) {
 		const effect = queue[i]
-		const parent = effectParent.get(effect)
+		const parent = getEffectNode(effect).parent
 		if (parent && !effects.has(parent)) {
 			effects.add(parent)
 			queue.push(parent)
@@ -246,7 +246,7 @@ export function recordTriggerLink(
 	prop: any,
 	evolution: Evolution
 ) {
-	raiseEffectTrigger(target, obj, evolution, prop)
+	raiseEffectTrackers(target, obj, evolution, prop)
 	if (options.introspection.enableHistory) {
 		addToMutationHistory(source, target, obj, prop, evolution)
 	}
@@ -337,7 +337,7 @@ function buildEffectNodes(allEffects: Set<EffectTrigger>) {
 		if (!effect) return 0
 		const cached = depthCache.get(effect)
 		if (cached !== undefined) return cached
-		const parent = effectParent.get(effect)
+		const parent = getEffectNode(effect).parent
 		const depth = computeDepth(parent) + (parent ? 1 : 0)
 		depthCache.set(effect, depth)
 		return depth
@@ -345,7 +345,7 @@ function buildEffectNodes(allEffects: Set<EffectTrigger>) {
 
 	for (const [effect, node] of nodeByEffect) {
 		node.depth = computeDepth(effect)
-		const parent = effectParent.get(effect)
+		const parent = getEffectNode(effect).parent
 		if (parent) {
 			const parentNode = nodeByEffect.get(parent)
 			if (parentNode) {

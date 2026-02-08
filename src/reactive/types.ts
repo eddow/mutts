@@ -77,14 +77,48 @@ export type EffectCleanup = ScopedCallback & {
 	[stopped]: boolean
 }
 
+// Debug type for stack frames
+export type StackFrame = {
+    functionName: string
+    fileName: string
+    lineNumber: number
+    columnNumber: number
+    raw: string
+}
+
+export type EffectTracking = (obj: any, evolution: Evolution, prop: any, effect: EffectTrigger) => void
+
+/**
+ * Centralized node for all effect metadata and relationships
+ */
+export interface EffectNode {
+    // Graph relationships
+    parent?: EffectTrigger
+    children?: Set<EffectCleanup>
+
+    // Lifecycle
+    cleanup?: ScopedCallback
+    stopped?: boolean
+    
+    // Error handling
+    forwardThrow?: CatchFunction
+    catchers?: CatchFunction[]
+
+    // Debug / Metadata
+    creationStack?: StackFrame[]
+    dependencyHook?: (obj: any, prop: any) => void
+    
+    // Tracking
+    trackers?: EffectTracking[]
+    
+    // Configuration
+    isOpaque?: boolean
+}
+
 /**
  * Type for the `runEffect` function of an effect - argument-less function to call to trigger the effect
  */
-export type EffectTrigger = ScopedCallback & {
-	[cleanup]: ScopedCallback
-	[forwardThrow]: CatchFunction
-	parent?: EffectTrigger
-}
+export type EffectTrigger = ScopedCallback
 
 /**
  * Async execution mode for effects

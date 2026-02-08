@@ -1,6 +1,5 @@
 import { getActiveEffect } from '../src/reactive/effect-context'
-import { effectCreationStacks } from '../src/reactive/effects'
-import { effectParent, getRoot } from '../src/reactive/registry'
+import { getEffectNode, getRoot } from '../src/reactive/registry'
 import { type EffectTrigger } from '../src/reactive/types'
 
 export const effectMarker ={
@@ -140,8 +139,9 @@ export function getLineage(effect?: EffectTrigger): LineageSegment[] {
 		})
 
 		// Move to parent
-		const parent = effectParent.get(current)
-		const creationStack = effectCreationStacks.get(rootFn)
+		const node = getEffectNode(current)
+		const parent = node.parent
+		const creationStack = getEffectNode(current).creationStack
 		
 		if (parent) {
 			current = parent

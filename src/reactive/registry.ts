@@ -1,4 +1,4 @@
-import { type EffectCleanup, type EffectTrigger, rootFunction } from './types'
+import { type EffectCleanup, type EffectNode, type EffectTrigger, rootFunction } from './types'
 
 // Track which effects are watching which reactive objects for cleanup
 export const effectToReactiveObjects = new WeakMap<EffectTrigger, Set<object>>()
@@ -6,12 +6,17 @@ export const effectToReactiveObjects = new WeakMap<EffectTrigger, Set<object>>()
 // Track effects per reactive object and property
 export const watchers = new WeakMap<object, Map<any, Set<EffectTrigger>>>()
 
-// runEffect -> set<stop>
-export const effectChildren = new WeakMap<EffectTrigger, Set<EffectCleanup>>()
+// Track effect metadata and relationships
+export const effectNodes = new WeakMap<EffectTrigger, EffectNode>()
 
-// Track parent effect relationships for hierarchy traversal (used in deep touch filtering)
-// TODO: we finally have made `effect.parent` in Object.defineProperties - chose only one way to store parent
-export const effectParent = new WeakMap<EffectTrigger, EffectTrigger | undefined>()
+export function getEffectNode(effect: EffectTrigger): EffectNode {
+    let node = effectNodes.get(effect)
+    if (!node) {
+        node = {}
+        effectNodes.set(effect, node)
+    }
+    return node
+}
 
 // Track reverse mapping to ensure unicity: One Root -> One Function
 const reverseRoots = new WeakMap<any, WeakRef<Function>>()

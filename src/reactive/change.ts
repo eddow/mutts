@@ -1,9 +1,9 @@
 import { recordTriggerLink } from '../../debug/debug'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { getActiveEffect, isRunning } from './effect-context'
-import { batch, hasBatched, opaqueEffects, recordActivation } from './effects'
+import { batch, hasBatched, recordActivation } from './effects'
 import { unwrap } from './proxy-state'
-import { watchers } from './registry'
+import { getEffectNode, watchers } from './registry'
 import { allProps, type EffectTrigger, type Evolution, options, type State } from './types'
 
 const states = new WeakMap<object, State>()
@@ -42,8 +42,10 @@ export function collectEffects(
 	for (const keys of keyChains)
 		for (const key of keys) {
 			const deps = objectWatchers.get(key)
+			// console.log(`[DEBUG] collectEffects: checking ${String(key)}. Found deps: ${deps ? deps.size : 'none'}`)
 			if (deps)
 				for (const effect of deps) {
+					// console.log(`[DEBUG] collectEffects: found dependency ${effect.name || 'anonymous'} for ${String(key)}`)
 					const runningChain = isRunning(effect)
 					if (runningChain) {
 						options.skipRunningEffect(effect)
@@ -109,7 +111,8 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 	const sourceEffect = getActiveEffect()
 
 	for (const effect of deps) {
-		if (!opaqueEffects.has(effect)) continue
+		const node = getEffectNode(effect)
+		if (!node.isOpaque) continue
 
 		const runningChain = isRunning(effect)
 		if (runningChain) {

@@ -3,7 +3,7 @@ import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { batch } from './effects'
 import { isNonReactive } from './non-reactive-state'
 import { unwrap } from './proxy-state'
-import { effectParent, watchers } from './registry'
+import { getEffectNode, watchers } from './registry'
 import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, options } from './types'
 
 function isObject(value: any): value is object {
@@ -205,7 +205,8 @@ function hasAncestorInSet(
 	while (current && !visited.has(current)) {
 		visited.add(current)
 		if (allowedSet.has(current)) return true
-		current = effectParent.get(current as EffectTrigger)
+		const node = getEffectNode(current as EffectTrigger)
+		current = node.parent
 	}
 	return false
 }
@@ -246,6 +247,7 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 		let currentEffects: Set<EffectTrigger> | undefined
 		const propsArray = [prop]
 		if (objectWatchers) {
+			// console.log(`[DEBUG] dispatchNotifications: processing ${obj.constructor.name} (has watchers)`)
 			currentEffects = new Set<EffectTrigger>()
 			collectEffects(obj, evolution, currentEffects, objectWatchers, [allProps], propsArray)
 
