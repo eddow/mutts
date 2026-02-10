@@ -3,7 +3,88 @@ import { cleanedBy } from '.'
 import { effect, untracked } from './effects'
 import { memoize } from './memoize'
 import { reactive } from './proxy'
-import type { cleanup, EffectAccess, EffectCleanup, ScopedCallback } from './types'
+import type { cleanup, EffectAccess, EffectCleanup, EffectCloser, ScopedCallback } from './types'
+
+/**
+ * Reactively attends to each entry of a collection or each key yielded by an
+ * enumeration callback. For each key, an inner effect runs the callback. When a
+ * key disappears, its inner effect is disposed. The callback may return a cleanup
+ * (like a regular effect closer).
+ *
+ * Accepts arrays, records, Maps, Sets, or a raw `() => Iterable<Key>` callback.
+ *
+ * @example
+ * ```typescript
+ * // Record shorthand
+ * attend(record, (key) => { console.log(key, record[key]) })
+ *
+ * // Array shorthand
+ * attend(array, (index) => { console.log(index, array[index]) })
+ *
+ * // Raw enumeration callback
+ * attend(() => Object.keys(record), (key) => { ... })
+ * ```
+ */
+export function attend<T>(
+	source: readonly T[],
+	callback: (index: number) => EffectCloser | void
+): ScopedCallback
+export function attend<K, V>(
+	source: Map<K, V>,
+	callback: (key: K) => EffectCloser | void
+): ScopedCallback
+export function attend<T>(
+	source: Set<T>,
+	callback: (value: T) => EffectCloser | void
+): ScopedCallback
+export function attend<S extends Record<PropertyKey, any>>(
+	source: S,
+	callback: (key: keyof S & string) => EffectCloser | void
+): ScopedCallback
+export function attend<Key>(
+	enumerate: () => Iterable<Key>,
+	callback: (key: Key) => EffectCloser | void
+): ScopedCallback
+export function attend(
+	source: any,
+	callback: (key: any) => EffectCloser | void
+): ScopedCallback {
+	const enumerate: () => Iterable<any> =
+		typeof source === 'function'
+			? source
+			: Array.isArray(source)
+				? () => Array.from({ length: source.length }, (_, i) => i)
+				: source instanceof Map
+					? () => source.keys()
+					: source instanceof Set
+						? () => source.values()
+						: () => Object.keys(source)
+
+	const keyEffects = new Map<any, ScopedCallback>()
+
+	const outer = effect(({ ascend }) => {
+		const keys = new Set<any>()
+		for (const key of enumerate()) keys.add(key)
+
+		for (const key of keys) {
+			if (keyEffects.has(key)) continue
+			keyEffects.set(key, ascend(() => effect(() => callback(key))))
+		}
+
+		for (const key of Array.from(keyEffects.keys())) {
+			if (!keys.has(key)) {
+				keyEffects.get(key)!()
+				keyEffects.delete(key)
+			}
+		}
+	})
+
+	return () => {
+		outer()
+		for (const stop of keyEffects.values()) stop()
+		keyEffects.clear()
+	}
+}
 
 /**
  * Result of a reactive scan, which is a reactive array of accumulated values

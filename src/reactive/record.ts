@@ -1,14 +1,12 @@
 import { FoolProof } from '../utils'
+import { attend } from './buffer'
 import { touched1 } from './change'
 import { cleanedBy } from './effect-context'
-import { effect } from './effects'
 import { reactive } from './proxy'
 import {
 	cleanup,
-	type EffectCleanup,
 	type EffectCloser,
 	type ScopedCallback,
-	stopped,
 } from './types'
 
 /**
@@ -131,59 +129,32 @@ export function organized<
 ): OrganizedResult<Target> {
 	const observedSource = reactive(source) as Source
 	const target = reactive(baseTarget) as Target
-	const keyEffects = new Map<PropertyKey, EffectCleanup>()
 
-	function disposeKey(key: PropertyKey) {
-		const stopEffect = keyEffects.get(key)
-		if (stopEffect) {
-			keyEffects.delete(key)
-			stopEffect()
-		}
-	}
-
-	const cleanupKeys = effect(function organizedKeysEffect({ ascend }) {
-		//const keys = Reflect.ownKeys(observedSource) as PropertyKey[]
-		const keys = new Set<PropertyKey>()
-		for (const key in observedSource) keys.add(key)
-
-		for (const key of keys) {
-			if (keyEffects.has(key)) continue
-			ascend(() => {
-				const stop = effect(function organizedKeyEffect() {
-					const sourceKey = key as keyof Source
-					const accessBase = {
-						key: sourceKey,
-						get: () => FoolProof.get(observedSource, sourceKey, observedSource),
-						set: (value: Source[typeof sourceKey]) =>
-							FoolProof.set(observedSource, sourceKey, value, observedSource),
-					}
-					Object.defineProperty(accessBase, 'value', {
-						get: accessBase.get,
-						set: accessBase.set,
-						configurable: true,
-						enumerable: true,
-					})
-					return apply(accessBase as OrganizedAccess<Source, typeof sourceKey>, target)
-				})
-				keyEffects.set(key, stop)
-			})
-		}
-
-		for (const key of Array.from(keyEffects.keys())) if (!keys.has(key)) disposeKey(key)
-	})
-
-	return cleanedBy(
-		target,
-		Object.defineProperties(
-			() => {
-				cleanupKeys()
-				for (const key of Array.from(keyEffects.keys())) disposeKey(key)
-			},
-			{
-				[stopped]: { get: () => cleanupKeys[stopped] },
+	const stop = attend(
+		() => {
+			const keys: PropertyKey[] = []
+			for (const key in observedSource) keys.push(key)
+			return keys
+		},
+		(key) => {
+			const sourceKey = key as keyof Source
+			const accessBase = {
+				key: sourceKey,
+				get: () => FoolProof.get(observedSource, sourceKey, observedSource),
+				set: (value: Source[typeof sourceKey]) =>
+					FoolProof.set(observedSource, sourceKey, value, observedSource),
 			}
-		) as EffectCleanup
-	) as OrganizedResult<Target>
+			Object.defineProperty(accessBase, 'value', {
+				get: accessBase.get,
+				set: accessBase.set,
+				configurable: true,
+				enumerable: true,
+			})
+			return apply(accessBase as OrganizedAccess<Source, typeof sourceKey>, target)
+		}
+	)
+
+	return cleanedBy(target, stop) as OrganizedResult<Target>
 }
 
 /**

@@ -11,6 +11,7 @@ import {
 	getEffectNode,
 	getRoot,
 	markWithRoot,
+	resetRegistry,
 	watchers,
 } from './registry'
 import {
@@ -187,19 +188,22 @@ export function onEffectThrow(onThrow: CatchFunction, effect?: EffectTrigger) {
 	const node = getEffectNode(effect)
 	if (!node.catchers) node.catchers = [onThrow]
 	else node.catchers.push(onThrow)
-	console.log(`[DEBUG] onEffectThrow registered for ${effect.name || 'anonymous'}`, node)
 }
 
 // Dependency graph: tracks which effects trigger which other effects
 // Uses roots (Function) as keys for consistency
-const effectTriggers = new WeakMap<Function, IterableWeakSet<Function>>()
-const effectTriggeredBy = new WeakMap<Function, IterableWeakSet<Function>>()
+let effectTriggers = new WeakMap<Function, IterableWeakSet<Function>>()
+let effectTriggeredBy = new WeakMap<Function, IterableWeakSet<Function>>()
 
 // Transitive closures: track all indirect relationships
 // causesClosure: for each effect, all effects that trigger it (directly or indirectly)
 // consequencesClosure: for each effect, all effects that it triggers (directly or indirectly)
-const causesClosure = new WeakMap<Function, IterableWeakSet<Function>>()
-const consequencesClosure = new WeakMap<Function, IterableWeakSet<Function>>()
+let causesClosure = new WeakMap<Function, IterableWeakSet<Function>>()
+let consequencesClosure = new WeakMap<Function, IterableWeakSet<Function>>()
+
+// Batch re-entrance depth and broken state
+let batchDepth = 0
+let broken = false
 
 // Debug: Capture where an effect was created
 export const effectCreationStacks = new WeakMap<Function, StackFrame[]>()
@@ -227,15 +231,9 @@ function getOrCreateClosure(
  */
 function addGraphEdge(callerRoot: Function, targetRoot: Function) {
 	if (options.cycleHandling === 'production') return
-	// Skip if edge already exists
-	const triggers = effectTriggers.get(callerRoot)
-	if (triggers?.has(targetRoot)) {
-		console.log(`[DEBUG] addGraphEdge: ${callerRoot.name} -> ${targetRoot.name} (already exists)`)
-		return // Edge already exists
-	}
-	console.log(`[DEBUG] addGraphEdge: ${callerRoot.name} -> ${targetRoot.name} (adding)`)
-
 	// Add to forward graph: callerRoot → targetRoot
+	const triggers = effectTriggers.get(callerRoot)
+
 	if (!triggers) {
 		const newTriggers = new IterableWeakSet<Function>()
 		newTriggers.add(targetRoot)
@@ -299,13 +297,11 @@ function addGraphEdge(callerRoot: Function, targetRoot: Function) {
 
 	// 4. Cross-product: for each X in causesClosure(U) and Y in consequencesClosure(V): X→Y
 	if (uCausesSet?.size && vConsequencesSet?.size) {
-		console.log(`[DEBUG] addGraphEdge: propagating transitive X -> Y. X count: ${uCausesSet.size}, Y count: ${vConsequencesSet.size}`)
 		for (const x of uCausesSet) {
 			const xConsequences = getOrCreateClosure(consequencesClosure, x)
 			for (const y of vConsequencesSet) {
 				// Skip if this would create a self-loop
 				if (x === y) continue
-				console.log(`[DEBUG] addGraphEdge: adding X(${x.name}) -> Y(${y.name}) transitive`)
 				xConsequences.add(y)
 				const yCauses = getOrCreateClosure(causesClosure, y)
 				yCauses.add(x)
@@ -479,7 +475,6 @@ const batchCleanups = new Set<EffectCleanup>()
  */
 function computeAllInDegrees(batch: BatchQueue): void {
 	if (options.cycleHandling === 'production') return
-	console.log(`[DEBUG] computeAllInDegrees: start`)
 	const activeEffect = getActiveEffect()
 	const activeRoot = activeEffect ? getRoot(activeEffect) : null
 
@@ -499,7 +494,6 @@ function computeAllInDegrees(batch: BatchQueue): void {
 		}
 		batch.inDegrees.set(root, inDegree)
 	}
-	console.log(`[DEBUG] computeAllInDegrees: done`)
 }
 
 /**
@@ -601,7 +595,6 @@ function wouldCreateCycle(callerRoot: Function, targetRoot: Function): boolean {
 	// This would create a cycle: callerRoot -> targetRoot -> ... -> callerRoot
 	// Using consequencesClosure: if targetRoot triggers callerRoot, then callerRoot is in consequencesClosure(targetRoot)
 	const targetConsequences = consequencesClosure.get(targetRoot)
-	console.log(`[DEBUG] wouldCreateCycle check: ${callerRoot.name} -> ${targetRoot.name}. targetConsequences has caller?`, targetConsequences?.has(callerRoot))
 	if (targetConsequences?.has(callerRoot)) {
 		return true // Cycle detected: targetRoot -> ... -> callerRoot, and we're adding callerRoot -> targetRoot
 	}
@@ -801,7 +794,6 @@ function executeNext(effectuatedRoots: Function[]): any {
 			if (inDegree === 0) {
 				nextEffect = effect
 				nextRoot = root
-				console.log(`[DEBUG] executeNext: found next ${root.name}`)
 				break
 			}
 		}
@@ -866,10 +858,17 @@ function executeNext(effectuatedRoots: Function[]): any {
 // Track which sub-effects have been executed to prevent infinite loops
 // These are all the effects triggered under `activeEffect` and all their sub-effects
 export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'immediate') {
+	if (broken) {
+		throw new ReactiveError(
+			'[reactive] Reactive system is broken after an unrecoverable error. Call reset() to recover.',
+			{ code: ReactiveErrorCode.BrokenEffects }
+		)
+	}
 	if (!Array.isArray(effect)) effect = [effect]
-	// console.log(`[DEBUG] batch starting with ${effect.length} effects: ${effect.map(e => e.name || 'anonymous').join(', ')}`)
 	const roots = effect.map(getRoot)
 
+	batchDepth++
+	try {
 	if (batchQueue) {
 		// Nested batch - add to existing
 		options?.chain(roots, getRoot(getActiveEffect()))
@@ -903,6 +902,7 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 		const caller = getActiveEffect()
 		const effectuatedRoots: Function[] = []
 		const firstReturn: { value?: any } = {}
+		let success = false
 
 		try {
 			if (immediate) {
@@ -978,28 +978,46 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 					// If we want to keep that behavior: if (immediate) break
 				}
 			}
+				success = true
 		} finally {
+			if (!success) panicThrow()
 			activationRegistry = undefined
 			batchQueue = undefined
 			batchCleanups.clear()
-			options.endChain()
+			optionCall('endChain')
 		}
 		return firstReturn.value
 	}
+	} finally {
+		batchDepth--
+	}
 }
 
-export function resetBatchQueueForTest() {
-    batchQueue = undefined
-    activationRegistry = undefined
-    batchCleanups.clear()
+function panicThrow() {
+	broken = true
 }
 
-function panicThrow(error: Error) {
+/**
+ * Resets the reactive system to a consistent state.
+ * Call this after an unrecoverable error has set the system to "broken".
+ * This clears all batch state, effect dependency graphs, and watcher registrations.
+ * All existing effects become orphaned and must be recreated.
+ */
+export function reset() {
+	broken = false
+	batchDepth = 0
 	activationRegistry = undefined
 	batchQueue = undefined
-	optionCall('endChain')
-	throw error
+	batchCleanups.clear()
+	effectTriggers = new WeakMap()
+	effectTriggeredBy = new WeakMap()
+	causesClosure = new WeakMap()
+	consequencesClosure = new WeakMap()
+	resetRegistry()
+	effectHistory.present.active = undefined
 }
+
+export { reset as resetBatchQueueForTest }
 
 // Inject batch function to allow atomic game loops in requestAnimationFrame/setTimeout/...
 // Note: Automatic batching of async callbacks (setTimeout, Promise.then, etc.) is NOT implemented.

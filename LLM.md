@@ -95,6 +95,16 @@ In `mutts`, you define **what things are**, not **when things happen**.
 *   **Migration**: All internal application logic should be expressible via reactive derivations (`memoize`, `project`, `effect`) rather than transient event pulses.
 
 
+## Cleanup Semantics: `cleanedBy`, `attend`, `project`
+
+When a reactive bunch (`attend`, `project`, `scan`, …) is **cleaned up**, all its inner effects are disposed. There is no need to manually undo work done by those effects — cleanup means the owner is being removed from concern entirely.
+
+- `cleanedBy(owner, cleanup)`: ties the cleanup to the owner's lifecycle. When the owner is disposed, the cleanup runs.
+- `attend(enumerate, callback)` returns a cleanup. Each per-key callback can return a cleanup too. All are called when the attend is disposed.
+- `project(source, callback)` similarly disposes per-item effects when items are removed or the projection itself is cleaned up.
+
+**Key rule**: cleanup functions should release *reactive subscriptions*, not undo *side effects* on the owner. For example, if `attend` sets DOM attributes on an element, there is no need to reset those attributes in cleanup — the element itself is being removed.
+
 ## Debugging Reactivity
 
 Tools are built-in in order to catch common reactivity-related issues.

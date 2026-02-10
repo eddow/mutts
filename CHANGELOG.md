@@ -12,6 +12,7 @@
 - `onEffectThrow` - effect throw/catch feature
 - typings: `ScopedCallback` became `EffectTrigger` and `EffectCleanup`
 - `describe` - reactive property definition
+- `attend` - reactive enumeration
 
 ## Refactoring
 

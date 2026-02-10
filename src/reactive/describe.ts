@@ -1,5 +1,6 @@
+import { attend } from './buffer'
+import { touched1 } from './change'
 import { cleanedBy } from './effect-context'
-import { effect } from './effects'
 import { reactive } from './proxy'
 
 /**
@@ -17,44 +18,22 @@ export function describe<T extends object>(
 	target: T = Object.create(null) as T
 ): T {
 	descriptors = reactive(descriptors)
-	const keyEffects = new Map<PropertyKey, () => void>()
 
-	function disposeKey(key: PropertyKey) {
-		const stop = keyEffects.get(key)
-		if (stop) {
-			stop()
-			keyEffects.delete(key)
-			Reflect.deleteProperty(target, key)
-		}
-	}
-
-	const cleanup = effect(function describeEffect({ ascend }) {
-		const keys = Reflect.ownKeys(descriptors)
-
-		for (const key of keys) {
-			if (keyEffects.has(key)) continue
-			ascend(() => {
-				const stop = effect(function describeKeyEffect() {
-					const desc = (descriptors as any)[key]
-					if (desc) {
-						Object.defineProperty(target, key, {
-							...desc,
-							configurable: true,
-						})
-					}
+	const stop = attend(
+		() => Reflect.ownKeys(descriptors),
+		(key) => {
+			const desc = (descriptors as any)[key]
+			if (desc) {
+				Object.defineProperty(target, key, {
+					enumerable: true,
+					...desc,
+					configurable: true,
 				})
-				keyEffects.set(key, stop)
-			})
+				touched1(target, { type: 'set', prop: key }, key)
+			}
+			return () => Reflect.deleteProperty(target, key)
 		}
+	)
 
-		for (const key of Array.from(keyEffects.keys())) {
-			if (!(keys as PropertyKey[]).includes(key)) disposeKey(key)
-		}
-	})
-
-	return cleanedBy(target, () => {
-		cleanup()
-		for (const stop of keyEffects.values()) stop()
-		keyEffects.clear()
-	})
+	return cleanedBy(target, stop)
 }

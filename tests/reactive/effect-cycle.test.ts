@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { effect, resetBatchQueueForTest, options, ReactiveErrorCode } from '../../src/reactive/effects'
+import { effect, reset, options, ReactiveErrorCode } from '../../src/reactive/effects'
 import { reactive } from '../../src/reactive/proxy'
 
 describe('effect cycle detection and ordering', () => {
 	const originalCycleHandling = options.cycleHandling
 	beforeEach(() => {
-		resetBatchQueueForTest()
+		reset()
 		options.cycleHandling = 'production'
 		options.maxEffectChain = 100
 		options.maxTriggerPerBatch = 100
@@ -321,6 +321,10 @@ describe('effect cycle detection and ordering', () => {
 			options.maxEffectChain = 5
 			expect(() => createSimpleCycle(10)).toThrow(/Max effect chain reached/)
 
+			// Reset broken state before next assertion
+			reset()
+			options.cycleHandling = 'production'
+
 			// With maxEffectChain=100, same cycle completes without error
 			options.maxEffectChain = 100
 			const state = createSimpleCycle(10)
@@ -336,6 +340,10 @@ describe('effect cycle detection and ordering', () => {
 			try {
 				// Cycle is caught immediately when adding edge, regardless of maxEffectChain
 				expect(() => createSimpleCycle(10)).toThrow(/Cycle detected/)
+
+				// Reset broken state before next assertion
+				reset()
+				options.cycleHandling = 'development'
 
 				let caughtError: any
 				try {
@@ -355,6 +363,10 @@ describe('effect cycle detection and ordering', () => {
 			try {
 				// Same immediate detection as development
 				expect(() => createSimpleCycle(10)).toThrow(/Cycle detected/)
+
+				// Reset broken state before next assertion
+				reset()
+				options.cycleHandling = 'debug'
 
 				let caughtError: any
 				try {

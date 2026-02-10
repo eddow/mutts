@@ -1,6 +1,10 @@
-import { describe, it, expect } from 'vitest'
-import { effect, memoize, onEffectThrow, reactive } from 'mutts'
+import { describe, it, expect, afterEach } from 'vitest'
+import { effect, memoize, onEffectThrow, reactive, reset } from 'mutts'
 import { ReactiveError, ReactiveErrorCode } from '../../src/reactive/types'
+
+afterEach(() => {
+	reset()
+})
 
 /* TODO:
 The async effect tests are expecting promise rejections to be caught by onEffectThrow, but looking at the implementation, the runningPromise is created but not actually awaited or have its rejection handled. The promise rejections won't automatically trigger the error handlers.
@@ -575,8 +579,23 @@ describe('Error Propagation - Additional Tests', () => {
 				state.a = 1
 			}).toThrow(ReactiveError)
 
+			// Reset broken state, recreate the cycle, then verify error codes
+			reset()
+
+			const state2 = reactive({ a: 0, b: 0 })
+			effect(() => {
+				if (state2.a === 1) {
+					state2.b = 1
+				}
+			})
+			effect(() => {
+				if (state2.b === 1) {
+					state2.a = 2
+				}
+			})
+
 			try {
-				state.a = 1
+				state2.a = 1
 			} catch (e: any) {
 				expect(e).toBeInstanceOf(ReactiveError)
 				expect(e.code).toBe(ReactiveErrorCode.CycleDetected)

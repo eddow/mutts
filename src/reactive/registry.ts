@@ -1,13 +1,13 @@
 import { type EffectCleanup, type EffectNode, type EffectTrigger, rootFunction } from './types'
 
 // Track which effects are watching which reactive objects for cleanup
-export const effectToReactiveObjects = new WeakMap<EffectTrigger, Set<object>>()
+export let effectToReactiveObjects = new WeakMap<EffectTrigger, Set<object>>()
 
 // Track effects per reactive object and property
-export const watchers = new WeakMap<object, Map<any, Set<EffectTrigger>>>()
+export let watchers = new WeakMap<object, Map<any, Set<EffectTrigger>>>()
 
 // Track effect metadata and relationships
-export const effectNodes = new WeakMap<EffectTrigger, EffectNode>()
+export let effectNodes = new WeakMap<EffectTrigger, EffectNode>()
 
 export function getEffectNode(effect: EffectTrigger): EffectNode {
     let node = effectNodes.get(effect)
@@ -19,7 +19,14 @@ export function getEffectNode(effect: EffectTrigger): EffectNode {
 }
 
 // Track reverse mapping to ensure unicity: One Root -> One Function
-const reverseRoots = new WeakMap<any, WeakRef<Function>>()
+let reverseRoots = new WeakMap<any, WeakRef<Function>>()
+
+export function resetRegistry() {
+	effectToReactiveObjects = new WeakMap()
+	watchers = new WeakMap()
+	effectNodes = new WeakMap()
+	reverseRoots = new WeakMap()
+}
 
 /**
  * Marks a function with its root function for effect tracking

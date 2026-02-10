@@ -12,6 +12,8 @@ Unlike `Object.defineProperties`, the reactive `describe` utility is alive:
 
 This is particularly useful when projecting props or dynamically extending objects in a reactive way.
 
+Internally, `describe` is built on [`attend`](./attend.md), which provides the reactive key lifecycle.
+
 ## API
 
 ```typescript

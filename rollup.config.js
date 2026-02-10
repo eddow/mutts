@@ -87,39 +87,16 @@ const config = [
     external,
     plugins: [
       pluginDts(),
-      { // TODO: Might be an overkill for Array augmentation ?
-        name: 'append-array-augmentation',
+      { //TOTO: remove the demand - try to remove it and see why pounce/* make problems
+        name: 'generate-index-dts',
         closeBundle() {
-          // Run after all bundles are closed to ensure rollup-plugin-dts has finished
+          // rollup-plugin-dts generates browser.d.ts/node.d.ts from the entry keys,
+          // but package consumers also expect dist/index.d.ts.
+          // The rolled-up .d.ts files can drop named re-exports (rollup-plugin-dts bug),
+          // so we re-export from the complete intermediate files instead.
           const indexPath = join('dist', 'index.d.ts')
-          const augmentationContent = readFileSync('src/index.d.ts', 'utf8')
-
-          try {
-            // Read the current content
-            let currentContent = readFileSync(indexPath, 'utf8').trim()
-
-            // If the file is empty or only has export {}, rollup-plugin-dts didn't generate exports
-            // In this case, we need to manually read the exports from the individual .d.ts files
-            if (!currentContent || currentContent === 'export {};' || currentContent === 'export { };') {
-              // Read source index.ts to get export statements and convert to .js extensions for declarations
-              const sourceExports = readFileSync('src/index.ts', 'utf8')
-                .split('\n')
-                .filter(line => line.trim().startsWith('export'))
-                .map(line => line.replace(/from ['"]\.\/([^'"]+)['"]/g, "from './$1.js'"))
-
-              currentContent = sourceExports.join('\n')
-            } else {
-              // Remove any trailing export { } statements
-              currentContent = currentContent.replace(/\n\s*export\s*{\s*}\s*;?\s*$/m, '')
-            }
-
-            // Append augmentation at the end
-            const finalContent = currentContent.trim() + '\n\n' + augmentationContent
-            writeFileSync(indexPath, finalContent, 'utf8')
-            console.log('✓ Array augmentation included in index.d.ts')
-          } catch (error) {
-            console.warn('Failed to process index.d.ts:', error.message)
-          }
+          writeFileSync(indexPath, "export * from './src/index'\n", 'utf8')
+          console.log('✓ dist/index.d.ts generated')
         },
       },
     ],

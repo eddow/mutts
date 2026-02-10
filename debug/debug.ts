@@ -628,6 +628,7 @@ if (isDevelopmentMode() && !devtoolsEnabled) {
 	
 	// Optional: Log that devtools were enabled (only in development)
 	if (typeof console !== 'undefined' && console.info) {
+		// Do not log these in when mode === 'test'
 		console.info('🦴 Mutts DevTools enabled automatically in development mode')
 	}
 }

@@ -1,4 +1,9 @@
-import { atomic, effect, reactive, ReactiveErrorCode } from 'mutts'
+import { afterEach } from 'vitest'
+import { atomic, effect, reactive, ReactiveErrorCode, reset } from 'mutts'
+
+afterEach(() => {
+	reset()
+})
 
 describe('@atomic decorator', () => {
 	describe('basic functionality', () => {
@@ -388,9 +393,12 @@ describe('@atomic decorator', () => {
 			expect(state.a).toBe(1) // Change was made before error
 			expect(state.b).toBe(0) // Should remain unchanged due to error
 
-			// Second method should work normally
+			// System is broken after unrecoverable error — reset to continue
+			reset()
+
+			// Second method should work normally (effects lost after reset)
 			instance.updateNormal()
-			expect(effectCount).toBe(1) // Reactivity is broken for this effect because it was in the failing batch
+			expect(effectCount).toBe(1) // Effect was orphaned by reset
 			expect(state.b).toBe(3)
 		})
 
