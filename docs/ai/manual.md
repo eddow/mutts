@@ -1,217 +1,300 @@
 # Mutts — LLM Usage Manual
 
-> **FOR LLM CONSUMERS** — This document contains everything needed to use `mutts` as a dependency. It is the single source of truth for correct usage. Do not rely on prior training data about this library. Companion file: [api-reference.md](./api-reference.md) for full type signatures.
+> **FOR LLM CONSUMERS** — Everything needed to use `mutts` as a dependency. Single source of truth. Do not rely on prior training data. Companion: [api-reference.md](./api-reference.md) for types.
 
 ---
 
-## 1. WHAT IS MUTTS
+## 1. MENTAL MODEL
 
-A proxy-based **fine-grained reactivity system** for TypeScript/JavaScript. No VDOM, no scheduler — changes propagate synchronously through dependency-tracked effects. Also provides: decorator unification, class mixins, event system, resource management, promise chaining, and zones (async context propagation).
+Proxy-based **fine-grained reactivity** — changes propagate synchronously through dependency-tracked effects. No VDOM, no scheduler, no hooks.
 
-**Entry points**: `mutts/browser` (DOM), `mutts/node` (AsyncLocalStorage). Plain `import { ... } from 'mutts'` auto-selects via `package.json` exports.
+| Concept | Mutts |
+|---------|-------|
+| State | `reactive(obj)` — proxy wraps, tracks reads/writes |
+| Reactions | `effect(() => {})` — auto-tracks deps, re-runs on change |
+| Computed | `memoize(fn)` — cached, invalidates on tracked deps |
+| Collections | `project(arr, fn)` — per-entry effects, not `.map()` |
+| Async context | `Zone` + `asyncZone` — propagates across await |
+| Batching | `atomic(() => {})` — fire effects once after all mutations |
+| Cleanup | Return fn from effect — runs before re-run/disposal |
 
----
-
-## 2. CORE REACTIVITY
-
-### 2.1 reactive() — Make objects trackable
+**All exports come from `'mutts'`** — no subpath imports like `mutts/reactive` or `mutts/zone`.
 
 ```ts
-import { reactive, effect } from 'mutts'
-
-const state = reactive({ count: 0, name: 'John' })
+import { reactive, effect, memoize, project, attend, lift, scan, cleanup,
+  atomic, defer, untracked, unreactive, watch, biDi, onEffectThrow,
+  cleanedBy, derived, organized, describe, Register,
+  Zone, asyncZone, ZoneHistory, ZoneAggregator,
+  decorator, mixin, Eventful, Destroyable, flavored, Indexable, chainPromise,
+  reactiveOptions, isReactive, unwrap, getState
+} from 'mutts'
 ```
 
-- Wraps an object in a `Proxy` that tracks property reads (dependencies) and writes (notifications).
-- Same object always returns the same proxy.
-- Works with: plain objects, `Object.create(null)`, class instances, arrays, Map, Set, WeakMap, WeakSet.
-- `unwrap(proxy)` recovers the original. `isReactive(obj)` checks.
+**Entry points**: `mutts` (auto-selects), `mutts/browser` (DOM), `mutts/node` (AsyncLocalStorage), `mutts/debug`.
 
-### 2.2 effect() — React to changes
+**Singleton guard**: mutts throws if loaded twice (different bundles/versions). Ensure your bundler externalizes or aliases `mutts` to a single source.
+
+---
+
+## 2. CRITICAL TRAPS
+
+### TRAP 1: Memoize with primitives
+`memoize` uses WeakMap — args MUST be objects/symbols, NOT primitives.
+
+```ts
+// BAD
+const double = memoize((n: number) => n * 2) // WeakMap can't key on number
+
+// GOOD
+const double = memoize((obj: { n: number }) => obj.n * 2)
+```
+
+### TRAP 2: Reactive reads lose context after await
+Effect tracking context is automatically propagated across async boundaries in Node.js (via `AsyncLocalStorage`). In browsers, monkey-patching is less robust — use `tracked` to be safe.
+
+```ts
+// Node.js — works automatically (effectHistory is pre-registered in asyncZone)
+effect(async () => {
+  await fetch('/api')
+  console.log(state.count) // tracked in Node.js
+})
+
+// Browser or explicit — use access.tracked to restore context
+effect(({ tracked }) => {
+  someCallback(() => {
+    tracked(() => console.log(state.count)) // restore tracking context
+  })
+})
+```
+
+### TRAP 3: Self-triggering effects (cycles)
+Effect reads and writes same state → infinite loop.
+
+```ts
+// BAD — cycle
+effect(() => {
+  state.count = state.count + 1 // reads count, writes count → re-triggers
+})
+
+// GOOD — defer mutation
+effect(() => {
+  const val = state.count
+  defer(() => { state.processedCount = val }) // runs after batch
+})
+```
+
+### TRAP 4: Using queueMicrotask for cycle avoidance
+`defer()` is batch-aware and synchronous. `queueMicrotask` breaks batching.
+
+```ts
+// BAD
+effect(() => {
+  queueMicrotask(() => state.x = state.y) // async, breaks atomic batches
+})
+
+// GOOD
+effect(() => {
+  defer(() => state.x = state.y) // sync after batch completes
+})
+```
+
+### TRAP 5: Array clearing
+`array.length = 0` works (triggers all indices + length). `splice(0)` is equivalent.
+
+```ts
+array.length = 0  // works — touches all affected indices
+array.splice(0)   // also works — explicit clear
+```
+
+### TRAP 6: Using .map() for reactive transforms
+`.map()` is static — full rebuild on any change. Use `project()` for per-entry reactivity.
+
+```ts
+// BAD — full rebuild
+const doubled = items.map(x => x.value * 2)
+
+// GOOD — per-entry effects
+const doubled = project(items, ({ get }) => get().value * 2)
+```
+
+### TRAP 7: Deep watch overhead
+`watch(obj, fn, { deep: true })` tracks ALL nested properties. Prefer explicit reads + recursive touching (enabled by default).
+
+```ts
+// EXPENSIVE
+watch(state, () => { ... }, { deep: true })
+
+// BETTER — explicit property reads
+effect(() => {
+  state.user.name // only tracks .user.name
+})
+```
+
+### TRAP 8: _mutts_* properties are debug helpers
+`_mutts_*` properties are for introspection/logging ONLY — not stable API.
+
+```ts
+// OK for debugging
+console.log(obj._mutts_watchers)
+
+// BAD — don't build logic on it
+if (obj._mutts_isReactive) { ... }
+```
+
+---
+
+## 3. CORE REACTIVITY
+
+### 3.1 reactive() — Trackable state
+
+```ts
+const state = reactive({ count: 0, items: [1, 2, 3] })
+// Same object → same proxy. Works: objects, arrays, Map, Set, WeakMap, WeakSet
+// unwrap(proxy) → original. isReactive(obj) → boolean
+```
+
+### 3.2 effect() — Auto-tracked reactions
 
 ```ts
 const stop = effect(({ reaction, tracked, ascend }) => {
-  console.log(state.count) // tracked automatically
-  return () => { /* cleanup before next run or disposal */ }
+  console.log(state.count) // auto-tracked
+  return () => { /* cleanup: before re-run or disposal */ }
 })
-
-state.count++ // triggers effect
-stop()        // disposes effect permanently
+state.count++ // triggers
+stop()        // disposes
 ```
 
-- **Auto-tracks**: any reactive property read inside the callback becomes a dependency.
-- **Cleanup**: return a function — called before each re-run and on disposal.
-- **`reaction`**: `false` on first run, `true` on subsequent triggers.
-- **`tracked(fn)`**: restores tracking context in async/unmanaged callbacks.
-- **`ascend(fn)`**: tracks dependencies in the *parent* effect instead.
-- **Parent-child**: effects created inside other effects are children; disposing a parent disposes all children.
-- **GC**: unreferenced top-level effects may be garbage-collected. Store the cleanup reference to keep alive.
+- **Access object**: `{ reaction, tracked(fn), ascend(fn) }` — `reaction` = false on first run, true after. `tracked` restores context in async. `ascend` tracks in parent effect.
+- **Parent-child**: effects inside effects are children — parent disposal cascades.
+- **GC**: unreferenced top-level effects may GC — store `stop` to keep alive.
+- **Modifiers**: `effect.opaque(() => {})` (identity-only), `effect.named('x')(() => {})` (debug label). Chainable.
 
-**Modifiers** (chainable):
-```ts
-effect.opaque(() => { ... })           // identity-only tracking (no deep touch)
-effect.named('label')(() => { ... })   // named for debugging
-effect.opaque.named('x')(() => { ... })
-```
-
-### 2.3 memoize() — Cached computed values
+### 3.3 memoize() — Cached computed
 
 ```ts
 const doubled = memoize((obj: { value: number }) => obj.value * 2)
-// Arguments must be WeakMap-compatible (objects/symbols). No primitives.
-// Cache invalidates when tracked reactive reads inside fn change.
-// Same fn passed to memoize() multiple times returns same wrapper.
+// Args MUST be objects/symbols (WeakMap keys). Cache invalidates on tracked deps.
+// Decorator: @memoize on getters (per-instance) or methods (per-instance+args).
 ```
 
-As decorator: `@memoize` on getters (per-instance cache) or methods (per-instance+args).
-
-### 2.4 untracked() — Escape tracking
+### 3.4 untracked() — Escape tracking
 
 ```ts
-untracked(() => {
-  // Reactive reads here are NOT tracked by the enclosing effect
-})
+untracked(() => { state.count }) // NOT tracked
 ```
 
-### 2.5 unreactive() — Opt out
+### 3.5 unreactive() — Opt out
 
 ```ts
-unreactive(obj)           // mark object as non-reactive
-unreactive(MyClass)       // mark entire class
-@unreactive('id', 'meta') // mark specific properties on a @reactive class
+unreactive(obj) // mark non-reactive
+unreactive(MyClass) // entire class
+@unreactive('id', 'meta') // specific props on @reactive class
 ```
 
-### 2.6 atomic() — Batch mutations
+### 3.6 atomic() — Batch mutations
 
 ```ts
-const updateBoth = atomic((a, b) => {
-  state.a = a
-  state.b = b
-  // Effects fire ONCE after both mutations, not twice
-})
-updateBoth(10, 20)
+const updateBoth = atomic((a, b) => { state.a = a; state.b = b }) // effects fire once
+// Decorator: @atomic on methods
 ```
 
-Also works as `@atomic` decorator on class methods.
+### 3.7 defer() — Avoid cycles
 
-### 2.7 defer() / addBatchCleanup() — Avoid cycles
-
-When an effect needs to mutate state it reads, defer the mutation:
 ```ts
 effect(() => {
   const len = state.items.length
-  defer(() => { state.processedCount = len }) // runs after batch completes
+  defer(() => { state.processedCount = len }) // sync after batch, FIFO
 })
+// Outside batch: immediate. NO microtask delay.
 ```
-- Runs synchronously after outermost batch. FIFO order. No microtask delay.
-- Outside a batch: executes immediately.
 
-### 2.8 biDi() — Bidirectional binding
+### 3.8 biDi() — Bidirectional binding
 
-Bridges reactive state ↔ external (DOM, third-party). Prevents infinite loops automatically.
 ```ts
 const provide = biDi(
-  (v) => inputElement.value = v,       // external setter
+  (v) => input.value = v, // external setter
   { get: () => model.value, set: (v) => model.value = v }
 )
-inputElement.addEventListener('input', () => provide(inputElement.value))
+input.addEventListener('input', () => provide(input.value))
+// Prevents infinite loops automatically
 ```
 
-### 2.9 watch() — Observe changes
+### 3.9 watch() — Observe changes
 
 ```ts
-// Watch a specific derivation
-watch(() => state.count, (newVal, oldVal) => { ... })
+watch(() => state.count, (newVal, oldVal) => {}) // specific derivation
+watch(state, () => {}) // any property
+watch(state, () => {}, { deep: true }) // deep (expensive)
+```
 
-// Watch any property on an object
-watch(state, () => { ... })
+### 3.10 cleanedBy() — Attach cleanup to objects
 
-// Deep watch (higher overhead)
-watch(state, () => { ... }, { deep: true })
+```ts
+const obj = cleanedBy({ data: [] }, () => console.log('cleaned up'))
+obj[cleanup]() // triggers cleanup
+// Chains: if obj already has a cleanup, both run
+```
+
+### 3.11 derived() — Reactive computed value
+
+```ts
+const d = derived((access) => state.a + state.b)
+d.value // auto-recomputes when state.a or state.b change
+d[cleanup]() // dispose
 ```
 
 ---
 
-## 3. COLLECTIONS
-
-All standard collections get reactive wrappers via `reactive()`:
+## 4. COLLECTIONS
 
 | Type | Tracking |
 |------|----------|
-| `reactive([])` | Per-index, `.length`, iteration (allProps) |
+| `reactive([])` | Per-index, `.length`, iteration |
 | `reactive(new Map())` | Per-key, `.size`, iteration |
 | `reactive(new Set())` | Per-value, `.size`, iteration |
-| `reactive(new WeakMap())` | Per-key only |
-| `reactive(new WeakSet())` | Per-value only |
+| `reactive(new WeakMap/Set())` | Per-key/value only |
 
 Array methods (`push`, `splice`, `sort`, etc.) all trigger reactivity.
 
-
-### 3.1 Register — Keyed ordered collection
+### 4.1 Register — Keyed ordered collection
 
 ```ts
-import { Register } from 'mutts/reactive'
-
-const list = new Register(item => item.id, [
-  { id: 1, label: 'Alpha' },
-  { id: 2, label: 'Bravo' },
-])
-
-list.push({ id: 3, label: 'Charlie' })
-list.get(2)            // lookup by key, O(1)
-list.set(2, newItem)   // update by key
-list.remove(2)         // remove by key
-list.keep(item => item.active) // filter in-place
+const list = new Register(item => item.id, [{ id: 1, label: 'A' }])
+list.get(1)            // O(1) lookup by key
+list.set(1, newItem)   // update by key
+list.remove(1)         // remove by key
+list.keep(x => x.active) // filter in-place
 list.upsert(v => list.push(v), ...items) // update or insert
+// Full array surface + CRUD events: on('add'|'delete'|'update'|'rekey', ...)
 ```
-
-Full array surface (`map`, `filter`, `reduce`, `sort`, etc.) + CRUD events (`on('add', ...)`, `on('delete', ...)`, `on('update', ...)`, `on('rekey', ...)`).
 
 ---
 
-## 4. COLLECTION TRANSFORMS
+## 5. COLLECTION TRANSFORMS
 
-### 4.1 project() — Per-entry reactive map
+All transforms return reactive results. Cleanup via `result[cleanup]()`.
 
-The reactive replacement for `.map()`. Each entry gets its own effect — only changed entries recompute.
+### 5.1 project() — Per-entry reactive map
 
 ```ts
-import { project, cleanup } from 'mutts'
-
-// Array
 const names = project(users, ({ get }) => get().name.toUpperCase())
-// names[0] recomputes only when users[0] changes
-
-// Record
-const grades = project.record(scores, ({ get }) => get() >= 90 ? 'A' : 'B')
-
-// Map
-const totals = project.map(inventory, ({ get }) => get().count)
-
-// Auto-dispatch
-const doubled = project(source, ({ get }) => get() * 2)
-
-// Cleanup
-names[cleanup]()
+// names[0] recomputes ONLY when users[0] changes
+// Variants: project.record(), project.map() — auto-dispatches by source type
 ```
 
 **Access object**: `{ get(), set(v), key, source, old, value }`
 
-### 4.2 attend() — Per-key lifecycle
-
-Creates inner effect per key. Disposed when key disappears.
+### 5.2 attend() — Per-key lifecycle
 
 ```ts
-import { attend } from 'mutts'
-
 attend(reactiveRecord, (key) => {
   console.log(`${key} = ${reactiveRecord[key]}`)
-  return () => console.log(`cleanup: ${key}`)
+  return () => console.log(`cleanup: ${key}`) // disposed when key disappears
 })
-// Also works with: arrays, Maps, Sets, or raw () => Iterable<Key>
+// Works with: arrays, Maps, Sets, or raw () => Iterable<Key>
 ```
 
-### 4.3 organized() — Per-key record transform with side effects
+### 5.3 organized() — Per-key record transform
 
 ```ts
 const doubled = organized(source, (access, target) => {
@@ -220,41 +303,34 @@ const doubled = organized(source, (access, target) => {
 })
 ```
 
-### 4.4 describe() — Reactive Object.defineProperties
+### 5.4 describe() — Reactive Object.defineProperties
 
 ```ts
 const descriptors = reactive({ foo: { value: 1, enumerable: true } })
 const target = describe(descriptors) // target.foo === 1
-descriptors.bar = { get: () => 42, enumerable: true } // target.bar appears
-delete descriptors.foo // target.foo disappears
+// Add/remove descriptors → target properties appear/disappear reactively
 ```
 
-### 4.5 scan() — Reactive accumulation
+### 5.5 scan() — Reactive accumulation
 
 ```ts
 const result = scan(source, (acc, item) => acc + item.val, 0)
-// result is reactive array of intermediates: [1, 3, 6]
-// Changing source[1].val only recomputes from index 1 onward
-result[cleanup]()
+// [1, 3, 6] — changing source[1] recomputes from index 1 onward
+// Items must be objects (WeakMap keys). Move-optimized.
 ```
 
-Items must be objects (WeakMap keys). Move-optimized (reorders reuse cached intermediates).
-
-### 4.6 lift() — Sync a computed array/object
+### 5.6 lift() — Sync a computed array/object
 
 ```ts
 const filtered = lift(() => items.filter(x => x.active))
-// Only changed elements sync — element-wise diff, not full rebuild
-filtered[cleanup]()
+// Element-wise diff — only changed elements sync, not full rebuild
 ```
 
 ---
 
-## 5. EVOLUTION TRACKING
+## 6. EVOLUTION TRACKING
 
 ```ts
-import { getState } from 'mutts/reactive'
-
 let state = getState(obj)
 effect(() => {
   while ('evolution' in state) {
@@ -264,68 +340,64 @@ effect(() => {
 })
 ```
 
-**Recursive touching**: replacing an object with another of the same prototype triggers fine-grained per-property diffs, not a wholesale parent notification. Disable with `reactiveOptions.recursiveTouching = false`.
+**Recursive touching**: replacing an object with another of the same prototype triggers fine-grained per-property diffs, not wholesale notification. Disable: `reactiveOptions.recursiveTouching = false`.
 
 ---
 
-## 6. ERROR HANDLING
+## 7. ERROR HANDLING
 
 ```ts
-import { onEffectThrow } from 'mutts'
-
 effect(() => {
   onEffectThrow((error) => {
-    console.error('Caught:', error)
     // return without throwing = handled
     // throw = try next handler
-    // return function = cleanup on effect disposal
+    // return function = cleanup on disposal
   })
   // ... code that might throw
 })
 ```
 
-- Multiple handlers tried in order. Unhandled errors propagate to parent effect chain.
-- **Must register before throwing code** (handlers cleared on re-run).
-- Does **not** catch async errors — use `.catch()` on Promises.
+- Multiple handlers, tried in order. Unhandled → propagate to parent effect.
+- **Must register before throwing code** (cleared on re-run).
+- Does **not** catch async errors — use `.catch()`.
 
 ---
 
-## 7. DEBUGGING
+## 8. DEBUGGING & OPTIONS
 
 ```ts
-import { reactiveOptions } from 'mutts/reactive'
+import { reactiveOptions } from 'mutts'
 
-// Cycle detection modes
-reactiveOptions.cycleHandling = 'development' // default — graph-based, throws immediately
+// Cycle detection
+reactiveOptions.cycleHandling = 'development' // default: graph-based, throws
 reactiveOptions.cycleHandling = 'debug'       // full transitive closure, detailed paths
-reactiveOptions.cycleHandling = 'production'  // heuristic via maxTriggerPerBatch (fastest)
+reactiveOptions.cycleHandling = 'production'  // heuristic via maxTriggerPerBatch
 
-// Memoization discrepancy (double-run detection)
-reactiveOptions.onMemoizationDiscrepancy = (cached, fresh, fn, args, cause) => {
-  throw new Error(`Discrepancy in ${fn.name}: ${cause}`)
-}
-
-// Lifecycle hooks
-reactiveOptions.enter = (effect) => { ... }
-reactiveOptions.leave = (effect) => { ... }
-reactiveOptions.touched = (obj, evolution) => { ... }
+// Lifecycle hooks (all wrapped via optionCall for safety)
+reactiveOptions.enter = (effect) => {}    // before effect runs
+reactiveOptions.leave = (effect) => {}    // after effect runs
+reactiveOptions.touched = (obj, evolution, props, effects) => {}
+reactiveOptions.beginChain = (roots) => {} // before batch
+reactiveOptions.garbageCollected = (fn) => {} // effect GC'd
+reactiveOptions.skipRunningEffect = (fn) => {} // effect skipped (already running)
+reactiveOptions.onMemoizationDiscrepancy = (cached, fresh, fn, args, cause) => {}
 
 // Introspection (memory-intensive, dev only)
-import { enableIntrospection, getDependencyGraph, getMutationHistory } from 'mutts/introspection'
+import { enableIntrospection, getDependencyGraph, getMutationHistory } from 'mutts'
 enableIntrospection({ historySize: 100 })
 ```
 
-**ReactiveError.debugInfo** contains: `causalChain`, `creationStack`, `cycle` (for CYCLE_DETECTED).
+**ReactiveError.debugInfo**: `causalChain`, `creationStack`, `cycle` (for CYCLE_DETECTED).
 
 ---
 
-## 8. ZONES (Async Context)
+## 9. ZONES (Async Context)
 
 ```ts
-import { Zone, asyncZone } from 'mutts/zone'
+import { Zone, asyncZone } from 'mutts'
 
 const requestId = new Zone<string>()
-asyncZone.add(requestId)     // register for async propagation
+asyncZone.add(requestId) // register for async propagation
 
 requestId.with('req-123', async () => {
   await somePromise()
@@ -333,118 +405,108 @@ requestId.with('req-123', async () => {
 })
 ```
 
-- `Zone<T>`: stack-based storage. `.with(value, fn)`, `.active`, `.root(fn)`.
-- `ZoneHistory<T>`: tracks history for cycle detection.
-- `ZoneAggregator`: combines multiple zones. `asyncZone` is the global one.
-- `.zoned`: snapshot current context for manual bridging into unmanaged callbacks.
-- Reactivity uses zones internally (`effectHistory` zone tracks active effect across await).
+- **`Zone<T>`**: stack-based. `.with(value, fn)`, `.active`, `.root(fn)`.
+- **`ZoneHistory<T>`**: extends Zone, tracks history set for cycle detection.
+- **`ZoneAggregator`**: combines zones. `asyncZone` is the global one.
+- **`.zoned`**: snapshot context for manual bridging into unmanaged callbacks.
+- Reactivity uses zones internally (`effectHistory` tracks active effect across await).
+- **Node**: uses `AsyncLocalStorage`. **Browser**: monkey-patches Promise/setTimeout (less robust).
 
 ---
 
-## 9. OTHER MODULES
+## 10. OTHER MODULES
 
-### 9.1 Decorators (`mutts/decorator`)
+### 10.1 Decorators
 
-Unified system for legacy (`experimentalDecorators`) and modern (Stage 3):
 ```ts
-import { decorator } from 'mutts/decorator'
 const myDec = decorator({ method(original, name) { ... }, class(target) { ... } })
+// Works with both legacy (experimentalDecorators) and Stage 3 decorators
+// Built-in: @cached, @debounce(ms), @throttle(ms), @deprecated(msg)
 ```
 
-Standard decorators: `@cached`, `@debounce(ms)`, `@throttle(ms)`, `@deprecated(msg)`.
-
-### 9.2 Mixin (`mutts/mixin`)
+### 10.2 Mixin
 
 ```ts
-import { mixin } from 'mutts/mixin'
-const Countable = mixin((base) => class extends base { count = 0; increment() { this.count++ } })
-
-class A extends Countable { }           // as base class
-class B extends Countable(OtherBase) { } // as mixin
-// Cached: same base always returns same mixed class
+const Countable = mixin((base) => class extends base { count = 0 })
+class A extends Countable { }           // as base
+class B extends Countable(Other) { }    // as mixin (cached per base)
 ```
 
-### 9.3 Eventful (`mutts/eventful`)
+### 10.3 Eventful
 
-Type-safe event system:
 ```ts
-import { Eventful } from 'mutts/eventful'
 interface MyEvents { click: (x: number, y: number) => void }
 class Button extends Eventful<MyEvents> { }
-
-const btn = new Button()
-btn.on.click((x, y) => { ... })   // dot notation
-btn.emit.click(100, 200)
-btn.off.click()
-const unhook = btn.hook((event, ...args) => { ... }) // global listener
+btn.on.click((x, y) => {})  // dot notation subscribe
+btn.emit.click(100, 200)    // emit
+btn.off.click()              // unsubscribe all
+btn.hook((event, ...args) => {}) // global listener
 ```
 
-### 9.4 Destroyable (`mutts/destroyable`)
+### 10.4 Destroyable
 
-Resource management with `FinalizationRegistry` and `Symbol.dispose`:
 ```ts
-import { Destroyable, allocated, destructor } from 'mutts/destroyable'
-
 class FileHandler extends Destroyable() {
   @allocated accessor filePath: string
   [destructor](alloc) { console.log(`Closing: ${alloc.filePath}`) }
 }
-// Destroyed objects throw DestructionError on access.
-// Explicit: Destroyable.destroy(instance) or future `using` statement.
+// Destroyed objects throw DestructionError on access
+// Destroyable.destroy(instance) or `using` statement
 ```
 
-### 9.5 Flavored Functions (`mutts/flavored`)
+### 10.5 Flavored Functions
 
-Chainable property modifiers on functions:
 ```ts
-import { flavored, flavorOptions } from 'mutts'
 const greet = flavored(
   (name: string, opts?: { loud?: boolean }) => opts?.loud ? name.toUpperCase() : name,
   { get loud() { return flavorOptions(this, { loud: true }) } }
 )
-greet.loud('hi') // "HI"
+greet.loud('hi') // "HI" — chainable property modifiers
 ```
 
-### 9.6 Indexable (`mutts/indexable`)
+### 10.6 Indexable
 
-Numeric index access (`obj[0]`) on custom classes via Proxy:
 ```ts
-import { Indexable } from 'mutts/indexable'
-const MyCollection = Indexable(BaseClass, {
-  get(index) { return this.data[index] },
-  set(index, v) { this.data[index] = v }
+const MyCol = Indexable(Base, {
+  get(i) { return this.data[i] },
+  set(i, v) { this.data[i] = v }
 })
+// Enables obj[0] numeric index access on custom classes via Proxy
 ```
 
-### 9.7 PromiseChain (`mutts/promiseChain`)
+### 10.7 PromiseChain
 
-Fluent chaining on Promises without intermediate `await`:
 ```ts
-import { chainPromise } from 'mutts/promiseChain'
 const theme = await chainPromise(api.getUser('123')).getProfile().getSettings().theme
+// Fluent chaining on Promises without intermediate await
 ```
 
 ---
 
-## 10. PHILOSOPHY & TRAPS
+## 11. PHILOSOPHY
 
-### Affirmative State
-Declare `Y = f(X)`. Do NOT say "when X changes, update Y". The system ensures consistency.
+- **Affirmative state**: Declare `Y = f(X)`. Don't say "when X changes, update Y".
+- **Events are legacy**: Use reactive derivations (`effect`, `memoize`, `project`) for internal logic. Events only for DOM/external APIs.
+- **Cleanup ≠ undo**: Cleanup releases subscriptions, does NOT undo side effects.
 
-### Events Are Legacy
-Only use events for DOM interaction or external APIs. Internal logic should use reactive derivations (`effect`, `memoize`, `project`).
+---
 
-### Cleanup Semantics
-Cleanup functions release reactive subscriptions, NOT undo side effects. If an element is being removed, there's no point resetting its attributes.
+## 12. QUICK REFERENCE — DO vs DON'T
 
-### Key Traps
-
-| Trap | Fix |
-|------|-----|
-| `memoize` with primitive args | Args must be objects/symbols (WeakMap keys) |
-| Bare reactive reads lose context after `await` | Register zones in `asyncZone` or use `tracked(() => ...)` |
-| Self-triggering effects | Use `defer()` / `addBatchCleanup()` |
-| `queueMicrotask` for cycle avoidance | Use `defer()` instead (synchronous, batch-aware) |
-| Deep watch overhead | Prefer explicit property reads + recursive touching |
-| `_mutts_*` properties are debug/introspection helpers | Use them for logging, tracing, and profiling only — not as stable API |
-
+| DO | DON'T |
+|----|-------|
+| `project(arr, fn)` | `arr.map(fn)` for reactive transforms |
+| `effect(() => { state.x })` | bare `state.x` outside effect |
+| `defer(() => state.y = val)` | `queueMicrotask(() => state.y = val)` |
+| `memoize((obj) => obj.n * 2)` | `memoize((n: number) => n * 2)` |
+| `atomic(() => { a=1; b=2 })` | sequential mutations (2 effect runs) |
+| `untracked(() => state.x)` | reading state you don't want tracked |
+| `watch(() => state.x, cb)` | manual dirty-checking |
+| `arr.splice(0)` or `arr.length = 0` | manual loop to clear arrays |
+| `tracked(() => ...)` after await | bare reads after await |
+| `isReactive(obj)` to check | `obj._mutts_isReactive` |
+| Store `stop = effect(...)` | letting effect GC unintentionally |
+| `import { x } from 'mutts'` | `import { x } from 'mutts/reactive'` (no subpaths) |
+| `cleanedBy(obj, fn)` for cleanup | manual `obj[cleanup] = fn` |
+| `derived(() => a + b)` for computed | `effect` + manual state sync |
+| `unreactive(domNode)` | wrapping DOM nodes in `reactive()` |
