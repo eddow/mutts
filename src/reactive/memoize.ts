@@ -4,7 +4,7 @@ import { touched1 } from './change'
 import { effect, root, untracked } from './effects'
 import { getRoot, markWithRoot } from './registry'
 import { dependant } from './tracking'
-import { options, rootFunction } from './types'
+import { optionCall, options, rootFunction } from './types'
 
 export type Memoizable = object | any[] | symbol | ((...args: any[]) => any)
 
@@ -54,7 +54,7 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 				try {
 					const fresh = untracked(() => fn(...localArgs))
 					if (!deepCompare(node.result, fresh)) {
-						options.onMemoizationDiscrepancy(node.result, fresh, fn, localArgs, 'calculation')
+						optionCall('onMemoizationDiscrepancy', node.result, fresh, fn, localArgs, 'calculation')
 					}
 				} finally {
 					options.isVerificationRun = wasVerification
@@ -93,7 +93,7 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 			try {
 				const fresh = untracked(() => fn(...localArgs))
 				if (!deepCompare(node.result, fresh)) {
-					options.onMemoizationDiscrepancy(node.result, fresh, fn, localArgs, 'comparison')
+					optionCall('onMemoizationDiscrepancy', node.result, fresh, fn, localArgs, 'comparison')
 				}
 			} finally {
 				options.isVerificationRun = wasVerification

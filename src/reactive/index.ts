@@ -1,5 +1,3 @@
-// TODO: "effect stack", knowing the stack of effects, to know when we are in a re-evaluation the stack like if we just entered from first effect execution of all effects in lineage
-
 export { attend, lift, type ScanResult, scan } from './buffer'
 export { getState, touched, touched1 } from './change'
 export { deepWatch } from './deep-watch'

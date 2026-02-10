@@ -35,11 +35,18 @@ const hasReentry: any[] = []
 const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
-		if (obj && typeof obj === 'object' && !Object.hasOwn(obj, prop)) {
+		if (obj && typeof obj === 'object' && prop !== Symbol.toStringTag) {
 			const metaProto = metaProtos.get(obj.constructor)
 			if (metaProto && Object.hasOwn(metaProto, prop)) {
 				const desc = Object.getOwnPropertyDescriptor(metaProto, prop)!
-				return desc.get ? desc.get.call(obj) : (...args: any[]) => desc.value.apply(obj, args)
+				if (desc.get) {
+					if (!Object.hasOwn(obj, prop)) return desc.get.call(obj)
+					// For own properties (e.g., array length): only override if writable/configurable
+					const ownDesc = Object.getOwnPropertyDescriptor(obj, prop)!
+					if (ownDesc.configurable || ownDesc.writable || ownDesc.get)
+						return desc.get.call(obj)
+				} else if (!Object.hasOwn(obj, prop))
+					return (...args: any[]) => desc.value.apply(obj, args)
 			}
 		}
 		if (prop === nonReactiveMark) return false
@@ -103,6 +110,17 @@ const reactiveHandlers = {
 		if (unwrappedObj[unreactiveProperties]?.has(prop) || unwrappedObj !== unwrappedReceiver)
 			return FoolProof.set(obj, prop, value, receiver)
 		const newValue = unwrap(value)
+		// metaProto setter dispatch (e.g., reactive array length)
+		if (obj && typeof obj === 'object' && prop !== Symbol.toStringTag) {
+			const metaProto = obj.constructor && metaProtos.get(obj.constructor)
+			if (metaProto && Object.hasOwn(metaProto, prop)) {
+				const desc = Object.getOwnPropertyDescriptor(metaProto, prop)!
+				if (desc.set) {
+					desc.set.call(obj, newValue)
+					return true
+				}
+			}
+		}
 		// Read old value, using withEffect(undefined, ...) for getter-only accessors to avoid
 		// breaking memoization dependency tracking during SET operations
 		let oldVal = absent

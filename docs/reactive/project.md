@@ -87,7 +87,7 @@ project.array(
 
 **Related Files:**
 - `src/reactive/project.ts` - Main implementation
-- `src/reactive/mapped.ts` - Reference for `ReactiveReadOnlyArray` pattern
+- `src/reactive/array.ts` - Reference for `ReactiveReadOnlyArray` pattern
 - `src/reactive/record.ts` - Reference for `organized` pattern (different use case)
 - `tests/reactive/project.test.ts` - Test coverage
 

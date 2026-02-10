@@ -50,7 +50,6 @@ export class Zone<T> extends AZone<T> {
 	active: T | undefined
 }
 
-// TODO!!! When zones are managed in async cases, they only enter and never leave!
 type HistoryValue<T> = { present: T | undefined; history: Set<T> }
 export class ZoneHistory<T> extends AZone<HistoryValue<T>> {
 	private history = new Set<T>()
@@ -91,7 +90,7 @@ export class ZoneHistory<T> extends AZone<HistoryValue<T>> {
 		return { present: this.controlled.active, history: new Set(this.history) }
 	}
 	set active(value: HistoryValue<T> | undefined) {
-		this.history = this.history && new Set(this.history)
+		this.history = value?.history ? new Set(value.history) : new Set()
 		this.controlled.active = value?.present
 	}
 }

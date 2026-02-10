@@ -21,20 +21,17 @@ console.log(myZone.active); // undefined
 
 ## Async Propagation
 
-By default, zones are lost when an async operation yields control (e.g., after `await`). To fix this, `mutts` provides `configureAsyncZone()`.
+By default, zones are lost when an async operation yields control (e.g., after `await`). To fix this, register zones in `asyncZone` — the global `ZoneAggregator` — which automatically preserves context across async boundaries via `asyncHooks`.
 
 ```typescript
-import { configureAsyncZone, asyncZone, Zone } from 'mutts/zone';
+import { asyncZone, Zone } from 'mutts/zone';
 
 const requestId = new Zone<string>();
 
 // 1. Tell the global aggregator to track this zone
 asyncZone.add(requestId);
 
-// 2. Patch global async primitives (once per app)
-configureAsyncZone();
-
-// 3. Usage
+// 2. Usage
 requestId.with("req-123", async () => {
     await somePromise();
     // Context is automatically preserved across await!
@@ -43,7 +40,6 @@ requestId.with("req-123", async () => {
 ```
 
 > [!WARNING]
-> TODO
 > **Browser Limitations**: In browser environments (where `AsyncLocalStorage` is unavailable), `mutts` relies on monkey-patching global async primitives (Promise, setTimeout, etc.) to propagate zones. This is generally less robust than Node.js's `async_hooks` and may fail to track context across:
 > *   Native `async/await` boundaries in some modern browsers if not transpiled.
 > *   Concurrent modifications to global prototypes by other libraries.

@@ -4,7 +4,7 @@ import { batch } from './effects'
 import { isNonReactive } from './non-reactive-state'
 import { unwrap } from './proxy-state'
 import { getEffectNode, watchers } from './registry'
-import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, options } from './types'
+import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, optionCall, options } from './types'
 
 function isObject(value: any): value is object {
 	return typeof value === 'object' && value !== null
@@ -266,7 +266,7 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 
 			for (const effect of currentEffects) combinedEffects.add(effect)
 		}
-		options.touched(obj, evolution, propsArray, currentEffects)
+		optionCall('touched', obj, evolution, propsArray, currentEffects)
 		if (objectsWithDeepWatchers.has(obj)) bubbleUpChange(obj, evolution)
 	}
 	if (combinedEffects.size) batch([...combinedEffects])

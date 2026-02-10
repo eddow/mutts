@@ -9,9 +9,6 @@ import { dependant } from './tracking'
  * Only tracks individual value operations, no size tracking (WeakSet limitation)
  */
 export abstract class ReactiveWeakSet<T extends object> extends WeakSet<T> {
-	get [Symbol.toStringTag]() {
-		return 'ReactiveWeakSet'
-	}
 	add(value: T): this {
 		const had = this.has(value)
 		this.add(value)
@@ -41,10 +38,6 @@ export abstract class ReactiveWeakSet<T extends object> extends WeakSet<T> {
  * Tracks size changes, individual value operations, and collection-wide operations
  */
 export abstract class ReactiveSet<T> extends Set<T> {
-	get [Symbol.toStringTag]() {
-		return 'ReactiveSet'
-	}
-
 	get size(): number {
 		// size depends on the wrapper instance, like Map counterpart
 		dependant(this, 'size')

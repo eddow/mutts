@@ -476,7 +476,7 @@ state.c = 15 // Does NOT trigger effect
 
 The `effect` function provides a special `access` parameter with `tracked` and `ascend` functions that restore the active effect context for dependency tracking in asynchronous operations. 
 
-In modern `mutts`, this is powered by the **Zone system**. When you use `configureAsyncZone()`, the active effect context is automatically preserved across `await` points and timers, making manual use of `tracked` optional for these cases.
+In modern `mutts`, this is powered by the **Zone system**. When zones are registered in `asyncZone`, the active effect context is automatically preserved across `await` points and timers, making manual use of `tracked` optional for these cases.
 
 #### The Problem with Async Effects
 
@@ -494,7 +494,7 @@ effect(() => {
     const another = state.name // ✅ Tracked (active effect is still set)
 })
 
-// Async effect WITHOUT configureAsyncZone() - context is lost after await
+// Async effect WITHOUT zone registration - context is lost after await
 effect(async () => {
     const value = state.count // ✅ Tracked
     
@@ -504,7 +504,7 @@ effect(async () => {
     const another = state.name // ❌ NOT tracked
 })
 
-// Async effect WITH configureAsyncZone() - context is preserved
+// Async effect WITH zone registration - context is preserved
 effect(async () => {
     const value = state.count // ✅ Tracked
     
@@ -525,7 +525,7 @@ effect(async ({ tracked }) => {
 
 #### Key Benefits of the Zone System
 
-1.  **Automatic Restoration**: With `configureAsyncZone()`, most native async APIs (Promises, timers) automatically preserve the reactive context.
+1.  **Automatic Restoration**: With zones registered in `asyncZone`, most native async APIs (Promises, timers) automatically preserve the reactive context.
 2.  **Manual Control**: `access.tracked()` allows you to manually "passport" the context into third-party libraries or unmanaged callbacks.
 
 ### Using `ascend` for Parent Effect Tracking

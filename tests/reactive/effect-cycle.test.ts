@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { effect, reset, options, ReactiveErrorCode } from '../../src/reactive/effects'
+import { effect, reset } from '../../src/reactive/effects'
+import { options, ReactiveErrorCode } from '../../src/reactive/types'
 import { reactive } from '../../src/reactive/proxy'
 
 describe('effect cycle detection and ordering', () => {

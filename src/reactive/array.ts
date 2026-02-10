@@ -25,29 +25,18 @@ export abstract class Indexer extends Array {
 		dependant(this, i)
 		return reactive(this[i])
 	}
+	// Returns undefined intentionally: signals the proxy handler that notifications
+	// were already dispatched via touched(), preventing double notification
 	set(i: number, value: any) {
 		const added = i >= this.length
 		this[i] = value
 		touched(this, { type: 'set', prop: i }, index(i, { length: added }))
-	}
-	getLength() {
-		dependant(this, 'length')
-		return this.length
-	}
-	setLength(value: number) {
-		const oldLength = this.length
-		try {
-			this.length = value
-		} finally {
-			touched(this, { type: 'set', prop: 'length' }, range(oldLength, value, { length: true }))
-		}
 	}
 }
 const indexLess = { get: FoolProof.get, set: FoolProof.set }
 Object.assign(FoolProof, {
 	get(obj: any, prop: any, receiver: any) {
 		if (obj instanceof Array && typeof prop === 'string') {
-			if (prop === 'length') return Indexer.prototype.getLength.call(obj)
 			const index = parseInt(prop)
 			if (!Number.isNaN(index)) return Indexer.prototype.get.call(obj, index)
 		}
@@ -55,7 +44,6 @@ Object.assign(FoolProof, {
 	},
 	set(obj: any, prop: any, value: any, receiver: any) {
 		if (obj instanceof Array && typeof prop === 'string') {
-			if (prop === 'length') return Indexer.prototype.setLength.call(obj, value)
 			const index = parseInt(prop)
 			if (!Number.isNaN(index)) return Indexer.prototype.set.call(obj, index, value)
 		}
@@ -67,8 +55,18 @@ export abstract class ReactiveArray extends Array {
 	toJSON() {
 		return this
 	}
-	get [Symbol.toStringTag]() {
-		return 'ReactiveArray'
+	get length(): number {
+		dependant(this, 'length')
+		return this.length
+	}
+	set length(value: number) {
+		const oldLength = this.length
+		if (oldLength === value) return
+		try {
+			this.length = value
+		} finally {
+			touched(this, { type: 'set', prop: 'length' }, range(oldLength, value, { length: true }))
+		}
 	}
 	// Safe array access with negative indices
 	at(index: number): any {

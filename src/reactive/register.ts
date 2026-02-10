@@ -62,7 +62,6 @@ function getRegisterBase<T>() {
 interface RegisterInstance<T> extends ArrayReadForward<T> {
 	[index: number]: T
 }
-// TODO: What to do with prototype forwarding ?
 @unreactive
 class RegisterClass<T, K extends PropertyKey = PropertyKey>
 	extends getRegisterBase<any>()

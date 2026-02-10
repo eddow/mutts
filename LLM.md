@@ -43,8 +43,9 @@
 
 ### 4. Zones (`mutts/zone`)
 *   **Context Propagation**: Manages stack-based and history-aware execution contexts.
-*   **Async Support**: Automatically preserves context across `Promises`, `setTimeout`, etc. via `configureAsyncZone()`.
+*   **Async Support**: Register zones in `asyncZone` to automatically preserve context across `Promises`, `setTimeout`, etc.
 *   **Key Classes**: `Zone`, `ZoneHistory`, `ZoneAggregator`.
+*   **`ZoneHistory.active` setter**: Restores both `present` and `history` from the snapshot. The async hook uses `active` getter/setter (not `enter/leave`) to snapshot and restore zone state across async boundaries — so the setter must properly restore the history set.
 
 ### 5. Other Utilities
 *   **Destroyable**: Resource management with `Symbol.dispose` support.
@@ -94,6 +95,10 @@ In `mutts`, you define **what things are**, not **when things happen**.
 *   **When to avoid Events**: Do not use events for internal state synchronization. If you find yourself emitting an event to trigger a state update elsewhere in your application, you are likely fighting the framework.
 *   **Migration**: All internal application logic should be expressible via reactive derivations (`memoize`, `project`, `effect`) rather than transient event pulses.
 
+
+## `optionCall` — Defensive Option Hook Invocation
+
+All user-extensible option hooks in `options` (e.g. `touched`, `enter`, `leave`, `beginChain`, `skipRunningEffect`, `onMemoizationDiscrepancy`, `garbageCollected`) are called via `optionCall('name', ...args)` instead of `options.name(...)`. This wraps each call in try/catch so a throwing user callback cannot crash the reactive engine. `options.warn(...)` is the exception — it's called directly since it's the error reporter for `optionCall` itself.
 
 ## Cleanup Semantics: `cleanedBy`, `attend`, `project`
 

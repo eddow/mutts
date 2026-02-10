@@ -10,10 +10,6 @@ import { dependant } from './tracking'
  * Only tracks individual key operations, no size tracking (WeakMap limitation)
  */
 export abstract class ReactiveWeakMap<K extends object, V> extends WeakMap<K, V> {
-	get [Symbol.toStringTag]() {
-		return 'ReactiveWeakMap'
-	}
-
 	// Implement WeakMap interface methods with reactivity
 	delete(key: K): boolean {
 		const hadKey = this.has(key)
@@ -53,10 +49,6 @@ export abstract class ReactiveWeakMap<K extends object, V> extends WeakMap<K, V>
  * Tracks size changes, individual key operations, and collection-wide operations
  */
 export abstract class ReactiveMap<K, V> extends Map<K, V> {
-	get [Symbol.toStringTag]() {
-		return 'ReactiveMap'
-	}
-
 	// Implement Map interface methods with reactivity
 	get size(): number {
 		dependant(this, 'size') // The ReactiveMap instance still goes through proxy

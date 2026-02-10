@@ -497,6 +497,74 @@ describe('ReactiveArray', () => {
 	})
 
 
+	describe('length assignment (truncation)', () => {
+		it('should notify length-tracking effects when set to 0', () => {
+			const reactiveArray = reactive([1, 2, 3])
+
+			let effectCount = 0
+			effect(() => {
+				effectCount++
+				reactiveArray.length
+			})
+
+			expect(effectCount).toBe(1)
+			reactiveArray.length = 0
+			expect(effectCount).toBe(2)
+			expect(reactiveArray.length).toBe(0)
+		})
+
+		it('should notify index-tracking effects when truncated', () => {
+			const reactiveArray = reactive([1, 2, 3])
+
+			let effectCount = 0
+			let val: any
+			effect(() => {
+				effectCount++
+				val = reactiveArray[1]
+			})
+
+			expect(effectCount).toBe(1)
+			expect(val).toBe(2)
+
+			reactiveArray.length = 0
+			expect(effectCount).toBe(2)
+			expect(val).toBeUndefined()
+		})
+
+		it('should notify allProps (iteration) effects when truncated', () => {
+			const reactiveArray = reactive([1, 2, 3])
+
+			let effectCount = 0
+			const values: number[] = []
+			effect(() => {
+				effectCount++
+				values.length = 0
+				for (const v of reactiveArray) values.push(v)
+			})
+
+			expect(effectCount).toBe(1)
+			expect(values).toEqual([1, 2, 3])
+
+			reactiveArray.length = 0
+			expect(effectCount).toBe(2)
+			expect(values).toEqual([])
+		})
+
+		it('should be a no-op when length is already the same', () => {
+			const reactiveArray = reactive([1, 2, 3])
+
+			let effectCount = 0
+			effect(() => {
+				effectCount++
+				reactiveArray.length
+			})
+
+			expect(effectCount).toBe(1)
+			reactiveArray.length = 3
+			expect(effectCount).toBe(1)
+		})
+	})
+
 	describe('mixed index and length reactivity', () => {
 		it('should track both index and length changes in same effect', () => {
 			const array = [1, 2, 3]

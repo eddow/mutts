@@ -67,6 +67,54 @@ describe('ZoneHistory', () => {
             }).toThrow('ZoneHistory: re-entering historical zone');
         });
     });
+
+    test('active setter restores history from snapshot (async hook path)', () => {
+        const zone = new ZoneHistory<string>();
+
+        zone.present.with('a', () => {
+            // Snapshot state while 'a' is in history
+            const snapshot = zone.active;
+            expect(snapshot.history.has('a')).toBe(true);
+
+            zone.present.with('b', () => {
+                expect(zone.has('a')).toBe(true);
+                expect(zone.has('b')).toBe(true);
+
+                // Simulate async hook: save current, restore snapshot
+                const prev = zone.active;
+                zone.active = snapshot;
+
+                // History should be restored to snapshot (only 'a')
+                expect(zone.has('a')).toBe(true);
+                expect(zone.has('b')).toBe(false);
+
+                // Restore prev
+                zone.active = prev;
+                expect(zone.has('a')).toBe(true);
+                expect(zone.has('b')).toBe(true);
+            });
+        });
+
+        // After all with() blocks, history should be clean
+        expect(zone.active.history.size).toBe(0);
+    });
+
+    test('active setter clears history when set to undefined', () => {
+        const zone = new ZoneHistory<string>();
+
+        zone.present.with('a', () => {
+            const snapshot = zone.active;
+            expect(zone.has('a')).toBe(true);
+
+            // Setting to undefined should clear history
+            zone.active = undefined;
+            expect(zone.has('a')).toBe(false);
+
+            // Restore from snapshot
+            zone.active = snapshot;
+            expect(zone.has('a')).toBe(true);
+        });
+    });
 });
 
 describe('ZoneAggregator', () => {

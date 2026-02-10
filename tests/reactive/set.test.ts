@@ -41,7 +41,7 @@ describe('ReactiveWeakSet', () => {
 		it('should have correct toStringTag', () => {
 			const ws = new WeakSet<object>()
 			const rws = reactive(ws)
-			expect(rws[Symbol.toStringTag]).toBe('ReactiveWeakSet')
+			expect(rws[Symbol.toStringTag]).toBe('WeakSet')
 		})
 	})
 })

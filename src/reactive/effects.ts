@@ -31,8 +31,6 @@ import {
 	type ScopedCallback,
 	stopped,
 } from './types'
-// TODO: don't import these from effects.ts
-export { options, ReactiveErrorCode }
 
 /**
  * Finds a cycle in a sequence of functions by looking for the first repetition
@@ -893,7 +891,7 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 		// New batch - initialize
 		if (!activationRegistry) activationRegistry = new Map()
 		else throw new Error('Batch already in progress')
-		options.beginChain(roots)
+		optionCall('beginChain', roots)
 		batchQueue = {
 			all: new Map(),
 			inDegrees: new Map(),
@@ -1103,7 +1101,7 @@ export const effect = named(effectMarker.leave, flavored(
 			// The effect has been stopped after having been planned
 			if (effectStopped) return
 
-			options.enter(getRoot(fn))
+			optionCall('enter', getRoot(fn))
 			let reactionCleanup: EffectCloser | undefined
 			let result: any
 			let caught = 0
@@ -1117,7 +1115,7 @@ export const effect = named(effectMarker.leave, flavored(
 			let errorToThrow: Error | undefined
 			try {
 				result = tracked(named(effectMarker.enter, () => fn.call(null, access)))
-				options.leave(fn)
+				optionCall('leave', fn)
 				if (
 					result &&
 					typeof result !== 'function' &&
@@ -1316,7 +1314,7 @@ export const effect = named(effectMarker.leave, flavored(
 				callIfCollected,
 				() => {
 					stopEffect()
-					options.garbageCollected(fn)
+					optionCall('garbageCollected', fn)
 				},
 				stopEffect
 			)

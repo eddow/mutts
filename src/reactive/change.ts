@@ -4,7 +4,7 @@ import { getActiveEffect, isRunning } from './effect-context'
 import { batch, hasBatched, recordActivation } from './effects'
 import { unwrap } from './proxy-state'
 import { getEffectNode, watchers } from './registry'
-import { allProps, type EffectTrigger, type Evolution, options, type State } from './types'
+import { allProps, type EffectTrigger, type Evolution, optionCall, type State } from './types'
 
 const states = new WeakMap<object, State>()
 
@@ -48,7 +48,7 @@ export function collectEffects(
 					// console.log(`[DEBUG] collectEffects: found dependency ${effect.name || 'anonymous'} for ${String(key)}`)
 					const runningChain = isRunning(effect)
 					if (runningChain) {
-						options.skipRunningEffect(effect)
+						optionCall('skipRunningEffect', effect)
 						continue
 					}
 					if (!effects.has(effect)) {
@@ -85,7 +85,7 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 		const effects = new Set<EffectTrigger>()
 		if (props) collectEffects(obj, evolution, effects, objectWatchers, [allProps], props)
 		else collectEffects(obj, evolution, effects, objectWatchers, objectWatchers.keys())
-		options.touched(obj, evolution, props as any[] | undefined, effects)
+		optionCall('touched', obj, evolution, props as any[] | undefined, effects)
 		batch(Array.from(effects))
 	}
 
@@ -116,7 +116,7 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 
 		const runningChain = isRunning(effect)
 		if (runningChain) {
-			options.skipRunningEffect(effect)
+			optionCall('skipRunningEffect', effect)
 			continue
 		}
 		effects.add(effect)
@@ -125,7 +125,7 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 	}
 
 	if (effects.size > 0) {
-		options.touched(obj, evolution, [prop], effects)
+		optionCall('touched', obj, evolution, [prop], effects)
 		batch(Array.from(effects))
 	}
 }

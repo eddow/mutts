@@ -234,7 +234,7 @@ describe('ReactiveWeakMap', () => {
 		it('should have correct toStringTag', () => {
 			const weakMap = new WeakMap<object, string>()
 			const reactiveWeakMap = reactive(weakMap)
-			expect(reactiveWeakMap[Symbol.toStringTag]).toBe('ReactiveWeakMap')
+			expect(reactiveWeakMap[Symbol.toStringTag]).toBe('WeakMap')
 		})
 	})
 })
@@ -625,7 +625,7 @@ describe('ReactiveMap', () => {
 		it('should have correct toStringTag', () => {
 			const map = new Map<string, number>()
 			const reactiveMap = reactive(map)
-			expect(reactiveMap[Symbol.toStringTag]).toBe('ReactiveMap')
+			expect(reactiveMap[Symbol.toStringTag]).toBe('Map')
 		})
 	})
 

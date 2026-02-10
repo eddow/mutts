@@ -498,14 +498,22 @@ export const options = {
 }
 // biome-ignore-end lint/correctness/noUnusedFunctionParameters: Interface declaration with empty defaults
 
-// TODO: all `options.stuff(...)` should be an `optionCall('stuff', ...)`
-export const optionCall = (name: string, ...args: any) => {
-	if (options[name]) {
-		try {
-			return options[name](...args)
-		} catch (error) {
-			options.warn(`options.${name} threw`, error)
-		}
+type CallableOption = {
+	[K in keyof typeof options]: (typeof options)[K] extends ((...args: any[]) => any) | undefined
+		? K
+		: never
+}[keyof typeof options]
+
+export function optionCall<K extends CallableOption>(
+	name: K,
+	...args: NonNullable<(typeof options)[K]> extends (...a: infer A) => unknown ? A : never
+): void {
+	const fn = options[name]
+	if (typeof fn !== 'function') return
+	try {
+		;(fn as Function)(...args)
+	} catch (error) {
+		options.warn(`options.${name} threw`, error)
 	}
 }
 
