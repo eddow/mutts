@@ -6,20 +6,12 @@ afterEach(() => {
 	reset()
 })
 
-/* TODO:
-The async effect tests are expecting promise rejections to be caught by onEffectThrow, but looking at the implementation, the runningPromise is created but not actually awaited or have its rejection handled. The promise rejections won't automatically trigger the error handlers.
-
-Issues I found:
-
-Async Error Tests: The tests expect promise rejections to be caught by onEffectThrow, but the implementation doesn't attach a .catch() handler to the runningPromise. Promise rejections in async effects are not automatically propagated to the error handlers.
-Cleanup Error Test: The test expects cleanup errors to be handled gracefully, but cleanup functions are called in an untracked() block which might not have the same error handling context.
-Before I suggest corrections, could you clarify:
-
-Should async effect promise rejections be caught by onEffectThrow? (This would require implementation changes)
-Or should the tests be written to expect that promise rejections are NOT caught by onEffectThrow?
-For cleanup errors, should they be silently ignored or should they have their own error handling mechanism?
-The current implementation suggests that async effects create promises but don't handle their rejections through the error propagation system.
-*/
+/*
+ * Note: async effect promise rejections are NOT caught by onEffectThrow — the implementation
+ * creates runningPromise but doesn't attach .catch() to propagate through error handlers.
+ * Cleanup errors run in untracked() and may not share the same error handling context.
+ * Current behavior: async errors require explicit .catch() on promises.
+ */
 describe('onEffectThrow', () => {
 	it('should catch basic errors', () => {
 		const state = reactive({ value: 0 })

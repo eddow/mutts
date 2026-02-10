@@ -10,7 +10,7 @@ function tick(ms: number = 0) {
 	return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-// TODO: Make sure gc is tested at least on one side (node I guess)
+// GC tests require --expose-gc flag; skipped when gc is unavailable (browser)
 const gc = typeof globalThis.gc === 'function' ? globalThis.gc : undefined
 const itGarbageCollection = gc ? it : it.skip
 

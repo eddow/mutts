@@ -150,7 +150,7 @@ describe('Async Propagation', () => {
     beforeEach(() => {
         asyncZone.clear();
     });
-    // TODO: Rehabilitate browser-side
+    // Browser-side async propagation uses monkey-patching (less robust than Node's AsyncLocalStorage)
     test('async propagation works via async hooks', async () => {
         const zone = new Zone<string>();
         asyncZone.add(zone);

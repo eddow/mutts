@@ -256,56 +256,6 @@ export function nodeLineage(segments: LineageSegment[]): void {
 }
 
 /**
- * Legacy version of nodeLineage that returns a formatted string (useful for comparison or logs)
- * @param segments - Lineage segments
- * @deprecated TODO: remove me and all the code running around
- */
-export function nodeLineageLegacy(segments: LineageSegment[]): string {
-	// ANSI color codes for Node.js terminal
-	const colors = {
-		reset: '\x1b[0m',
-		bright: '\x1b[1m',
-		dim: '\x1b[2m',
-		red: '\x1b[31m',
-		green: '\x1b[32m',
-		yellow: '\x1b[33m',
-		blue: '\x1b[34m',
-		magenta: '\x1b[35m',
-		cyan: '\x1b[36m',
-		white: '\x1b[37m',
-		gray: '\x1b[90m',
-	}
-	
-	const result: string[] = []
-	
-	result.push(`${colors.bright}${colors.cyan}🦴 Effect Lineage Trace (${segments.length} segments)${colors.reset}`)
-	
-	for (let i = 0; i < segments.length; i++) {
-		const segment = segments[i]
-		const isLast = i === segments.length - 1
-		const prefix = i === 0 ? '📍' : isLast ? '└─' : '├─'
-		const connector = isLast ? '  ' : '│ '
-		
-		result.push(`${colors.gray}${connector}${colors.reset}${colors.bright}${colors.magenta}${prefix} Effect: ${segment.effectName}${colors.reset}`)
-		
-		for (let j = 0; j < segment.stack.length; j++) {
-			const frame = segment.stack[j]
-			const framePrefix = j === segment.stack.length - 1 ? '   └─' : '   ├─'
-			
-			if (frame.functionName === '...node_modules...') {
-				result.push(`${colors.gray}   ${connector}${colors.reset}${colors.dim}${framePrefix} ${colors.yellow}${frame.functionName}${colors.reset}`)
-			} else {
-				const fnColor = frame.functionName === 'anonymous' ? colors.gray : colors.green
-				result.push(`${colors.gray}   ${connector}${colors.reset}${colors.dim}${framePrefix}${colors.reset} ${fnColor}${frame.functionName}${colors.reset} ${colors.gray}(${colors.reset}${colors.blue}${frame.fileName}:${frame.lineNumber}:${frame.columnNumber}${colors.reset}${colors.gray})${colors.reset}`)
-			}
-		}
-		if (i < segments.length - 1) result.push('')
-	}
-	
-	return result.join('\n')
-}
-
-/**
  * Captures and logs lineage to console
  */
 export function captureNodeLineage(): void {

@@ -8,7 +8,7 @@
 import { effect, raiseEffectTrackers } from '../src/reactive/effects'
 import { effectToReactiveObjects, getEffectNode, getRoot, markWithRoot } from '../src/reactive/registry'
 import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, options } from '../src/reactive/types'
-import { getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter, nodeLineage, nodeLineageLegacy } from './lineage'
+import { getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter, nodeLineage } from './lineage'
 import { showLineagePanel } from './lineage-panel'
 
 /**
@@ -459,11 +459,6 @@ export function enableDevTools() {
 		nodeLineage(tag?: string) {
 			nodeLineage(getLineage())
 			return '🦴 Effect Lineage Trace' + (tag ? ` (${tag})` : '')
-		},
-		nodeLineageLegacy() {
-			console.groupCollapsed('nodeLineageLegacy')
-			console.log(nodeLineageLegacy(getLineage()))
-			console.groupEnd()
 		},
 		get browserLineage() {
 			return wrapLineageForDebug(getLineage())

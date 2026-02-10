@@ -43,12 +43,8 @@ export function showLineagePanel() {
 		isVisible: true,
 	})
 
-	// Track the last triggered effect
-	/* TODO: this is really not how effect triggers work - `onEffectTrigger` is called when "this effect" (here nothing) is triggered
-	What we could try is to add events or such in zones... but it's really cosmetic and the whole panel is buggy - not worth doing yet (260206).
-	onEffectTrigger((_obj, _evol, _prop, effectTrigger) => {
-		state.activeLineage = getLineage(effectTrigger)
-	})*/
+	// onEffectTrigger tracks "this effect" (here nothing) — not useful for a global panel.
+	// Would need zone-based events to track all triggers. Panel is cosmetic/experimental (260206).
 
 	// UI Creation
 	const panel = document.createElement('div')
