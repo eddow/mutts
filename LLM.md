@@ -110,6 +110,29 @@ When a reactive bunch (`attend`, `project`, `scan`, …) is **cleaned up**, all 
 
 **Key rule**: cleanup functions should release *reactive subscriptions*, not undo *side effects* on the owner. For example, if `attend` sets DOM attributes on an element, there is no need to reset those attributes in cleanup — the element itself is being removed.
 
+## Reactivity: Prototype Chains & Scope Objects (Structural Stability Contract)
+
+Some consumers (notably Pounce) model scopes using `Object.create(parent)` chains. Property reads then follow the JavaScript prototype lookup rules: a `get` may resolve to the first ancestor that *owns* the property.
+
+To keep inherited reads performant, `mutts` tracks dependencies for inherited properties using **two-point tracking**:
+
+1. The **leaf** object being read (the receiver of the `get`).
+2. The **owning ancestor** where the property is found.
+
+This design relies on a contract:
+
+**Structural stability**: in a prototype-chain of reactive objects, the *presence* of keys on each level is fixed at creation time. Keys may change value, but intermediate levels must not later gain or lose keys that would shadow/unshadow a property.
+
+### What breaks if you violate the contract
+
+If an intermediate object later adds or deletes an own property that changes prototype resolution (shadowing/unshadowing), effects that previously read the inherited property may not be re-run, because they intentionally do not depend on every intermediate level.
+
+### Recommended pattern
+
+- Create scope objects with all relevant keys declared up-front (it is fine for values to be `undefined`).
+- Avoid dynamically adding/removing properties on intermediate scopes in a prototype chain.
+- If you need dynamic key presence, prefer a plain reactive record (no prototype chain) or a dedicated collection (`Map`/`Set`) that explicitly models dynamic membership.
+
 ## Debugging Reactivity
 
 Tools are built-in in order to catch common reactivity-related issues.

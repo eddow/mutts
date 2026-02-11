@@ -55,9 +55,22 @@ const reactiveHandlers = {
 		if (unwrappedObj[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
 			return FoolProof.get(obj, prop, receiver)
 
-		// Check if property exists and if it's an own property (cached for later use)
-		const hasProp = Reflect.has(receiver, prop)
-		const isOwnProp = hasProp && Object.hasOwn(receiver, prop)
+		// Check if property exists using a trap-free walk to avoid triggering
+		// the has-trap cascade on prototype chains of reactive proxies.
+		const isOwnProp = Object.hasOwn(obj, prop)
+		let hasProp = isOwnProp
+		let owner: any = isOwnProp ? reactiveObject(obj) : undefined
+		if (!isOwnProp) {
+			let raw = unwrap(Object.getPrototypeOf(obj))
+			while (raw && raw !== Object.prototype) {
+				if (Object.hasOwn(raw, prop)) {
+					hasProp = true
+					owner = reactiveObject(raw)
+					break
+				}
+				raw = unwrap(Object.getPrototypeOf(raw))
+			}
+		}
 		const isInheritedAccess = hasProp && !isOwnProp
 
 		// For accessor properties, check the unwrapped object to see if it's an accessor
@@ -75,18 +88,12 @@ const reactiveHandlers = {
 		)
 			dependant(obj, prop)
 
-		// Watch the whole prototype chain when requested or for null-proto objects
-		if (isInheritedAccess && (!options.instanceMembers || !(obj instanceof Object))) {
-			let current = reactiveObject(Object.getPrototypeOf(obj))
-			while (current && current !== Object.prototype) {
-				dependant(current, prop)
-				if (Object.hasOwn(current, prop)) break
-				let next = reactiveObject(Object.getPrototypeOf(current))
-				if (next === current) {
-					next = reactiveObject(Object.getPrototypeOf(unwrap(current)))
-				}
-				current = next
-			}
+		// Two-Point Tracking: for inherited access on null-proto chains, only track
+		// the owning ancestor — not every intermediate level.  This relies on the
+		// "structural stability" contract: key presence in the chain is fixed at
+		// creation time, so intermediate levels never gain/lose shadowing properties.
+		if (isInheritedAccess && owner && (!options.instanceMembers || !(obj instanceof Object))) {
+			dependant(owner, prop)
 		}
 		const value = FoolProof.get(obj, prop, receiver)
 		if (typeof value === 'object' && value !== null) {
