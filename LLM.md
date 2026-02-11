@@ -124,3 +124,61 @@ Track the creation history of effects intertwined with JS stack traces. This is 
 
 **Full Documentation**: [docs/reactive/debugging.md](file:///home/fmdm/dev/reactive/debugging.md)
 
+## Circular Dependencies & Bundle Optimization
+
+Circular dependencies in `mutts` can lead to significant bundle bloat and performance issues, especially when they bridge the gap between "Core" logic and "Debug" tools.
+
+### The Problem
+If a Core module (e.g., `effects.ts`, `project.ts`) imports a value from the Debug module (e.g., `debug.ts`), and the Debug module imports back from Core (e.g., `types.ts`, `registry.ts`), a cycle is formed. 
+Tools like Rollup will bundle these modules together to resolve the cycle. This means:
+1.  **Tree-Shaking Fails**: Debug code (and its dependencies like UI renderers) gets included in the production bundle.
+2.  **Bundle Bloat**: Your minimal 5KB library can jump to 500KB+.
+3.  **Performance Hit**: Evaluation time increases significantly.
+
+### Solution Pattern: Dependency Injection Hook
+To break these cycles, use a **Hook Interface** pattern.
+
+1.  **Define a Hook Interface**: Create a lightweight file (e.g., `debug-hooks.ts`) that defines the interface for the functionality you need from the other module.
+    ```typescript
+    // debug-hooks.ts
+    export interface DebugHooks {
+        onEffectCreated: (effect: Effect) => void;
+    }
+    export const debugHooks: DebugHooks = {
+        onEffectCreated: () => {} // No-op default
+    };
+    export function setDebugHooks(hooks: Partial<DebugHooks>) {
+        Object.assign(debugHooks, hooks);
+    }
+    ```
+
+2.  **Consume the Hook in Core**: Import *only* the hook interface/object in your Core module.
+    ```typescript
+    // effects.ts (Core)
+    import { debugHooks } from './debug-hooks';
+
+    function createEffect() {
+        // ... logic ...
+        debugHooks.onEffectCreated(effect);
+    }
+    ```
+
+3.  **Inject the Implementation**: In the Debug module (or entry point), import the setter and inject the real implementation.
+    ```typescript
+    // debug.ts
+    import { setDebugHooks } from './debug-hooks';
+
+    function realDebugHandler(effect) {
+        console.log('Effect created:', effect);
+    }
+
+    setDebugHooks({
+        onEffectCreated: realDebugHandler
+    });
+    ```
+
+### Rule of Thumb
+- **Core** should never import **Debug**.
+- **Debug** can import **Core** (types, registry, utils).
+- If Core needs to trigger Debug logic, use a **Hook**.
+

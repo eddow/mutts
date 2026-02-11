@@ -1,5 +1,5 @@
 import { named } from '../utils'
-import { getTriggerChain, isDevtoolsEnabled, registerEffectForDebug } from '../../debug/debug'
+import { debugHooks } from './debug-hooks'
 import { effectMarker, getStackFrame, type StackFrame } from '../../debug/lineage'
 import { decorator } from '../decorator'
 import { flavored, flavorOptions } from '../flavored'
@@ -160,13 +160,15 @@ export function recordActivation(effect: EffectTrigger, obj: any, evolution: Evo
  * state.count = 5
  * ```
  */
-export function onEffectTrigger(onTouch: EffectTracking, effect?: EffectTrigger) {
+export function why(onTouch: EffectTracking, effect?: EffectTrigger) {
 	effect ??= getActiveEffect()
 	if (!effect) throw new Error('Tracking an effect trigger while not in an effect')
 	const node = getEffectNode(effect)
 	if (!node.trackers) node.trackers = [onTouch]
 	else node.trackers.push(onTouch)
 }
+/** @deprecated Use `why` instead */
+export const onEffectTrigger = why
 
 export function raiseEffectTrackers(
 	effect: EffectTrigger,
@@ -180,13 +182,15 @@ export function raiseEffectTrackers(
 		for (const tracker of trackers) tracker(obj, evolution, prop, effect)
 	}
 }
-export function onEffectThrow(onThrow: CatchFunction, effect?: EffectTrigger) {
+export function caught(onThrow: CatchFunction, effect?: EffectTrigger) {
 	effect ??= getActiveEffect()
 	if (!effect) throw new Error('Tracking an effect throw while not in an effect')
 	const node = getEffectNode(effect)
 	if (!node.catchers) node.catchers = [onThrow]
 	else node.catchers.push(onThrow)
 }
+/** @deprecated Use `caught` instead */
+export const onEffectThrow = caught
 
 // Dependency graph: tracks which effects trigger which other effects
 // Uses roots (Function) as keys for consistency
@@ -656,7 +660,7 @@ function addToBatch(effect: EffectTrigger, caller?: EffectTrigger, immediate?: b
 					: `Cycle detected: ${callerRoot.name || callerRoot.toString()} → ${root.name || root.toString()} (and back)`
 
 			batchQueue.all.delete(root)
-			const causalChain = getTriggerChain(effect)
+			const causalChain = debugHooks.getTriggerChain(effect)
 			const creationStack = getEffectNode(effect).creationStack
 
 			throw new ReactiveError(`[reactive] ${cycleMessage}`, {
@@ -945,7 +949,7 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 							// Try to get causation for the last effect
 							causalChain:
 								effectuatedRoots.length > 0
-									? getTriggerChain(
+									? debugHooks.getTriggerChain(
 											batchQueue.all.get(effectuatedRoots[effectuatedRoots.length - 1])!
 										)
 									: [],
@@ -1235,7 +1239,7 @@ export const effect = named(effectMarker.leave, flavored(
 		// Initialize metadata node
 		const node = getEffectNode(runEffect)
 		
-		if (isDevtoolsEnabled()) {
+		if (debugHooks.isDevtoolsEnabled()) {
 			const stack = getStackFrame() // Robustly skips internal mutts frames
 			if (stack.length > 0) {
 				node.creationStack = stack
@@ -1277,8 +1281,8 @@ export const effect = named(effectMarker.leave, flavored(
 			node.isOpaque = true
 		}
 
-		if (isDevtoolsEnabled()) {
-			registerEffectForDebug(runEffect)
+		if (debugHooks.isDevtoolsEnabled()) {
+			debugHooks.registerEffect(runEffect)
 		}
 
 		// Store parent relationship for hierarchy traversal - ALREADY DONE ABOVE via getEffectNode

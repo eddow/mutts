@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { effect, memoize, onEffectThrow, reactive, reset } from 'mutts'
+import { effect, memoize, caught, reactive, reset } from 'mutts'
 import { ReactiveError, ReactiveErrorCode } from '../../src/reactive/types'
 
 afterEach(() => {
@@ -7,20 +7,20 @@ afterEach(() => {
 })
 
 /*
- * Note: async effect promise rejections are NOT caught by onEffectThrow — the implementation
+ * Note: async effect promise rejections are NOT caught by caught — the implementation
  * creates runningPromise but doesn't attach .catch() to propagate through error handlers.
  * Cleanup errors run in untracked() and may not share the same error handling context.
  * Current behavior: async errors require explicit .catch() on promises.
  */
-describe('onEffectThrow', () => {
+describe('caught', () => {
 	it('should catch basic errors', () => {
 		const state = reactive({ value: 0 })
-		let caught = false
+		let wasCaught = false
 		let errorValue: any = null
 
 		effect(() => {
-			onEffectThrow((err) => {
-				caught = true
+			caught((err) => {
+				wasCaught = true
 				errorValue = err
 			})
 
@@ -29,7 +29,7 @@ describe('onEffectThrow', () => {
 
 		state.value = 1
 
-		expect(caught).toBe(true)
+		expect(wasCaught).toBe(true)
 		expect(errorValue?.message).toBe('Test error')
 	})
 
@@ -39,11 +39,11 @@ describe('onEffectThrow', () => {
 		let handler2 = false
 
 		effect(() => {
-			onEffectThrow(() => {
+			caught(() => {
 				handler1 = true
 				// Success - returns without throwing
 			})
-			onEffectThrow(() => {
+			caught(() => {
 				handler2 = true
 				// Should not run
 			})
@@ -63,11 +63,11 @@ describe('onEffectThrow', () => {
 		let handler2 = false
 
 		effect(() => {
-			onEffectThrow(() => {
+			caught(() => {
 				handler1 = true
 				throw new Error('Handler 1 failed')
 			})
-			onEffectThrow(() => {
+			caught(() => {
 				handler2 = true
 				// Success
 			})
@@ -87,7 +87,7 @@ describe('onEffectThrow', () => {
 		let childError: any = null
 
 		effect(() => {
-			onEffectThrow((err) => {
+			caught((err) => {
 				parentCaught = true
 				childError = err
 			})
@@ -109,7 +109,7 @@ describe('onEffectThrow', () => {
 		let catchRan = false
 
 		const stop = effect(() => {
-			onEffectThrow(() => {
+			caught(() => {
 				catchRan = true
 				return () => {
 					cleanupCalled = true
@@ -132,7 +132,7 @@ describe('onEffectThrow', () => {
 		let catchCount = 0
 
 		effect(() => {
-			onEffectThrow(() => {
+			caught(() => {
 				catchCount++
 			})
 
@@ -163,7 +163,7 @@ describe('onEffectThrow', () => {
 	})
 })
 
-describe('onEffectThrow - zone re-entry bug', () => {
+describe('caught - zone re-entry bug', () => {
 	it('should handle child throwing during parent first run without zone re-entry error', () => {
 		const state = reactive({ triggerError: false })
 		let parentCaught = false
@@ -172,7 +172,7 @@ describe('onEffectThrow - zone re-entry bug', () => {
 		const stop = effect(() => {
 			parentRunCount++
 			
-			onEffectThrow((err) => {
+			caught((err) => {
 				parentCaught = true
 				console.log('Parent caught:', err.message)
 			})
@@ -206,7 +206,7 @@ describe('onEffectThrow - zone re-entry bug', () => {
 		let errorMessage = ''
 
 		const stop = effect(() => {
-			onEffectThrow((err) => {
+			caught((err) => {
 				parentCaught = true
 				errorMessage = err.message
 			})
@@ -229,7 +229,7 @@ describe('onEffectThrow - zone re-entry bug', () => {
 		const errors: string[] = []
 
 		const stop = effect(() => {
-			onEffectThrow((err) => {
+			caught((err) => {
 				parentCaughtCount++
 				errors.push(err.message)
 			})
@@ -264,12 +264,12 @@ describe('onEffectThrow - zone re-entry bug', () => {
 		let childCaught = false
 
 		const stop = effect(() => {
-			onEffectThrow((err) => {
+			caught((err) => {
 				parentCaught = true
 			})
 
 			effect(() => {
-				onEffectThrow((err) => {
+				caught((err) => {
 					childCaught = true
 					// Re-throw to propagate to parent
 					throw err
@@ -301,7 +301,7 @@ describe('onEffectThrow - zone re-entry bug', () => {
 		const stop = effect(() => {
 			parentRunCount++
 			
-			onEffectThrow((err) => {
+			caught((err) => {
 				// Setting reactive state in catch handler
 				errorState.hasError = true
 				errorState.message = err.message
@@ -332,13 +332,13 @@ describe('onEffectThrow - zone re-entry bug', () => {
 
 describe('Error Propagation - Additional Tests', () => {
 	describe('Async Effect Errors', () => {
-		it('should catch promise rejections in onEffectThrow', async () => {
+		it('should catch promise rejections in caught', async () => {
 			const state = reactive({ shouldReject: false })
 			let caughtError: any = null
 			let effectRan = false
 
 			effect(() => {
-				onEffectThrow((err) => {
+				caught((err) => {
 					caughtError = err
 				})
 
@@ -371,7 +371,7 @@ describe('Error Propagation - Additional Tests', () => {
 			let parentCaughtError: any = null
 
 			effect(() => {
-				onEffectThrow((err) => {
+				caught((err) => {
 					parentCaughtError = err
 				})
 
@@ -407,7 +407,7 @@ describe('Error Propagation - Additional Tests', () => {
 			})
 
 			effect(() => {
-				onEffectThrow((err) => {
+				caught((err) => {
 					caughtError = err
 				})
 				memoized()
@@ -436,7 +436,7 @@ describe('Error Propagation - Additional Tests', () => {
 			})
 
 			effect(() => {
-				onEffectThrow((err) => {
+				caught((err) => {
 					caughtError = err
 				})
 				memoized2()
@@ -455,7 +455,7 @@ describe('Error Propagation - Additional Tests', () => {
 			let caughtError: any = null
 
 			effect(() => {
-				onEffectThrow((err) => {
+				caught((err) => {
 					caughtError = err
 				})
 				
@@ -482,7 +482,7 @@ describe('Error Propagation - Additional Tests', () => {
 			const results: string[] = []
 
 			effect(() => {
-				onEffectThrow((err) => {
+				caught((err) => {
 					results.push(`caught: ${err.message}`)
 					state.attempts++
 					if (state.attempts >= 3) {
@@ -522,7 +522,7 @@ describe('Error Propagation - Additional Tests', () => {
 			let cleanupCalled = false
 
 			const stop = effect(() => {
-				onEffectThrow((err) => {
+				caught((err) => {
 					caughtError = err
 				})
 
@@ -552,7 +552,7 @@ describe('Error Propagation - Additional Tests', () => {
 
 			// Create a cycle to trigger CycleDetected error
 			effect(() => {
-				onEffectThrow((err) => {
+				caught((err) => {
 					caughtError = err
 				})
 				

@@ -22,8 +22,8 @@ Proxy-based **fine-grained reactivity** — changes propagate synchronously thro
 
 ```ts
 import { reactive, effect, memoize, project, attend, lift, scan, cleanup,
-  atomic, defer, untracked, unreactive, watch, biDi, onEffectThrow,
-  cleanedBy, derived, organized, describe, Register,
+  atomic, defer, untracked, unreactive, watch, when, biDi, caught, why,
+  cleanedBy, organized, describe, Register,
   Zone, asyncZone, ZoneHistory, ZoneAggregator,
   decorator, mixin, Eventful, Destroyable, flavored, Indexable, chainPromise,
   reactiveOptions, isReactive, unwrap, getState
@@ -235,12 +235,23 @@ obj[cleanup]() // triggers cleanup
 // Chains: if obj already has a cleanup, both run
 ```
 
-### 3.11 derived() — Reactive computed value
+### 3.11 Lazy computed values
 
 ```ts
-const d = derived((access) => state.a + state.b)
-d.value // auto-recomputes when state.a or state.b change
-d[cleanup]() // dispose
+// Lazy + trackable (preferred):
+const total = memoize(() => state.a + state.b)
+effect(() => console.log(total())) // recomputes only on read, dependency tracked
+
+// Eager + trackable (stable reactive proxy):
+const d = lift(() => ({ value: state.a + state.b }))
+effect(() => console.log(d.value)) // recomputes immediately, .value is reactive
+```
+
+### 3.12 when() — Promise-based reactive wait
+
+```ts
+await when(() => state.loaded)        // resolves when truthy
+await when(() => state.ready, { timeout: 5000 }) // rejects after 5s
 ```
 
 ---
@@ -326,6 +337,10 @@ const filtered = lift(() => items.filter(x => x.active))
 // Element-wise diff — only changed elements sync, not full rebuild
 ```
 
+**lift vs deep touching**: Deep touching handles `state.items = newArray` (replacement diffs). `lift` is for **derived collections** (filter/map/reshape) where there's no single assignment — the output is recomputed from scratch.
+
+**lift vs memoize**: `memoize` is lazy (invalidate → recompute on next read), returns raw values, keyed by args. `lift` is eager (recompute immediately), returns a **stable reactive proxy** with per-element diffing. Use `lift` for derived collections consumed by `project()`/effects; use `memoize` for parameterized caching or lazy evaluation.
+
 ---
 
 ## 6. EVOLUTION TRACKING
@@ -348,7 +363,7 @@ effect(() => {
 
 ```ts
 effect(() => {
-  onEffectThrow((error) => {
+  caught((error) => {
     // return without throwing = handled
     // throw = try next handler
     // return function = cleanup on disposal
@@ -508,5 +523,5 @@ const theme = await chainPromise(api.getUser('123')).getProfile().getSettings().
 | Store `stop = effect(...)` | letting effect GC unintentionally |
 | `import { x } from 'mutts'` | `import { x } from 'mutts/reactive'` (no subpaths) |
 | `cleanedBy(obj, fn)` for cleanup | manual `obj[cleanup] = fn` |
-| `derived(() => a + b)` for computed | `effect` + manual state sync |
+| `memoize(() => a + b)` for computed | `effect` + manual state sync |
 | `unreactive(domNode)` | wrapping DOM nodes in `reactive()` |

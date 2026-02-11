@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { effect, onEffectThrow, reset } from '../../src/reactive/effects'
+import { effect, caught, reset } from '../../src/reactive/effects'
 import { reactive } from '../../src/reactive/proxy'
 import { ReactiveError, ReactiveErrorCode, options } from '../../src/reactive/types'
 
@@ -69,20 +69,20 @@ describe('broken state and reset', () => {
 		expect(results).toEqual([0, 42])
 	})
 
-	it('should NOT enter broken state when error is recovered by onEffectThrow', () => {
+	it('should NOT enter broken state when error is recovered by caught', () => {
 		const state = reactive({ value: 0 })
-		let caught = false
+		let wasCaught = false
 
 		effect(() => {
-			onEffectThrow(() => {
-				caught = true
+			caught(() => {
+				wasCaught = true
 			})
 			if (state.value === 1) throw new Error('Recoverable')
 		})
 
-		// Error is caught by onEffectThrow — batch continues, no broken state
+		// Error is caught — batch continues, no broken state
 		state.value = 1
-		expect(caught).toBe(true)
+		expect(wasCaught).toBe(true)
 
 		// System should still work
 		const state2 = reactive({ x: 0 })
@@ -99,7 +99,7 @@ describe('broken state and reset', () => {
 		let parentCaught = false
 
 		effect(() => {
-			onEffectThrow(() => {
+			caught(() => {
 				parentCaught = true
 			})
 

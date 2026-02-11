@@ -1,4 +1,12 @@
-#1.0.10
+# 1.0.10
+
+## Functionality
+
+- `when`: reactive boolean => promise
+
+## Refactoring
+
+- why? caught!
 
 # 1.0.9
 

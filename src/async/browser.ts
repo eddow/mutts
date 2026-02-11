@@ -139,15 +139,16 @@ const prototypesToPatch = [
 	typeof IDBRequest !== 'undefined' && IDBRequest.prototype,
 	typeof IDBTransaction !== 'undefined' && IDBTransaction.prototype,
 	typeof IDBDatabase !== 'undefined' && IDBDatabase.prototype,
-	typeof FileReader !== 'undefined' && FileReader.prototype,
 	typeof AbortSignal !== 'undefined' && AbortSignal.prototype,
 ]
 
+console.time('mutts-patching')
 for (const proto of prototypesToPatch) {
 	if (proto) {
 		patchOnProperties(proto)
 	}
 }
+console.timeEnd('mutts-patching')
 
 const GLOBAL_ORIGINALS = Symbol.for('mutts.originals')
 const GLOBAL_PROMISE = Symbol.for('mutts.OriginalPromise')

@@ -124,6 +124,45 @@ function watchCallBack<T>(
 
 //#endregion
 
+//#region when
+
+/**
+ * Returns a promise that resolves when the predicate returns a truthy value.
+ * The predicate is evaluated reactively — it re-runs whenever its dependencies change.
+ * @param predicate - Reactive function that returns a value; resolves when truthy
+ * @param timeout - Optional timeout in milliseconds — rejects if condition is not met within this duration
+ * @returns Promise that resolves with the first truthy return value
+ */
+export function when<T>(predicate: (dep: EffectAccess) => T, timeout?: number): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		let timer: ReturnType<typeof setTimeout> | undefined
+		const stop = effect(function whenEffect(access) {
+			try {
+				const value = predicate(access)
+				if (value) {
+					if (timer !== undefined) clearTimeout(timer)
+					timer = undefined
+					queueMicrotask(() => stop())
+					resolve(value)
+				}
+			} catch (error) {
+				if (timer !== undefined) clearTimeout(timer)
+				timer = undefined
+				reject(error)
+			}
+		})
+		if (timeout !== undefined) {
+			timer = setTimeout(() => {
+				stop()
+				timer = undefined
+				reject(new Error(`when: timed out after ${timeout}ms`))
+			}, timeout)
+		}
+	})
+}
+
+//#endregion
+
 //#region nonReactive
 
 /**

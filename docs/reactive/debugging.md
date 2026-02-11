@@ -128,7 +128,7 @@ Always check `error.debugInfo.code` to identify the failure type:
 - `CYCLE_DETECTED`: A circular dependency was found.
 - `MAX_DEPTH_EXCEEDED`: The synchronous effect chain reached `maxEffectChain`.
 - `MAX_REACTION_EXCEEDED`: An effect was triggered too many times in a single batch.
-- `WRITE_IN_COMPUTED`: An attempt was made to modify reactive state inside a `memoize` or `derived` function.
+- `WRITE_IN_COMPUTED`: An attempt was made to modify reactive state inside a `memoize` function.
 
 ### Rich Debug Info
 

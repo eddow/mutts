@@ -276,6 +276,37 @@ showAdvanced.value = false
 | **Use Case** | Derived arrays/objects (map, filter, computed properties) | Cumulative operations (sum, reduce) |
 | **Data Types** | Arrays and objects | Arrays only (object items required) |
 
+## Comparison with Recursive Touching (Deep Touch)
+
+When you assign a new array/object to a reactive property (`state.items = newArray`), the reactive system performs a **recursive touch** — it diffs old vs new element-by-element and fires per-index notifications on the *same proxy*. This raises the question: is `lift` redundant?
+
+| | Recursive Touching | `lift` |
+| :--- | :--- | :--- |
+| **Trigger** | Direct assignment to a reactive property | Any reactive dependency change inside the callback |
+| **Scope** | Same-shape replacement of one value | Arbitrary computation → stable reactive output |
+| **Identity** | Same proxy, same object | Returns a **new persistent proxy** that outlives re-evaluations |
+| **Use case** | `state.user = fetchedUser` — fine-grained diff on assignment | `lift(() => items.filter(x => x.active))` — derived collection |
+
+Deep touching makes `lift` unnecessary for **replacement** patterns (`state.items = newItems`). `lift` remains essential for **derived collections** where the result is a transformation (filter, map, reshape) rather than a direct assignment — there is no single property to assign to, and the whole output is recomputed from scratch each time.
+
+## Comparison with `memoize`
+
+Both `lift` and `memoize` compute derived values from reactive dependencies, but they differ in evaluation strategy and output type.
+
+| | `memoize` | `lift` |
+| :--- | :--- | :--- |
+| **Evaluation** | Lazy — invalidates on dep change, recomputes on next read | Eager — recomputes immediately on dep change |
+| **Return type** | The raw return value of the function | A **stable reactive proxy** (array or object) |
+| **Downstream reactivity** | Consumers get a new value each time (identity changes) | Consumers see per-property/per-index diffs on the *same* proxy |
+| **Arguments** | Keyed by object args (WeakMap cache tree) | No args — closure over reactive deps |
+| **Decorator** | Yes (`@memoize` on getters/methods) | No |
+| **Cleanup** | Automatic (WeakMap GC) | Explicit `result[cleanup]()` |
+
+**When to use which:**
+- **`lift`** for derived collections where downstream consumers (e.g., `project()`, effects) benefit from per-element diffing on a stable proxy.
+- **`memoize`** for parameterized caching (`memoize((user) => expensiveCompute(user))`) or lazy evaluation where recomputation should only happen on access.
+- For a scalar result read in one place, they are nearly interchangeable — prefer `memoize` for its laziness and automatic cleanup.
+
 ## Performance Considerations
 
 ### Arrays

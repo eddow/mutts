@@ -1,4 +1,4 @@
-import { recordTriggerLink } from '../../debug/debug'
+import { debugHooks } from './debug-hooks'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { getActiveEffect, isRunning } from './effect-context'
 import { batch, hasBatched, recordActivation } from './effects'
@@ -55,7 +55,7 @@ export function collectEffects(
 						effects.add(effect)
 						if (!hasBatched(effect)) recordActivation(effect, obj, evolution, key)
 					}
-					recordTriggerLink(sourceEffect, effect, obj, key, evolution)
+					debugHooks.recordTriggerLink(sourceEffect, effect, obj, key, evolution)
 				}
 		}
 }
@@ -121,7 +121,7 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 		}
 		effects.add(effect)
 		recordActivation(effect, obj, evolution, prop)
-		recordTriggerLink(sourceEffect, effect, obj, prop, evolution)
+		debugHooks.recordTriggerLink(sourceEffect, effect, obj, prop, evolution)
 	}
 
 	if (effects.size > 0) {

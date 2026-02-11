@@ -10,6 +10,7 @@ import { effectToReactiveObjects, getEffectNode, getRoot, markWithRoot } from '.
 import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, options } from '../src/reactive/types'
 import { getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter, nodeLineage } from './lineage'
 import { showLineagePanel } from './lineage-panel'
+import { setDebugHooks } from '../src/reactive/debug-hooks'
 
 /**
  * Log an error with detailed context if error logging is enabled
@@ -112,8 +113,8 @@ function ensureEffectName(effect: EffectTrigger | EffectCleanup): string {
 	if (!name) {
 		const root = getRoot(effect)
 		name = root?.name?.trim() || `effect_${++effectCounter}`
-		effectNames.set(effect, name)
 	}
+	effectNames.set(effect, name)
 	return name
 }
 
@@ -481,6 +482,13 @@ export function enableDevTools() {
 	} else {
 		globalScope.devtoolsFormatters = [lineageFormatter]
 	}
+
+	setDebugHooks({
+		isDevtoolsEnabled: () => devtoolsEnabled,
+		registerEffect: registerEffectForDebug,
+		getTriggerChain: getTriggerChain,
+		recordTriggerLink: recordTriggerLink,
+	})
 }
 
 export function forceEnableGraphTracking() {

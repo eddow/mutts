@@ -1064,6 +1064,70 @@ effect(() => {
 
 **Bottom line:** Recursive touching gives you the granular control you need without deep watching's overhead, making it ideal for modern reactive applications.
 
+## Choosing the Right Reactive Primitive
+
+Mutts provides several ways to derive values from reactive state. They differ in **when** they recompute (eager vs lazy), **what** they return (raw value vs reactive proxy), and **how** downstream consumers track changes.
+
+### Comparison Table
+
+| Primitive | Evaluation | Output | Trackable | Identity stable | Cleanup | Best for |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `effect(() => ...)` | Eager | Side-effect (void) | N/A | N/A | Auto (parent/GC) | Side effects, DOM updates |
+| `memoize(() => expr)` | **Lazy** | Raw value | Yes (return) | No (new value each call) | Auto (WeakMap GC) | Cached scalars, computed getters |
+| `memoize(fn)(args)` | **Lazy** | Raw value | Yes (return) | No | Auto (WeakMap GC) | Parameterized caching |
+| `lift(() => [...])` | Eager | Reactive array proxy | Yes (per-index) | **Yes** | `result[cleanup]()` | Derived collections (filter, map) |
+| `lift(() => ({...}))` | Eager | Reactive object proxy | Yes (per-prop) | **Yes** | `result[cleanup]()` | Derived objects, computed shapes |
+| `project(source, fn)` | Eager | Reactive container | Yes (per-key) | **Yes** | `result[cleanup]()` | Per-element transforms on arrays/maps/records |
+| `attend(source, fn)` | Eager | Side-effects per key | N/A | N/A | `result[cleanup]()` | Per-element side effects (DOM binding) |
+| `scan(source, fn, init)` | Eager | Reactive array | Yes (per-index) | **Yes** | `result[cleanup]()` | Running accumulations (prefix sums) |
+| `when(() => cond)` | Eager | Promise\<T\> | N/A | N/A | Auto (on resolve/timeout) | Awaiting a reactive condition |
+| `watch(source, cb)` | Eager | Callback (old/new) | N/A | N/A | Returned cleanup | Observing specific changes |
+
+### Key distinctions
+
+- **Lazy vs Eager**: `memoize` only recomputes when the result is read. Everything else recomputes immediately when dependencies change — even if nobody is consuming the output.
+- **Trackable**: Can downstream effects depend on the result? `memoize`'s return value is trackable because calling it runs inside an effect context. `lift`/`project`/`scan` return reactive proxies where each property/index is independently trackable.
+- **Identity stable**: `lift`, `project`, and `scan` return the **same proxy** across recomputations — only changed slots are updated. This is critical for downstream `project()` or DOM reconciliation that relies on reference identity.
+
+### Common patterns
+
+**Lazy computed scalar** (like Vue/Solid `computed`):
+```typescript
+const total = memoize(() => state.price * state.quantity)
+effect(() => console.log(total())) // recomputes only when read
+```
+
+**Eager computed object** (trackable reactive proxy):
+```typescript
+const profile = lift(() => ({
+  displayName: user.name.toUpperCase(),
+  isAdult: user.age >= 18,
+}))
+effect(() => console.log(profile.displayName)) // tracks .displayName only
+```
+
+**Derived filtered collection**:
+```typescript
+const active = lift(() => items.filter(x => x.active))
+// active is a reactive array — project() or effects on active[i] work fine
+```
+
+**Per-element transform**:
+```typescript
+const doubled = project(numbers, ({ value }) => value * 2)
+// Each index has its own effect — changing numbers[3] only recomputes doubled[3]
+```
+
+### When deep touching makes `lift` unnecessary
+
+If you're simply **replacing** a reactive property with a new value of the same shape, deep touching already diffs element-by-element:
+
+```typescript
+state.items = fetchedItems // deep touch diffs old vs new per-index — no lift needed
+```
+
+`lift` is for **derived** data where there's no single property to assign to — the output is computed from scratch each time.
+
 ## Memoization
 
 ### `memoize()`

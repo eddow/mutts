@@ -1,5 +1,5 @@
 import { FoolProof } from '../utils'
-import { cleanedBy } from '.'
+import { cleanedBy } from './effect-context'
 import { effect, untracked } from './effects'
 import { memoize } from './memoize'
 import { reactive } from './proxy'

@@ -1,4 +1,3 @@
-import { setEffectName } from '../../debug/debug'
 import { FoolProof, named } from '../utils'
 import { cleanedBy, getActiveEffect } from './effect-context'
 import { effect, untracked } from './effects'
@@ -129,7 +128,6 @@ function projectArray<SourceValue, ResultValue>(
 					defineAccessValue(accessBase)
 					target[index] = apply(accessBase, target)
 				}))
-				setEffectName(stop, `project[${depth}]:${index}`)
 				indexEffects.set(i, stop)
 			})
 		}
@@ -196,7 +194,7 @@ function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
 					const produced = apply(accessBase, target)
 					target.set(key, produced)
 				})
-				setEffectName(stop, `project[${depth}]:${String(key)}`)
+
 				keyEffects.set(key, stop)
 			})
 		}
@@ -271,7 +269,7 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 					const produced = apply(accessBase, target)
 					;(target as any)[sourceKey] = produced
 				})
-				setEffectName(stop, `project[${depth}]:${String(key)}`)
+
 				keyEffects.set(key, stop)
 			})
 		}
@@ -333,7 +331,7 @@ function projectMap<Key, Value, ResultValue>(
 					const produced = apply(accessBase, target)
 					target.set(key, produced)
 				})
-				setEffectName(stop, `project[${depth}]:${String(key)}`)
+
 				keyEffects.set(key, stop)
 			})
 		}

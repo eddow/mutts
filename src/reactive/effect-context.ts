@@ -1,10 +1,8 @@
 import { tag } from '../utils'
 import { asyncZone, ZoneAggregator, ZoneHistory } from '../zone'
-import { effect, untracked } from './effects'
 import { getRoot } from './registry'
 import {
 	cleanup,
-	type EffectAccess,
 	type EffectTrigger,
 	type ScopedCallback,
 	stopped,
@@ -60,24 +58,3 @@ export function cleanedBy<T extends object>(obj: T, cleanupFn: ScopedCallback) {
 	}) as T & { [cleanup]: ScopedCallback }
 }
 
-//#region greedy caching
-
-/**
- * Creates a derived value that automatically recomputes when dependencies change
- * @param compute - Function that computes the derived value
- * @returns Object with value and cleanup function
- */
-export function derived<T>(compute: (dep: EffectAccess) => T): {
-	value: T
-	[cleanup]: ScopedCallback
-} {
-	const rv = { value: undefined as unknown as T }
-	return cleanedBy(
-		rv,
-		untracked(() =>
-			effect(function derivedEffect(access) {
-				rv.value = compute(access)
-			})
-		)
-	)
-}

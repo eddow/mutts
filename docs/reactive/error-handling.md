@@ -1,18 +1,18 @@
 # Effect Error Handling
 
-The `onEffectThrow` function allows you to catch and handle errors within reactive effects.
+The `caught` function allows you to catch and handle errors within reactive effects.
 
 ## Basic Usage
 
-Register an error handler inside an effect using `onEffectThrow`:
+Register an error handler inside an effect using `caught`:
 
 ```typescript
-import { effect, onEffectThrow, reactive } from 'mutts'
+import { effect, caught, reactive } from 'mutts'
 
 const state = reactive({ value: 0 })
 
 effect(() => {
-  onEffectThrow((error) => {
+  caught((error) => {
     console.error('Effect failed:', error)
   })
 
@@ -28,7 +28,7 @@ You can register multiple handlers. They are tried in order until one succeeds:
 ```typescript
 effect(() => {
   // First handler - try to recover
-  onEffectThrow((error) => {
+  caught((error) => {
     if (error.message === 'Retryable') {
       retryOperation()
       return  // Success - stops here
@@ -37,7 +37,7 @@ effect(() => {
   })
 
   // Second handler - log and continue
-  onEffectThrow((error) => {
+  caught((error) => {
     console.log('Operation failed:', error)
   })
 })
@@ -50,7 +50,7 @@ Errors in child effects propagate to parent effects:
 ```typescript
 effect(() => {
   // Parent catches child's error
-  onEffectThrow((error) => {
+  caught((error) => {
     console.log('Child failed:', error.message)
   })
 
@@ -69,7 +69,7 @@ Handlers can return cleanup functions:
 
 ```typescript
 effect(() => {
-  onEffectThrow((error) => {
+  caught((error) => {
     console.log('Handling error:', error)
     
     return () => {
@@ -82,7 +82,7 @@ effect(() => {
 
 ## API
 
-### `onEffectThrow(handler)`
+### `caught(handler)`
 
 Registers an error handler for the current effect.
 
@@ -118,4 +118,4 @@ Parent's handlers try
 
 - Handlers must be registered **before** the code that might throw
 - Handlers are cleared on each effect re-run (re-register if needed)
-- Errors in async effects (Promises) are not caught by `onEffectThrow` - use `.catch()` on the Promise
+- Errors in async effects (Promises) are not caught by `caught` - use `.catch()` on the Promise

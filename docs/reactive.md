@@ -17,6 +17,7 @@ The Mutts Reactive System documentation has been split into focused sections for
 *   **[Scan](./reactive/scan.md)**: Reactive scan and accumulation
 
 ## [Advanced Topics](./reactive/advanced.md)
+*   **[Choosing the Right Primitive](./reactive/advanced.md#choosing-the-right-reactive-primitive)**: Comparison table of effect-value functions (memoize, lift, project, scan, etc.)
 *   **[Atomic Operations](./reactive/advanced.md#atomic-operations)**: Batching and Bidirectional binding
 *   **[Evolution Tracking](./reactive/advanced.md#evolution-tracking)**: History introspection
 *   **[Prototype Chains](./reactive/advanced.md#prototype-chains-and-pure-objects)**: Advanced inheritance patterns
