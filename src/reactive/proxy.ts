@@ -11,7 +11,7 @@ import {
 	removeBackReference,
 } from './deep-watch-state'
 import { untracked } from './effects'
-import { absent, isNonReactive } from './non-reactive-state'
+import { absent, isNonReactive, isUnreactiveProp } from './non-reactive-state'
 import {
 	getExistingProxy,
 	proxyToObject,
@@ -27,7 +27,6 @@ import {
 	options,
 	ReactiveError,
 	ReactiveErrorCode,
-	unreactiveProperties,
 } from './types'
 export const metaProtos = new WeakMap()
 
@@ -49,36 +48,39 @@ const reactiveHandlers = {
 					return (...args: any[]) => desc.value.apply(obj, args)
 			}
 		}
-		if (prop === nonReactiveMark) return false
-		const unwrappedObj = unwrap(obj)
-		// Check if this property is marked as unreactive
-		if (unwrappedObj[unreactiveProperties]?.has(prop) || typeof prop === 'symbol')
+		// Symbols: fast-path — no reactivity tracking, no unreactive check needed
+		if (typeof prop === 'symbol')
+			return prop === nonReactiveMark ? false : FoolProof.get(obj, prop, receiver)
+		// Check if this property is marked as unreactive (WeakMap lookup — no proxy traps)
+		if (isUnreactiveProp(obj, prop))
 			return FoolProof.get(obj, prop, receiver)
 
 		// Check if property exists using a trap-free walk to avoid triggering
 		// the has-trap cascade on prototype chains of reactive proxies.
 		const isOwnProp = Object.hasOwn(obj, prop)
 		let hasProp = isOwnProp
-		let owner: any = isOwnProp ? reactiveObject(obj) : undefined
+		let owner: any = isOwnProp ? obj : undefined
 		if (!isOwnProp) {
-			let raw = unwrap(Object.getPrototypeOf(obj))
+			let raw = Object.getPrototypeOf(obj)
 			while (raw && raw !== Object.prototype) {
 				if (Object.hasOwn(raw, prop)) {
 					hasProp = true
-					owner = reactiveObject(raw)
+					owner = raw
 					break
 				}
-				raw = unwrap(Object.getPrototypeOf(raw))
+				raw = Object.getPrototypeOf(raw)
 			}
 		}
 		const isInheritedAccess = hasProp && !isOwnProp
 
 		// For accessor properties, check the unwrapped object to see if it's an accessor
 		// This ensures ignoreAccessors works correctly even after operations like Object.setPrototypeOf
+		// Skip for null-proto objects (pounce scopes) — they never have accessors
 		const shouldIgnoreAccessor =
 			options.ignoreAccessors &&
 			isOwnProp &&
-			(isOwnAccessor(receiver, prop) || isOwnAccessor(unwrappedObj, prop))
+			Object.getPrototypeOf(obj) !== null &&
+			(isOwnAccessor(receiver, prop) || isOwnAccessor(obj, prop))
 
 		// Depend if...
 		if (
@@ -95,7 +97,9 @@ const reactiveHandlers = {
 		if (isInheritedAccess && owner && (!options.instanceMembers || !(obj instanceof Object))) {
 			dependant(owner, prop)
 		}
-		const value = FoolProof.get(obj, prop, receiver)
+		// For arrays, use FoolProof.get (Indexer path) for numeric index reactivity.
+		// For all other objects, inline Reflect.get directly (skips 3 function calls).
+		const value = Array.isArray(obj) ? FoolProof.get(obj, prop, receiver) : Reflect.get(obj, prop, receiver)
 		if (typeof value === 'object' && value !== null) {
 			const reactiveValue = reactiveObject(value)
 
@@ -109,12 +113,10 @@ const reactiveHandlers = {
 		return value
 	},
 	set(obj: any, prop: PropertyKey, value: any, receiver: any): boolean {
-		// Read old value directly from unwrapped object to avoid triggering dependency tracking
-		const unwrappedObj = unwrap(obj)
 		const unwrappedReceiver = unwrap(receiver)
 
 		// Check if this property is marked as unreactive
-		if (unwrappedObj[unreactiveProperties]?.has(prop) || unwrappedObj !== unwrappedReceiver)
+		if (isUnreactiveProp(obj, prop) || obj !== unwrappedReceiver)
 			return FoolProof.set(obj, prop, value, receiver)
 		const newValue = unwrap(value)
 		// metaProto setter dispatch (e.g., reactive array length)
@@ -134,14 +136,14 @@ const reactiveHandlers = {
 		if (Reflect.has(unwrappedReceiver, prop)) {
 			// Check descriptor on both receiver and target to handle proxy cases
 			const receiverDesc = Object.getOwnPropertyDescriptor(unwrappedReceiver, prop)
-			const targetDesc = Object.getOwnPropertyDescriptor(unwrappedObj, prop)
+			const targetDesc = Object.getOwnPropertyDescriptor(obj, prop)
 			const desc = receiverDesc || targetDesc
-			// We *need* to use `receiver` and not `unwrappedObj` here, otherwise we break
+			// We *need* to use `receiver` and not `obj` here, otherwise we break
 			// the dependency tracking for memoized getters
 			if (desc?.get && !desc?.set) {
-				oldVal = untracked(() => Reflect.get(unwrappedObj, prop, receiver))
+				oldVal = untracked(() => Reflect.get(obj, prop, receiver))
 			} else {
-				oldVal = untracked(() => Reflect.get(unwrappedObj, prop, receiver))
+				oldVal = untracked(() => Reflect.get(obj, prop, receiver))
 			}
 		}
 		if (objectsWithDeepWatchers.has(obj)) {
@@ -235,9 +237,19 @@ function reactiveObject<T>(anyTarget: T): T {
 	const existing = getExistingProxy(target)
 	if (existing !== undefined) return existing as T
 
+	// Find nativeReactive via trap-free walk (avoids has-trap cascade on proxy chains)
+	let nativeClass: (new (t: any) => any) | undefined
+	let walk: any = target
+	while (walk) {
+		if (Object.hasOwn(walk, nativeReactive)) {
+			nativeClass = walk[nativeReactive]
+			break
+		}
+		walk = Object.getPrototypeOf(walk)
+	}
 	const proxied =
-		nativeReactive in target && !(target instanceof target[nativeReactive])
-			? new target[nativeReactive](target)
+		nativeClass && !(target instanceof nativeClass)
+			? new nativeClass(target)
 			: target
 	if (proxied !== target) trackProxyObject(proxied, target)
 	const proxy = new Proxy(proxied, reactiveHandlers)

@@ -226,9 +226,6 @@ export interface ProjectionContext {
 	parent?: ProjectionContext
 }
 
-// Symbol to mark functions with their root function
-const rootFunction = Symbol('root-function')
-
 /**
  * Structured error codes for machine-readable diagnosis
  */
@@ -517,4 +514,4 @@ export function optionCall<K extends CallableOption>(
 	}
 }
 
-export { type State, nativeReactive, rootFunction }
+export { type State, nativeReactive }

@@ -35,7 +35,7 @@ export {
 	ReactiveErrorCode,
 	type ScopedCallback,
 } from './types'
-export { unreactive, watch, when } from './watch'
+export { unreactive, watch, when, resource, type Resource } from './watch'
 export { describe } from './describe'
 
 import { ReactiveArray } from './array'

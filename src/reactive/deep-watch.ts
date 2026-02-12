@@ -2,6 +2,7 @@ import {
 	deepWatchers,
 	effectToDeepWatchedObjects,
 	objectsWithDeepWatchers,
+	registerDeepWatcher,
 } from './deep-watch-state'
 import { effect } from './effects'
 import { isNonReactive } from './non-reactive-state'
@@ -50,6 +51,8 @@ export function deepWatch<T extends object>(
 		(() => callback(target)) as EffectTrigger,
 		callback
 	)
+
+	registerDeepWatcher()
 
 	// Use the existing effect system to register dependencies
 	return effect(() => {

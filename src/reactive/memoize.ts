@@ -2,9 +2,9 @@ import { decorator } from '../decorator'
 import { deepCompare, renamed } from '../utils'
 import { touched1 } from './change'
 import { effect, root, untracked } from './effects'
-import { getRoot, markWithRoot } from './registry'
+import { getRoot, markWithRoot, rootFunctions } from './registry'
 import { dependant } from './tracking'
-import { optionCall, options, rootFunction } from './types'
+import { optionCall, options } from './types'
 
 export type Memoizable = object | any[] | symbol | ((...args: any[]) => any)
 
@@ -146,11 +146,10 @@ export const memoize = decorator({
 					{
 						method: original,
 						propertyKey,
-						...((original as any)[rootFunction]
-							? { [rootFunction]: (original as any)[rootFunction] }
-							: {}),
 					}
 				)
+				const origRoot = rootFunctions.get(original)
+				if (origRoot) rootFunctions.set(wrapper, origRoot)
 				wrapperRegistry.set(original, wrapper)
 			}
 			const memoized = memoizeFunction(wrapper as any)
@@ -171,11 +170,10 @@ export const memoize = decorator({
 					{
 						method: original,
 						propertyKey: name,
-						...((original as any)[rootFunction]
-							? { [rootFunction]: (original as any)[rootFunction] }
-							: {}),
 					}
 				)
+				const origRoot = rootFunctions.get(original)
+				if (origRoot) rootFunctions.set(wrapper, origRoot)
 				wrapperRegistry.set(original, wrapper)
 			}
 			const memoized = memoizeFunction(wrapper as any) as (...args: object[]) => unknown

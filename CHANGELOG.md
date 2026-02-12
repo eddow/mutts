@@ -3,10 +3,15 @@
 ## Functionality
 
 - `when`: reactive boolean => promise
+- `resource`: reactive resource
 
 ## Refactoring
 
 - why? caught!
+
+## Optimisations
+
+- reactive - overall
 
 # 1.0.9
 

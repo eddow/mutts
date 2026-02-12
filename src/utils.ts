@@ -86,15 +86,14 @@ export function renamed<F extends Function>(fct: F, name: string): F {
 		},
 	})
 }
+const hasNode = typeof Node !== 'undefined'
 export const FoolProof = {
 	get(obj: any, prop: any, receiver: any) {
-		// Check if Node is available and obj is an instance of Node
-		if (typeof Node !== 'undefined' && obj instanceof Node) return (obj as any)[prop]
+		if (hasNode && obj instanceof Node) return (obj as any)[prop]
 		return Reflect.get(obj, prop, receiver)
 	},
 	set(obj: any, prop: any, value: any, receiver: any) {
-		// Check if Node is available and obj is an instance of Node
-		if (typeof Node !== 'undefined' && obj instanceof Node) {
+		if (hasNode && obj instanceof Node) {
 			;(obj as any)[prop] = value
 			return true
 		}

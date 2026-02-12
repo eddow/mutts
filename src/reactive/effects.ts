@@ -859,7 +859,28 @@ function executeNext(effectuatedRoots: Function[]): any {
 
 // Track which sub-effects have been executed to prevent infinite loops
 // These are all the effects triggered under `activeEffect` and all their sub-effects
+// Temporary instrumentation — remove after profiling
+const batchStats = {
+	effects: 0, maxDepth: 0, batches: [] as { name: string, effects: number, maxDepth: number }[],
+	depthHisto: {} as Record<number, number>,
+	_current: null as null | { name: string, effects: number, maxDepth: number },
+}
+if (typeof globalThis !== 'undefined') (globalThis as any).__BATCH_STATS__ = batchStats
+
 export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'immediate') {
+	const n = Array.isArray(effect) ? effect.length : 1
+	batchStats.effects += n
+	if (batchDepth > batchStats.maxDepth) batchStats.maxDepth = batchDepth
+	batchStats.depthHisto[batchDepth] = (batchStats.depthHisto[batchDepth] || 0) + n
+	if (!batchQueue) {
+		const name = Array.isArray(effect) ? effect.map(e => e.name || '?').join(',') : (effect.name || '?')
+		batchStats._current = { name, effects: 0, maxDepth: 0 }
+		batchStats.batches.push(batchStats._current)
+	}
+	if (batchStats._current) {
+		batchStats._current.effects += n
+		if (batchDepth > batchStats._current.maxDepth) batchStats._current.maxDepth = batchDepth
+	}
 	if (broken) {
 		throw new ReactiveError(
 			'[reactive] Reactive system is broken after an unrecoverable error. Call reset() to recover.',

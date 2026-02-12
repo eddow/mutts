@@ -205,3 +205,12 @@ To break these cycles, use a **Hook Interface** pattern.
 - **Debug** can import **Core** (types, registry, utils).
 - If Core needs to trigger Debug logic, use a **Hook**.
 
+## Proxy Performance — Trap Cascade Prevention
+
+When reactive proxies form prototype chains (e.g. pounce scope objects via `Object.create(base)`), any operation that walks the prototype chain through proxies triggers trap cascades. Key patterns to avoid:
+
+1. **Never use `in` or `Reflect.has` on a proxy** when checking metadata — use `Object.hasOwn` + `Object.getPrototypeOf` walk on raw targets instead.
+2. **Never store metadata as symbol properties on reactive objects** — use external `WeakMap`/`WeakSet` keyed by the raw target. Symbol property access (`obj[sym]`) triggers the `get` trap and cascades through proxy prototype chains.
+3. **Fast-path counters** — for features used by few objects (deep watchers, `@unreactive`), guard the check with a counter so the common case (counter === 0) skips the lookup entirely.
+4. **Two-Point Tracking** — for inherited property reads on null-proto chains, only call `dependant()` on the leaf and the owning ancestor, not every intermediate level.
+

@@ -15,11 +15,8 @@ export function trackProxyObject(proxy: object, target: object) {
 }
 
 export function unwrap<T>(obj: T): T {
-	let current = obj
-	while (current && typeof current === 'object' && current !== null && proxyToObject.has(current)) {
-		current = proxyToObject.get(current) as T
-	}
-	return current
+	if (!obj || typeof obj !== 'object') return obj
+	return (proxyToObject.get(obj as object) as T) || obj
 }
 
 export function isReactive(obj: any): boolean {

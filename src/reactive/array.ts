@@ -34,18 +34,25 @@ export abstract class Indexer extends Array {
 	}
 }
 const indexLess = { get: FoolProof.get, set: FoolProof.set }
+// Fast numeric-string check: first char is a digit (0-9)
+function asIndex(prop: string): number {
+	const c = prop.charCodeAt(0)
+	if (c < 48 || c > 57) return -1 // not 0-9
+	const n = +prop // coerce — faster than parseInt, handles "0", "12", etc.
+	return n === (n | 0) && n >= 0 ? n : -1
+}
 Object.assign(FoolProof, {
 	get(obj: any, prop: any, receiver: any) {
-		if (obj instanceof Array && typeof prop === 'string') {
-			const index = parseInt(prop)
-			if (!Number.isNaN(index)) return Indexer.prototype.get.call(obj, index)
+		if (Array.isArray(obj) && typeof prop === 'string') {
+			const i = asIndex(prop)
+			if (i >= 0) return Indexer.prototype.get.call(obj, i)
 		}
 		return indexLess.get(obj, prop, receiver)
 	},
 	set(obj: any, prop: any, value: any, receiver: any) {
-		if (obj instanceof Array && typeof prop === 'string') {
-			const index = parseInt(prop)
-			if (!Number.isNaN(index)) return Indexer.prototype.set.call(obj, index, value)
+		if (Array.isArray(obj) && typeof prop === 'string') {
+			const i = asIndex(prop)
+			if (i >= 0) return Indexer.prototype.set.call(obj, i, value)
 		}
 		return indexLess.set(obj, prop, value, receiver)
 	},

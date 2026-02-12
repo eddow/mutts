@@ -1,16 +1,15 @@
 import { decorator, type GenericClassDecorator } from '../decorator'
 import { deepWatch } from './deep-watch'
 import { effect } from './effects'
-import { isNonReactive, nonReactiveClass, nonReactiveObjects } from './non-reactive-state'
+import { addUnreactiveProps, isNonReactive, nonReactiveClass, nonReactiveObjects, unreactiveProps } from './non-reactive-state'
+import { reactive } from './proxy'
 import { unwrap } from './proxy-state'
 import { markWithRoot } from './registry'
 import { dependant } from './tracking'
 import {
 	type EffectAccess,
 	type EffectCleanup,
-	nonReactiveMark,
 	stopped,
-	unreactiveProperties,
 } from './types'
 
 //#region watch
@@ -172,17 +171,7 @@ export function when<T>(predicate: (dep: EffectAccess) => T, timeout?: number): 
 function shallowNonReactive<T>(obj: T): T {
 	obj = unwrap(obj)
 	if (isNonReactive(obj)) return obj
-	try {
-		Object.defineProperty(obj as object, nonReactiveMark, {
-			value: true,
-			writable: false,
-			enumerable: false,
-			configurable: true,
-		})
-	} catch {}
-	if (!(nonReactiveMark in (obj as object))) nonReactiveObjects.add(obj as object)
-	// Finally, not deep
-	//for (const key in obj) deepNonReactive(obj[key])
+	nonReactiveObjects.add(obj as object)
 	return obj
 }
 function unreactiveApplication<T extends object>(...args: (keyof T)[]): GenericClassDecorator<T>
@@ -195,12 +184,12 @@ function unreactiveApplication<T extends object>(
 		? shallowNonReactive(arg1)
 		: (((original) => {
 				// Copy the parent's unreactive properties if they exist
-				original.prototype[unreactiveProperties] = new Set<PropertyKey>(
-					original.prototype[unreactiveProperties] || []
-				)
+				const parentSet = unreactiveProps.get(original.prototype)
+				const set = new Set<PropertyKey>(parentSet || [])
 				// Add all arguments (including the first one)
-				original.prototype[unreactiveProperties].add(arg1)
-				for (const arg of args) original.prototype[unreactiveProperties].add(arg)
+				set.add(arg1)
+				for (const arg of args) set.add(arg)
+				addUnreactiveProps(original.prototype, set)
 				return original // Return the class
 			}) as GenericClassDecorator<T>)
 }
@@ -217,3 +206,85 @@ export const unreactive = decorator({
 })
 
 //#endregion
+
+//#region resource
+
+export interface Resource<T> {
+	value: T | undefined
+	loading: boolean
+	error: any
+	latest: T | undefined
+	reload: () => void
+}
+
+/**
+ * Creates a reactive resource that automatically tracks async state.
+ * @param fetcher - Async function that returns the value. Reactive dependencies are tracked.
+ * @param options - Resource options (initialValue)
+ * @returns Reactive Resource object with value, loading, error, latest properties
+ */
+export function resource<T>(
+	fetcher: (dep: EffectAccess) => Promise<T> | T,
+	options: { initialValue?: T } = {}
+): Resource<T> {
+	const state = reactive({
+		value: options.initialValue,
+		loading: true,
+		error: undefined as any,
+		latest: options.initialValue,
+		reload: () => {
+			reloadSignal.value++
+		},
+	})
+	
+	const reloadSignal = reactive({ value: 0 })
+	let counter = 0
+
+	const stop = effect(
+		function resourceEffect(access) {
+			// Track reload signal to enable manual reloading
+			if (reloadSignal.value) { /* just tracking */ }
+			
+			const id = ++counter
+			state.loading = true
+			state.error = undefined
+			
+			try {
+				const result = fetcher(access)
+				
+				if (result instanceof Promise) {
+					result.then(
+						(val) => {
+							if (id === counter) {
+								state.value = val
+								state.latest = val
+								state.loading = false
+							}
+						},
+						(err) => {
+							if (id === counter) {
+								state.error = err
+								state.loading = false
+							}
+						}
+					)
+				} else {
+					state.value = result
+					state.latest = result
+					state.loading = false
+				}
+			} catch (err) {
+				state.error = err
+				state.loading = false
+			}
+		}
+	)
+	
+	// Expose stop method for manual cleanup if needed
+	;(state as any).stop = stop
+	
+	return state as Resource<T>
+}
+
+//#endregion
+

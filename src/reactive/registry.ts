@@ -1,4 +1,4 @@
-import { type EffectCleanup, type EffectNode, type EffectTrigger, rootFunction } from './types'
+import { type EffectCleanup, type EffectNode, type EffectTrigger } from './types'
 
 // Track which effects are watching which reactive objects for cleanup
 export let effectToReactiveObjects = new WeakMap<EffectTrigger, Set<object>>()
@@ -8,6 +8,9 @@ export let watchers = new WeakMap<object, Map<any, Set<EffectTrigger>>>()
 
 // Track effect metadata and relationships
 export let effectNodes = new WeakMap<EffectTrigger, EffectNode>()
+
+// Root function mapping (replaces Object.defineProperty with rootFunction symbol)
+export let rootFunctions = new WeakMap<Function, Function>()
 
 export function getEffectNode(effect: EffectTrigger): EffectNode {
     let node = effectNodes.get(effect)
@@ -26,6 +29,7 @@ export function resetRegistry() {
 	watchers = new WeakMap()
 	effectNodes = new WeakMap()
 	reverseRoots = new WeakMap()
+	rootFunctions = new WeakMap()
 }
 
 /**
@@ -54,11 +58,9 @@ export function markWithRoot<T extends Function>(fn: T, root: any): T {
 	// (Last writer wins for the check)
 	reverseRoots.set(root, new WeakRef(fn))
 
-	// Mark fn with the new root
-	return Object.defineProperty(fn, rootFunction, {
-		value: getRoot(root),
-		writable: false,
-	})
+	// Store root mapping in WeakMap (avoids expensive Object.defineProperty)
+	rootFunctions.set(fn, getRoot(root))
+	return fn
 }
 
 /**
@@ -67,6 +69,10 @@ export function markWithRoot<T extends Function>(fn: T, root: any): T {
  * @returns The root function
  */
 export function getRoot<T extends Function | undefined>(fn: T): T {
-	while (fn && rootFunction in fn) fn = fn[rootFunction] as T
+	while (fn) {
+		const r = rootFunctions.get(fn)
+		if (!r) break
+		fn = r as T
+	}
 	return fn
 }
