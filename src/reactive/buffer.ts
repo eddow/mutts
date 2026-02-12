@@ -128,7 +128,8 @@ export function scan<Input extends object, Output>(
 	initialValue: Output
 ): ScanResult<Output> {
 	const observedSource = reactive(source)
-	const result = reactive([] as Output[])
+	const rawResult: Output[] = []
+	const result = reactive(rawResult)
 
 	// Track effects for each index to dispose them when the array shrinks
 	const indexEffects = new Map<number, EffectCleanup>()
@@ -157,10 +158,8 @@ export function scan<Input extends object, Output>(
 		if (stop) {
 			stop()
 			indexEffects.delete(index)
-			untracked(() => {
-				Reflect.deleteProperty(indexToIntermediate as any, index)
-				Reflect.deleteProperty(result as any, index)
-			})
+			Reflect.deleteProperty(indexToIntermediate, index)
+			Reflect.deleteProperty(result, index)
 		}
 	}
 
@@ -170,7 +169,7 @@ export function scan<Input extends object, Output>(
 		let prev: Intermediate | undefined
 
 		for (let i = 0; i < length; i++) {
-			const val = FoolProof.get(observedSource as any, i, observedSource) as Input
+			const val = FoolProof.get(observedSource, i, observedSource) as Input
 
 			if (
 				!(val && (typeof val === 'object' || typeof val === 'function' || typeof val === 'symbol'))
@@ -211,9 +210,7 @@ export function scan<Input extends object, Output>(
 						const inter = indexToIntermediate[index]
 						if (inter) {
 							const accValue = inter.acc
-							untracked(() => {
-								result[index] = accValue
-							})
+							result[index] = accValue
 						}
 					})
 					indexEffects.set(index, stop)
@@ -229,11 +226,9 @@ export function scan<Input extends object, Output>(
 		}
 
 		// Ensure result length matches source length
-		untracked(() => {
-			if (result.length !== length) {
-				FoolProof.set(result as any, 'length', length, result)
-			}
-		})
+		if (rawResult.length !== length) {
+			FoolProof.set(result, 'length', length, result)
+		}
 	})
 
 	return cleanedBy(result, (() => {

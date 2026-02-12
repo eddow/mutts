@@ -159,7 +159,8 @@ describe('Async Hook Direct Tests', () => {
     });
 
     test('EventTarget (if available)', async () => {
-        // Only run this test in browser where we patch EventTarget manually
+        // DOM events are NOT zone-wrapped — zones are for async context
+        // preservation (Promise, setTimeout), not synchronous DOM callbacks.
         if (typeof window === 'undefined' || typeof EventTarget === 'undefined') return;
         
         removers.push(asyncHook(createHook('H1')));
@@ -181,10 +182,11 @@ describe('Async Hook Direct Tests', () => {
         await p;
         await waitForCleanup();
 
-        expect(callStack).toContain('H1:hook');
-        expect(callStack).toContain('H1:restore');
+        // Event fires normally, but no zone hook/restore/undo
         expect(callStack).toContain('event');
-        expect(callStack).toContain('H1:undo');
+        expect(callStack).not.toContain('H1:hook');
+        expect(callStack).not.toContain('H1:restore');
+        expect(callStack).not.toContain('H1:undo');
     });
 
     test('Dynamically adding/removing hooks', async () => {

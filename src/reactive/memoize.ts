@@ -6,7 +6,7 @@ import { getRoot, markWithRoot, rootFunctions } from './registry'
 import { dependant } from './tracking'
 import { optionCall, options } from './types'
 
-export type Memoizable = object | any[] | symbol | ((...args: any[]) => any)
+export type Memoizable = object | any[] | ((...args: any[]) => any)
 
 type MemoCacheTree<Result> = {
 	result?: Result

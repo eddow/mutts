@@ -88,7 +88,8 @@ function projectArray<SourceValue, ResultValue>(
 	apply: ProjectCallback<SourceValue, number, ResultValue[], readonly SourceValue[], ResultValue>
 ): ProjectResult<ResultValue[]> {
 	source = reactive(source)
-	const target = reactive([] as ResultValue[])
+	const rawTarget: ResultValue[] = []
+	const target = reactive(rawTarget)
 	const indexEffects = new Map<number, ScopedCallback>()
 
 	function normalizeTargetLength(length: number) {
@@ -107,7 +108,7 @@ function projectArray<SourceValue, ResultValue>(
 	const parent = getActiveProjection()
 	const depth = parent ? parent.depth + 1 : 0
 
-	const cleanupLength = effect(named(`project:${source[Symbol.toStringTag]}.length`, ({ ascend }) => {
+	const cleanupLength = effect(named('project:Array.length', ({ ascend }) => {
 		const length = source.length
 		normalizeTargetLength(length)
 		const existing = Array.from(indexEffects.keys())
@@ -117,7 +118,7 @@ function projectArray<SourceValue, ResultValue>(
 				const index = i
 				const stop = effect(named(`project:${source[Symbol.toStringTag]}[${index}]`, ({ reaction }) => {
 					if (!reaction) setActiveProjection({ source, key: index, target, depth, parent })
-					const previous = untracked(() => target[index])
+					const previous = rawTarget[index]
 					const accessBase = {
 						key: index,
 						source,
@@ -126,7 +127,8 @@ function projectArray<SourceValue, ResultValue>(
 						old: previous,
 					} as ProjectAccess<SourceValue, number, readonly SourceValue[], ResultValue[]>
 					defineAccessValue(accessBase)
-					target[index] = apply(accessBase, target)
+					const result = apply(accessBase, target)
+					if (result !== previous) target[index] = result
 				}))
 				indexEffects.set(i, stop)
 			})
@@ -179,7 +181,7 @@ function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
 			ascend(() => {
 				const stop = effect(function projectRegisterKeyEffect({ reaction }) {
 					if (!reaction) setActiveProjection({ source, key, target, depth, parent })
-					const previous = untracked(() => target.get(key))
+					const previous = rawTarget.get(key)
 					const accessBase = {
 						key,
 						source: source,
@@ -192,7 +194,7 @@ function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
 					} as ProjectAccess<SourceValue, Key, Register<SourceValue, Key>, Map<Key, ResultValue>>
 					defineAccessValue(accessBase)
 					const produced = apply(accessBase, target)
-					target.set(key, produced)
+					if (produced !== previous) target.set(key, produced)
 				})
 
 				keyEffects.set(key, stop)
@@ -222,7 +224,8 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 	>
 ): ProjectResult<Record<keyof Source, ResultValue>> {
 	source = reactive(source) as Source
-	const target = reactive({} as Record<keyof Source, ResultValue>)
+	const rawTarget = {} as Record<keyof Source, ResultValue>
+	const target = reactive(rawTarget)
 	const keyEffects = new Map<PropertyKey, ScopedCallback>()
 
 	function disposeKey(key: PropertyKey) {
@@ -249,9 +252,7 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 				const stop = effect(function projectRecordKeyEffect({ reaction }) {
 					if (!reaction) setActiveProjection({ source, key, target, depth, parent })
 					const sourceKey = key as keyof Source
-					const previous = untracked(
-						() => (target as Record<PropertyKey, ResultValue | undefined>)[key]
-					)
+					const previous = rawTarget[sourceKey]
 					const accessBase = {
 						key: sourceKey,
 						source: source,
@@ -267,7 +268,7 @@ function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 					>
 					defineAccessValue(accessBase)
 					const produced = apply(accessBase, target)
-					;(target as any)[sourceKey] = produced
+					if (produced !== previous) (target as any)[sourceKey] = produced
 				})
 
 				keyEffects.set(key, stop)
@@ -316,7 +317,7 @@ function projectMap<Key, Value, ResultValue>(
 			ascend(() => {
 				const stop = effect(function projectMapKeyEffect({ reaction }) {
 					if (!reaction) setActiveProjection({ source, key, target, depth, parent })
-					const previous = untracked(() => target.get(key))
+					const previous = rawTarget.get(key)
 					const accessBase = {
 						key,
 						source: source,
@@ -329,7 +330,7 @@ function projectMap<Key, Value, ResultValue>(
 					} as ProjectAccess<Value, Key, Map<Key, Value>, Map<Key, ResultValue>>
 					defineAccessValue(accessBase)
 					const produced = apply(accessBase, target)
-					target.set(key, produced)
+					if (produced !== previous) target.set(key, produced)
 				})
 
 				keyEffects.set(key, stop)

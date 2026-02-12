@@ -213,4 +213,7 @@ When reactive proxies form prototype chains (e.g. pounce scope objects via `Obje
 2. **Never store metadata as symbol properties on reactive objects** — use external `WeakMap`/`WeakSet` keyed by the raw target. Symbol property access (`obj[sym]`) triggers the `get` trap and cascades through proxy prototype chains.
 3. **Fast-path counters** — for features used by few objects (deep watchers, `@unreactive`), guard the check with a counter so the common case (counter === 0) skips the lookup entirely.
 4. **Two-Point Tracking** — for inherited property reads on null-proto chains, only call `dependant()` on the leaf and the owning ancestor, not every intermediate level.
+5. **Inline `Reflect.get` for non-arrays** — the proxy `get` handler can call `Reflect.get` directly for non-array objects, skipping the `FoolProof.get` → array patch → original `FoolProof.get` chain (3 function calls saved per read).
+6. **`markWithRoot` uses `rootFunctions` WeakMap** — avoids `Object.defineProperty` on every effect creation (which mutates V8 hidden classes). `getRoot` walks the WeakMap chain instead of symbol properties.
+7. **`isOwnAccessor` skip for null-proto** — `Object.getPrototypeOf(obj) === null` means no accessors, so skip the expensive `Object.getOwnPropertyDescriptor` calls.
 

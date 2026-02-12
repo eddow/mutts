@@ -25,6 +25,7 @@ export { organize, organized } from './record'
 export { Register, register } from './register'
 export {
 	cleanup,
+	stopped,
 	type EffectAccess as DependencyAccess,
 	type EffectCleanup,
 	type EffectOptions,

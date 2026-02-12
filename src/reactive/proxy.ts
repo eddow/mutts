@@ -134,17 +134,9 @@ const reactiveHandlers = {
 		// breaking memoization dependency tracking during SET operations
 		let oldVal = absent
 		if (Reflect.has(unwrappedReceiver, prop)) {
-			// Check descriptor on both receiver and target to handle proxy cases
-			const receiverDesc = Object.getOwnPropertyDescriptor(unwrappedReceiver, prop)
-			const targetDesc = Object.getOwnPropertyDescriptor(obj, prop)
-			const desc = receiverDesc || targetDesc
 			// We *need* to use `receiver` and not `obj` here, otherwise we break
 			// the dependency tracking for memoized getters
-			if (desc?.get && !desc?.set) {
-				oldVal = untracked(() => Reflect.get(obj, prop, receiver))
-			} else {
-				oldVal = untracked(() => Reflect.get(obj, prop, receiver))
-			}
+			oldVal = untracked(() => Reflect.get(obj, prop, receiver))
 		}
 		if (objectsWithDeepWatchers.has(obj)) {
 			if (typeof oldVal === 'object' && oldVal !== null) {

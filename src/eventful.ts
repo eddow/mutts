@@ -10,7 +10,7 @@ const eventBehavior = {
 	on<EventType extends keyof EventsBase>(
 		eventOrEvents: EventType | Partial<EventsBase>,
 		cb?: EventsBase[EventType]
-	): () => void {
+	): (this: Eventful<any>) => void {
 		if (typeof eventOrEvents === 'object') {
 			for (const e of Object.keys(eventOrEvents) as (keyof EventsBase)[]) {
 				this.on(e, eventOrEvents[e]!)

@@ -471,6 +471,10 @@ export function hasBatched(effect: EffectTrigger) {
 }
 const batchCleanups = new Set<EffectCleanup>()
 
+// DEV: stack of currently-executing effects (push on enter, pop on leave)
+const executingStack: EffectTrigger[] = []
+export function getExecutingStack(): readonly EffectTrigger[] { return executingStack }
+
 /**
  * Computes and caches in-degrees for all effects in the batch
  * Called once when batch starts or when new effects are added
@@ -612,15 +616,8 @@ function wouldCreateCycle(callerRoot: Function, targetRoot: Function): boolean {
  */
 function addToBatch(effect: EffectTrigger, caller?: EffectTrigger, immediate?: boolean) {
 	const node = getEffectNode(effect)
-	node.cleanup?.()
-	// If the effect was stopped during cleanup (e.g. lazy memoization), don't add it to the batch
-	if (node.stopped) {
-		// console.log(`[DEBUG] addToBatch: ${effect.name} is stopped`)
-		return
-	}
 
 	if (!batchQueue) {
-		// console.log(`[DEBUG] addToBatch: no batchQueue`)
 		return
 	}
 
@@ -632,21 +629,23 @@ function addToBatch(effect: EffectTrigger, caller?: EffectTrigger, immediate?: b
 		if (batchQueue.all.has(root)) {
 			batchQueue.all.delete(root)
 		}
-		batchQueue.all.set(root, effect)
 	} else {
-		// Dev/Debug mode: Set if not present (preserve order?)
-		// actually, we might want to update it?
-		// For now, simple set
+		// Dev mode: skip if already queued — the existing entry will re-run
 		if (batchQueue.all.has(root)) {
-			// console.log(`[DEBUG] ${root.name} already in batch`)
 			return
 		}
-		batchQueue.all.set(root, effect)
-		// console.log(`[DEBUG] ${root.name} added to batch`)
 	}
 
-	// batchQueue.all.set(root, effect)
-	// console.log(`[DEBUG] addToBatch: ${root.name} added to batch`)
+	// Cleanup AFTER confirming the effect will be (re-)added to the batch.
+	// Running cleanup before the check would destroy watcher registrations
+	// even when the effect is dropped (root already queued), permanently
+	// orphaning the effect from its dependencies.
+	node.cleanup?.()
+	// If the effect was stopped during cleanup (e.g. lazy memoization), don't add it to the batch
+	if (node.stopped) return
+
+	batchQueue.all.set(root, effect)
+
 	if (caller && !immediate && options.cycleHandling !== 'production') {
 		const callerRoot = getRoot(caller)
 		// const root = getRoot(effect) // Already have root
@@ -792,7 +791,6 @@ function executeNext(effectuatedRoots: Function[]): any {
 		// Using cached in-degrees for O(n) lookup instead of O(n²)
 		for (const [root, effect] of batchQueue!.all) {
 			const inDegree = batchQueue!.inDegrees.get(root) ?? 0
-			// console.log(`[DEBUG] executeNext: checking ${root.name}, inDegree: ${inDegree}`)
 			if (inDegree === 0) {
 				nextEffect = effect
 				nextRoot = root
@@ -847,7 +845,13 @@ function executeNext(effectuatedRoots: Function[]): any {
 
 	effectuatedRoots.push(getRoot(nextEffect))
 	// Execute the effect
-	const result = nextEffect()
+	executingStack.push(nextEffect)
+	let result: any
+	try {
+		result = nextEffect()
+	} finally {
+		executingStack.pop()
+	}
 
 	// Remove from batch and update in-degrees of dependents
 	batchQueue!.all.delete(nextRoot!)
@@ -859,28 +863,7 @@ function executeNext(effectuatedRoots: Function[]): any {
 
 // Track which sub-effects have been executed to prevent infinite loops
 // These are all the effects triggered under `activeEffect` and all their sub-effects
-// Temporary instrumentation — remove after profiling
-const batchStats = {
-	effects: 0, maxDepth: 0, batches: [] as { name: string, effects: number, maxDepth: number }[],
-	depthHisto: {} as Record<number, number>,
-	_current: null as null | { name: string, effects: number, maxDepth: number },
-}
-if (typeof globalThis !== 'undefined') (globalThis as any).__BATCH_STATS__ = batchStats
-
 export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'immediate') {
-	const n = Array.isArray(effect) ? effect.length : 1
-	batchStats.effects += n
-	if (batchDepth > batchStats.maxDepth) batchStats.maxDepth = batchDepth
-	batchStats.depthHisto[batchDepth] = (batchStats.depthHisto[batchDepth] || 0) + n
-	if (!batchQueue) {
-		const name = Array.isArray(effect) ? effect.map(e => e.name || '?').join(',') : (effect.name || '?')
-		batchStats._current = { name, effects: 0, maxDepth: 0 }
-		batchStats.batches.push(batchStats._current)
-	}
-	if (batchStats._current) {
-		batchStats._current.effects += n
-		if (batchDepth > batchStats._current.maxDepth) batchStats._current.maxDepth = batchDepth
-	}
 	if (broken) {
 		throw new ReactiveError(
 			'[reactive] Reactive system is broken after an unrecoverable error. Call reset() to recover.',
@@ -901,10 +884,12 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 			const firstReturn: { value?: any } = {}
 			// Execute immediately (before batch returns)
 			for (let i = 0; i < effect.length; i++) {
+				executingStack.push(effect[i])
 				try {
 					const rv = effect[i]()
 					if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
 				} finally {
+					executingStack.pop()
 					const root = getRoot(effect[i])
 					batchQueue.all.delete(root)
 				}
@@ -931,10 +916,12 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 			if (immediate) {
 				// Execute initial effects in providing order
 				for (let i = 0; i < effect.length; i++) {
+					executingStack.push(effect[i])
 					try {
 						const rv = effect[i]()
 						if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
 					} finally {
+						executingStack.pop()
 						batchQueue.all.delete(getRoot(effect[i]))
 					}
 				}
@@ -1268,7 +1255,7 @@ export const effect = named(effectMarker.leave, flavored(
 		}
 
 		let cleanup: (() => void) | null = null
-		const tracked = named(effectMarker.leave, effectHistory.present.with(runEffect, () => named(effectMarker.leave, effectAggregator.zoned)))
+		const tracked = effectHistory.present.with(runEffect, () => named(effectMarker.leave, effectAggregator.zoned))
 		const ascended = named(effectMarker.leave, effectHistory.zoned)
 		const parent = effectHistory.present.active
 		// Set parent relationship in node
