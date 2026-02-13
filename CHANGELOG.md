@@ -7,7 +7,9 @@
 
 ## Refactoring
 
-- why? caught!
+- **Refactored Cleanup Mechanism**: replaced legacy `why()` with structured `CleanupReason` passed to effects and cleanup funciones.
+- `CleanupReason` types: `propChange`, `stopped`, `gc`, `lineage`, `error`.
+- `access.reaction` now provides detailed `PropTrigger[]` info for reactions.
 
 ## Optimisations
 

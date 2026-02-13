@@ -3,7 +3,7 @@ import { cleanedBy } from './effect-context'
 import { effect, untracked } from './effects'
 import { memoize } from './memoize'
 import { reactive } from './proxy'
-import type { cleanup, EffectAccess, EffectCleanup, EffectCloser, ScopedCallback } from './types'
+import type { cleanup, CleanupReason, EffectAccess, EffectCleanup, EffectCloser, ScopedCallback } from './types'
 
 /**
  * Reactively attends to each entry of a collection or each key yielded by an
@@ -79,9 +79,9 @@ export function attend(
 		}
 	})
 
-	return () => {
-		outer()
-		for (const stop of keyEffects.values()) stop()
+	return (reason?: CleanupReason) => {
+		outer(reason)
+		for (const stop of keyEffects.values()) stop(reason)
 		keyEffects.clear()
 	}
 }
@@ -231,9 +231,9 @@ export function scan<Input extends object, Output>(
 		}
 	})
 
-	return cleanedBy(result, (() => {
-		mainEffect()
-		for (const stop of indexEffects.values()) stop()
+	return cleanedBy(result, ((reason?: CleanupReason) => {
+		mainEffect(reason)
+		for (const stop of indexEffects.values()) stop(reason)
 		indexEffects.clear()
 	}) as EffectCleanup) as ScanResult<Output>
 }
@@ -297,24 +297,20 @@ export function lift<Output extends object>(
 export function lift<Output extends any[] | object>(
 	cb: (access: EffectAccess) => Output
 ): Output & { [cleanup]: ScopedCallback } {
-	let result: Output
+	let result!: Output
 	const liftCleanup = effect((access) => {
 		const source = cb(access)
 		if (!source || typeof source !== 'object')
 			throw new Error('lift callback must return an array or object')
-		if (!result) {
-			if (Array.isArray(source)) {
-				result = reactive([]) as Output
-			} else {
-				result = reactive({}) as Output
-			}
-		}
+		result ??= reactive(Array.isArray(source) ? [] : {}) as Output
 		if (Array.isArray(source) && Array.isArray(result)) {
 			if (result.length !== source.length) result.length = source.length
 			for (let i = 0; i < source.length; i++) if (result[i] !== source[i]) result[i] = source[i]
 		} else if (!Array.isArray(source) && !Array.isArray(result)) {
-			Object.assign(result, source)
-			for (const key of Object.keys(result)) if (!(key in source)) delete result[key]
+			const src = source as Record<string, unknown>
+			const res = result as Record<string, unknown>
+			for (const key of Object.keys(src)) if (res[key] !== src[key]) res[key] = src[key]
+			for (const key of Object.keys(res)) if (!(key in src)) delete res[key]
 		} else {
 			throw new Error('lift callback must return the same type as the previous result')
 		}

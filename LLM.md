@@ -108,7 +108,24 @@ When a reactive bunch (`attend`, `project`, `scan`, …) is **cleaned up**, all 
 - `attend(enumerate, callback)` returns a cleanup. Each per-key callback can return a cleanup too. All are called when the attend is disposed.
 - `project(source, callback)` similarly disposes per-item effects when items are removed or the projection itself is cleaned up.
 
-**Key rule**: cleanup functions should release *reactive subscriptions*, not undo *side effects* on the owner. For example, if `attend` sets DOM attributes on an element, there is no need to reset those attributes in cleanup — the element itself is being removed.
+**CleanupReason**: Cleanup functions and inner effects receive a `CleanupReason` object:
+- `{ type: 'propChange', triggers: PropTrigger[] }`: triggered by reactive property change.
+- `{ type: 'stopped' }`: manually stopped or parent effect disposed.
+- `{ type: 'gc' }`: garbage collected by the system.
+- `{ type: 'lineage', parent: CleanupReason }`: child effect stopped because parent was stopped.
+- `{ type: 'error', error: any }`: stopped due to an unhandled error in the effect chain.
+
+**Reaction Reason**: The `access.reaction` property in `effect` contains the `CleanupReason` if the effect is a reaction:
+```typescript
+effect(({ reaction }) => {
+  if (reaction && typeof reaction === 'object') {
+    console.log('Reaction reason:', reaction.type);
+    if (reaction.type === 'propChange') {
+      reaction.triggers.forEach(t => console.log('Changed:', t.prop));
+    }
+  }
+})
+```
 
 ## Reactivity: Prototype Chains & Scope Objects (Structural Stability Contract)
 

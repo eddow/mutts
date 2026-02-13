@@ -5,7 +5,7 @@
  * - Provides graph data for tooling (DevTools panel, etc.)
  */
 
-import { effect, raiseEffectTrackers } from '../src/reactive/effects'
+import { effect } from '../src/reactive/effects'
 import { effectToReactiveObjects, getEffectNode, getRoot, markWithRoot } from '../src/reactive/registry'
 import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, options } from '../src/reactive/types'
 import { getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter, nodeLineage } from './lineage'
@@ -247,7 +247,6 @@ export function recordTriggerLink(
 	prop: any,
 	evolution: Evolution
 ) {
-	raiseEffectTrackers(target, obj, evolution, prop)
 	if (options.introspection.enableHistory) {
 		addToMutationHistory(source, target, obj, prop, evolution)
 	}

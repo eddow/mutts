@@ -730,4 +730,48 @@ describe('deep touch filtering', () => {
 			expect(effect2Runs).toBe(2)
 		})
 	})
+
+	describe('CleanupReason through recursiveTouching', () => {
+		it('should provide CleanupReason when effect is triggered via deep touch', () => {
+			const container = reactive({ item: { name: 'Alice', age: 30 } })
+			let lastReason: any = null
+			let runs = 0
+
+			effect(({ reaction }) => {
+				if (reaction && typeof reaction === 'object') {
+					lastReason = reaction
+				}
+				runs++
+				void container.item.name
+			})
+
+			expect(runs).toBe(1)
+			expect(lastReason).toBe(null)
+
+			// Replace item with same-prototype object — triggers recursiveTouching
+			container.item = { name: 'Bob', age: 25 }
+
+			expect(runs).toBe(2)
+			expect(lastReason).not.toBe(null)
+			expect(lastReason.type).toBe('propChange')
+			expect(lastReason.triggers.some((t: any) => t.prop === 'name')).toBe(true)
+		})
+
+		it('should not re-run when nested values are identical', () => {
+			const container = reactive({ item: { name: 'Alice', age: 30 } })
+			let runs = 0
+
+			effect(() => {
+				runs++
+				void container.item.name
+			})
+
+			expect(runs).toBe(1)
+
+			// Replace with identical nested values — recursiveTouching diffs and finds no change
+			container.item = { name: 'Alice', age: 30 }
+
+			expect(runs).toBe(1)
+		})
+	})
 })

@@ -5,6 +5,7 @@ import { cleanedBy } from './effect-context'
 import { reactive } from './proxy'
 import {
 	cleanup,
+	CleanupReason,
 	type EffectCloser,
 	type ScopedCallback,
 } from './types'
@@ -154,7 +155,7 @@ export function organized<
 		}
 	)
 
-	return cleanedBy(target, stop) as OrganizedResult<Target>
+	return cleanedBy(target, (reason?: CleanupReason) => stop(reason)) as OrganizedResult<Target>
 }
 
 /**

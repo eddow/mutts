@@ -1,4 +1,5 @@
 import { addState, collectEffects, touched1, touchedOpaque } from './change'
+import { debugHooks } from './debug-hooks'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { batch } from './effects'
 import { isNonReactive } from './non-reactive-state'
@@ -214,6 +215,7 @@ function hasAncestorInSet(
 export function dispatchNotifications(notifications: PendingNotification[]) {
 	if (!notifications.length) return
 	const combinedEffects = new Set<EffectTrigger>()
+	const effectCauses = new Map<EffectTrigger, PendingNotification[]>()
 
 	// Extract origin from first notification (all should have the same origin from a single deep touch)
 	const origin = notifications[0]?.origin
@@ -239,7 +241,8 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 		if (allowedEffects.size === 0) return
 	}
 
-	for (const { target, evolution, prop } of notifications) {
+	for (const notification of notifications) {
+		const { target, evolution, prop } = notification
 		if (!isObjectLike(target)) continue
 		const obj = unwrap(target)
 		addState(obj, evolution)
@@ -264,10 +267,28 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 				currentEffects = filteredEffects
 			}
 
-			for (const effect of currentEffects) combinedEffects.add(effect)
+			for (const effect of currentEffects) {
+				combinedEffects.add(effect)
+				let causes = effectCauses.get(effect)
+				if (!causes) {
+					causes = []
+					effectCauses.set(effect, causes)
+				}
+				causes.push(notification)
+			}
 		}
 		optionCall('touched', obj, evolution, propsArray, currentEffects)
 		if (objectsWithDeepWatchers.has(obj)) bubbleUpChange(obj, evolution)
 	}
-	if (combinedEffects.size) batch([...combinedEffects])
+	if (combinedEffects.size) {
+		const stack = debugHooks.isDevtoolsEnabled() ? new Error().stack : undefined
+		for (const effect of combinedEffects) {
+			const node = getEffectNode(effect)
+			if (!node.pendingTriggers) node.pendingTriggers = []
+			for (const { target, evolution, prop } of effectCauses.get(effect)!) {
+				node.pendingTriggers.push({ obj: unwrap(target), prop, evolution, stack })
+			}
+		}
+		batch([...combinedEffects])
+	}
 }

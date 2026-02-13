@@ -5,6 +5,7 @@ import { reactive } from './proxy'
 import { Register } from './register'
 import {
 	cleanup,
+	CleanupReason,
 	type EffectTrigger,
 	type ProjectionContext,
 	projectionInfo,
@@ -76,9 +77,9 @@ function makeCleanup<Result extends object>(
 			configurable: true,
 		})
 	}
-	return cleanedBy(target, () => {
+	return cleanedBy(target, (reason?: CleanupReason) => {
 		onDispose()
-		for (const stop of effectMap.values()) stop?.()
+		for (const stop of effectMap.values()) stop?.(reason)
 		effectMap.clear()
 	}) as ProjectResult<Result>
 }

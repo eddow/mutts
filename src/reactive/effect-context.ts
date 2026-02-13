@@ -3,6 +3,7 @@ import { asyncZone, ZoneAggregator, ZoneHistory } from '../zone'
 import { getRoot } from './registry'
 import {
 	cleanup,
+	CleanupReason,
 	type EffectTrigger,
 	type ScopedCallback,
 	stopped,
@@ -43,9 +44,9 @@ export function cleanedBy<T extends object>(obj: T, cleanupFn: ScopedCallback) {
 	return Object.defineProperty(obj, cleanup, {
 		value: oldCleanup
 			? Object.defineProperties(
-					() => {
-						oldCleanup()
-						cleanupFn()
+					(reason?: CleanupReason) => {
+						oldCleanup(reason)
+						cleanupFn(reason)
 					},
 					{
 						[stopped]: { get: () => oldCleanup[stopped] || cleanupFn[stopped] },

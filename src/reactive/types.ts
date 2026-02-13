@@ -44,23 +44,22 @@ export interface EffectAccess {
 	 */
 	ascend: FunctionWrapper
 	/**
-	 * Indicates whether the effect is running as a reaction (i.e. not the first call)
-	 * - `false`: First execution when the effect is created
-	 * - `true`: Subsequent executions triggered by dependency changes
+	 * `false` on the first execution, `CleanupReason` on subsequent runs.
+	 * The reason describes *why* the previous run was torn down.
 	 * @example
 	 * ```typescript
 	 * effect(({ reaction }) => {
 	 *   if (!reaction) {
-	 *     console.log('Effect initialized')
-	 *     // Setup code that should only run once
-	 *   } else {
-	 *     console.log('Effect re-ran due to dependency change')
-	 *     // Code that runs on every update
+	 *     // First run — setup
+	 *   } else if (reaction.type === 'propChange') {
+	 *     // Re-run due to dependency change
+	 *     for (const { prop, evolution } of reaction.triggers)
+	 *       console.log(`${String(prop)}: ${evolution.type}`)
 	 *   }
 	 * })
 	 * ```
 	 */
-	reaction: boolean
+	reaction: CleanupReason | false
 }
 // Zone-based async context preservation is implemented in zone.ts
 // It automatically preserves effect context across Promise boundaries (.then, .catch, .finally)
@@ -68,7 +67,57 @@ export interface EffectAccess {
 /**
  * Base type for effect callbacks - simple function without additional properties
  */
-export type ScopedCallback = () => void
+export type ScopedCallback = (reason?: CleanupReason) => void
+
+export type PropTrigger = { obj: object; prop: PropertyKey; evolution: Evolution; stack?: string }
+
+/**
+ * Reason for an effect cleanup/reaction
+ */
+export type CleanupReason =
+	| { type: 'propChange'; triggers: PropTrigger[] }
+	| { type: 'stopped' } // explicit stop() call
+	| { type: 'gc' } // FinalizationRegistry collected the holder
+	| { type: 'lineage'; parent: CleanupReason } // parent effect cleaned up (recursive)
+	| { type: 'error'; error: unknown } // error handler chain (reactionCleanup called with error)
+
+function formatTrigger({ obj, prop, evolution, stack }: PropTrigger): string {
+	const name = obj?.constructor?.name || 'Object'
+	const base = `${evolution.type} ${String(prop)} on ${name}`
+	return stack ? `${base}\n    ${stack.split('\n').slice(1).map(l => l.trim()).join('\n    ')}` : base
+}
+
+/**
+ * Human-friendly description of a `CleanupReason`.
+ * Handles recursive `lineage` with indentation.
+ *
+ * @example
+ * ```typescript
+ * effect(({ reaction }) => {
+ *   if (reaction) console.log(formatCleanupReason(reaction))
+ * })
+ * // "propChange: set count on Object, set name on Object"
+ * // "lineage ← stopped"
+ * ```
+ */
+export function formatCleanupReason(reason: CleanupReason, depth = 0): string {
+	const indent = depth ? '  '.repeat(depth) : ''
+	switch (reason.type) {
+		case 'propChange': {
+			const hasStacks = reason.triggers.some(t => t.stack)
+			const sep = hasStacks ? '\n' + indent : ', '
+			return `${indent}propChange: ${reason.triggers.map(formatTrigger).join(sep)}`
+		}
+		case 'stopped':
+			return `${indent}stopped`
+		case 'gc':
+			return `${indent}gc`
+		case 'error':
+			return `${indent}error: ${reason.error instanceof Error ? reason.error.message : String(reason.error)}`
+		case 'lineage':
+			return `${indent}lineage ←\n${formatCleanupReason(reason.parent, depth + 1)}`
+	}
+}
 
 /**
  * Type for effect cleanup functions with stopped state tracking
@@ -86,7 +135,6 @@ export type StackFrame = {
     raw: string
 }
 
-export type EffectTracking = (obj: any, evolution: Evolution, prop: any, effect: EffectTrigger) => void
 
 /**
  * Centralized node for all effect metadata and relationships
@@ -99,6 +147,8 @@ export interface EffectNode {
     // Lifecycle
     cleanup?: ScopedCallback
     stopped?: boolean
+    /** The reason why the effect is (re-)executing */
+    nextReason?: CleanupReason
     
     // Error handling
     forwardThrow?: CatchFunction
@@ -108,11 +158,11 @@ export interface EffectNode {
     creationStack?: StackFrame[]
     dependencyHook?: (obj: any, prop: any) => void
     
-    // Tracking
-    trackers?: EffectTracking[]
-    
     // Configuration
     isOpaque?: boolean
+
+    // Pending triggers to be batched into CleanupReason
+    pendingTriggers?: PropTrigger[]
 }
 
 /**
@@ -211,7 +261,7 @@ export const cleanup = Symbol('cleanup')
 
 export const forwardThrow = Symbol('throw')
 
-export type EffectCloser = (error?: any) => void
+export type EffectCloser = (reason?: CleanupReason) => void
 //biome-ignore lint/suspicious/noConfusingVoidType: We have to
 export type CatchFunction = (error: any) => EffectCloser | undefined | void
 

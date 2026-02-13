@@ -16,6 +16,7 @@ import {
 } from './registry'
 import {
 	type CatchFunction,
+	type CleanupReason,
 	cleanup as cleanupSymbol,
 	type EffectAccess,
 	type EffectCleanup,
@@ -25,6 +26,7 @@ import {
 	type Evolution,
 	optionCall,
 	options,
+	type PropTrigger,
 	ReactiveError,
 	ReactiveErrorCode,
 	// type AsyncExecutionMode,
@@ -58,7 +60,6 @@ function formatRoots(roots: Function[], limit = 20): string {
 	return `${start.join(' → ')} ... (${names.length - 15} more) ... ${end.join(' → ')}`
 }
 
-type EffectTracking = (obj: any, evolution: Evolution, prop: any, effect: EffectTrigger) => void
 
 export interface ActivationRecord {
 	effect: EffectTrigger
@@ -124,64 +125,6 @@ export function recordActivation(effect: EffectTrigger, obj: any, evolution: Evo
 	}
 }
 
-/**
- * Registers a debug callback that is called when the current effect is triggered by a dependency change
- *
- * This function is useful for debugging purposes as it pin-points exactly which reactive property
- * change triggered the effect. The callback receives information about:
- * - The object that changed
- * - The type of change (evolution)
- * - The specific property that changed
- *
- * **Note:** The tracker callback is automatically removed after being called once. If you need
- * to track multiple triggers, call `onEffectTrigger` again within the effect.
- *
- * @param onTouch - Callback function that receives (obj, evolution, prop) when the effect is triggered
- * @throws {Error} If called outside of an effect context
- *
- * @example
- * ```typescript
- * const state = reactive({ count: 0, name: 'John' })
- *
- * effect(() => {
- *   // Register a tracker to see what triggers this effect
- *   onEffectTrigger((obj, evolution, prop) => {
- *     console.log(`Effect triggered by:`, {
- *       object: obj,
- *       change: evolution.type,
- *       property: prop
- *     })
- *   })
- *
- *   // Access reactive properties
- *   console.log(state.count, state.name)
- * })
- *
- * state.count = 5
- * ```
- */
-export function why(onTouch: EffectTracking, effect?: EffectTrigger) {
-	effect ??= getActiveEffect()
-	if (!effect) throw new Error('Tracking an effect trigger while not in an effect')
-	const node = getEffectNode(effect)
-	if (!node.trackers) node.trackers = [onTouch]
-	else node.trackers.push(onTouch)
-}
-/** @deprecated Use `why` instead */
-export const onEffectTrigger = why
-
-export function raiseEffectTrackers(
-	effect: EffectTrigger,
-	obj: any,
-	evolution: Evolution,
-	prop: any
-) {
-	const node = getEffectNode(effect)
-	const trackers = node.trackers
-	if (trackers) {
-		for (const tracker of trackers) tracker(obj, evolution, prop, effect)
-	}
-}
 export function caught(onThrow: CatchFunction, effect?: EffectTrigger) {
 	effect ??= getActiveEffect()
 	if (!effect) throw new Error('Tracking an effect throw while not in an effect')
@@ -614,7 +557,12 @@ function wouldCreateCycle(callerRoot: Function, targetRoot: Function): boolean {
  * @param caller - The active effect that triggered this one (optional)
  * @param immediate - If true, don't create edges in the dependency graph
  */
-function addToBatch(effect: EffectTrigger, caller?: EffectTrigger, immediate?: boolean) {
+function addToBatch(
+	effect: EffectTrigger,
+	caller?: EffectTrigger,
+	immediate?: boolean,
+	reason?: CleanupReason
+) {
 	const node = getEffectNode(effect)
 
 	if (!batchQueue) {
@@ -622,6 +570,24 @@ function addToBatch(effect: EffectTrigger, caller?: EffectTrigger, immediate?: b
 	}
 
 	const root = getRoot(effect)
+
+	// Build reason from pending triggers if not provided
+	if (!reason && node.pendingTriggers?.length) {
+		reason = { type: 'propChange', triggers: node.pendingTriggers }
+	}
+	node.pendingTriggers = undefined
+
+	if (reason) {
+		if (
+			reason.type === 'propChange' &&
+			node.nextReason &&
+			node.nextReason.type === 'propChange'
+		) {
+			node.nextReason.triggers.push(...reason.triggers)
+		} else {
+			node.nextReason = reason
+		}
+	}
 
 	// 1. Add to batch first (needed for cycle detection)
 	if (options.cycleHandling === 'production') {
@@ -640,7 +606,7 @@ function addToBatch(effect: EffectTrigger, caller?: EffectTrigger, immediate?: b
 	// Running cleanup before the check would destroy watcher registrations
 	// even when the effect is dropped (root already queued), permanently
 	// orphaning the effect from its dependencies.
-	node.cleanup?.()
+	node.cleanup?.(reason)
 	// If the effect was stopped during cleanup (e.g. lazy memoization), don't add it to the batch
 	if (node.stopped) return
 
@@ -879,7 +845,8 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 		// Nested batch - add to existing
 		options?.chain(roots, getRoot(getActiveEffect()))
 		const caller = getActiveEffect()
-		for (let i = 0; i < effect.length; i++) addToBatch(effect[i], caller, immediate === 'immediate')
+		for (let i = 0; i < effect.length; i++)
+			addToBatch(effect[i], caller, immediate === 'immediate')
 		if (immediate) {
 			const firstReturn: { value?: any } = {}
 			// Execute immediately (before batch returns)
@@ -1089,7 +1056,7 @@ export const effect = named(effectMarker.leave, flavored(
 				const prevCleanup = node.cleanup
 				node.cleanup = undefined
 				try {
-					untracked(() => prevCleanup())
+					untracked(() => prevCleanup(node.nextReason || { type: 'stopped' }))
 				} catch (error) {
 					// If we want to report them, we could use options.warn or similar
 					options.warn('Error during effect cleanup', error)
@@ -1113,8 +1080,12 @@ export const effect = named(effectMarker.leave, flavored(
 			// The effect has been stopped after having been planned
 			if (effectStopped) return
 
-			optionCall('enter', getRoot(fn))
 			let reactionCleanup: EffectCloser | undefined
+			// Set reaction reason for the upcoming run
+			access.reaction = node.nextReason || access.reaction
+			node.nextReason = undefined
+
+			optionCall('enter', getRoot(fn))
 			let result: any
 			let caught = 0
 			
@@ -1179,16 +1150,13 @@ export const effect = named(effectMarker.leave, flavored(
 			} catch (error) {
 				// catcher:self`
 				errorToThrow = error
-			} finally {
-				access.reaction = true
 			}
 
 			// Create cleanup function for next run
-			node.cleanup = () => {
+			node.cleanup = (reason?: CleanupReason) => {
 				node.cleanup = undefined
-				reactionCleanup?.()
+				reactionCleanup?.(reason)
 				reactionCleanup = undefined
-				delete node.trackers
 				delete node.catchers
 				// Remove this effect from all reactive objects it's watching
 				const effectObjects = effectToReactiveObjects.get(runEffect)
@@ -1212,7 +1180,12 @@ export const effect = named(effectMarker.leave, flavored(
 				// Invoke all child stops (recursive via subEffectCleanup calling its own mainCleanup)
 				const children = node.children
 				if (children) {
-					for (const childCleanup of children) childCleanup()
+					const childReason: CleanupReason = reason
+						? reason.type === 'lineage'
+							? reason
+							: { type: 'lineage', parent: reason }
+						: { type: 'stopped' }
+					for (const childCleanup of children) childCleanup(childReason)
 					delete node.children
 				}
 			}
@@ -1220,9 +1193,10 @@ export const effect = named(effectMarker.leave, flavored(
 			// Define bubbling thrower
 			thrower = (error: any) => {
 				const catches = node.catchers
+				const reason: CleanupReason = { type: 'error', error }
 				if (catches)
 					while (caught < catches.length) {
-						reactionCleanup?.(error)
+						reactionCleanup?.(reason)
 						reactionCleanup = undefined
 						try {
 							reactionCleanup = catches[caught](error) as EffectCloser | undefined
@@ -1299,7 +1273,7 @@ export const effect = named(effectMarker.leave, flavored(
 		// Only ROOT effects are registered for GC cleanup and zone tracking
 		const isRootEffect = !parent
 
-		const stopEffect = (): void => {
+		const stopEffect = (reason?: CleanupReason): void => {
 			if (effectStopped) return
 			effectStopped = true
 			node.stopped = true
@@ -1310,7 +1284,7 @@ export const effect = named(effectMarker.leave, flavored(
 				runningPromise = null
 			}
 			try {
-				node.cleanup?.()
+				node.cleanup?.(reason || { type: 'stopped' })
 			} catch (error) {
 				// Cleanup errors should basically be ignored or at least not stop the world
 				// If we want to report them, we could use options.warn or similar
@@ -1321,11 +1295,11 @@ export const effect = named(effectMarker.leave, flavored(
 			fr.unregister(stopEffect)
 		}
 		if (isRootEffect) {
-			const callIfCollected = augmentedRv(() => stopEffect())
+			const callIfCollected = augmentedRv((reason) => stopEffect(reason))
 			fr.register(
 				callIfCollected,
 				() => {
-					stopEffect()
+					stopEffect({ type: 'gc' })
 					optionCall('garbageCollected', fn)
 				},
 				stopEffect
@@ -1339,17 +1313,17 @@ export const effect = named(effectMarker.leave, flavored(
 				parentNode.children = new Set()
 			}
 			const children = parentNode.children
-			
-			const subEffectCleanup = augmentedRv(() => {
+
+			const subEffectCleanup = augmentedRv((reason) => {
 				children.delete(subEffectCleanup)
 				// Execute this child effect cleanup (which triggers its own mainCleanup)
-				stopEffect()
+				stopEffect(reason)
 			})
 			children.add(subEffectCleanup)
 			return subEffectCleanup
 		}
 		// Should not be reachable given isRootEffect check, but for type safety
-		return augmentedRv(stopEffect)
+		return augmentedRv((reason) => stopEffect(reason))
 	},
 	{
 		get opaque() {

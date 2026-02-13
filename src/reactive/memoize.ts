@@ -4,13 +4,13 @@ import { touched1 } from './change'
 import { effect, root, untracked } from './effects'
 import { getRoot, markWithRoot, rootFunctions } from './registry'
 import { dependant } from './tracking'
-import { optionCall, options } from './types'
+import { CleanupReason, optionCall, options } from './types'
 
 export type Memoizable = object | any[] | ((...args: any[]) => any)
 
 type MemoCacheTree<Result> = {
 	result?: Result
-	cleanup?: () => void
+	cleanup?: (reason?: CleanupReason) => void
 	branches?: WeakMap<Memoizable, MemoCacheTree<Result>>
 }
 
@@ -78,7 +78,7 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 						// Lazy memoization: stop the effect so it doesn't re-run immediately.
 						// It will be re-created on next access.
 						if (node.cleanup) {
-							node.cleanup()
+							node.cleanup({ type: 'stopped' })
 							node.cleanup = undefined
 						}
 					}

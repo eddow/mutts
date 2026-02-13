@@ -11,8 +11,6 @@ export {
 	getActivationLog,
 	caught,
 	onEffectThrow,
-	onEffectTrigger,
-	why,
 	reset,
 	root,
 	untracked,
@@ -35,6 +33,9 @@ export {
 	ReactiveError,
 	ReactiveErrorCode,
 	type ScopedCallback,
+	type CleanupReason,
+	type PropTrigger,
+	formatCleanupReason,
 } from './types'
 export { unreactive, watch, when, resource, type Resource } from './watch'
 export { describe } from './describe'
