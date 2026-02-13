@@ -754,7 +754,7 @@ describe('deep touch filtering', () => {
 			expect(runs).toBe(2)
 			expect(lastReason).not.toBe(null)
 			expect(lastReason.type).toBe('propChange')
-			expect(lastReason.triggers.some((t: any) => t.prop === 'name')).toBe(true)
+			expect(lastReason.triggers.some((t: any) => t.evolution.prop === 'name')).toBe(true)
 		})
 
 		it('should not re-run when nested values are identical', () => {

@@ -4,7 +4,7 @@ import { getLineage } from '../../debug'
 
 describe('Effect Lineage', () => {
 	beforeEach(() => {
-		reactiveOptions.introspection.enableHistory = true
+		reactiveOptions.introspection!.enableHistory = true
 	})
 
 	it('should capture structured stack frames', () => {

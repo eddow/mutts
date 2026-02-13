@@ -16,7 +16,7 @@ import { setDebugHooks } from '../src/reactive/debug-hooks'
  * Log an error with detailed context if error logging is enabled
  */
 export function logError(error: Error, context: 'throw' | 'catch', effect?: any) {
-	if (!debugOptions.logErrors) return
+	if (!options.introspection?.logErrors) return
 	
 	const contextStr = context === 'throw' ? '🔴 Thrown' : '🟡 Caught'
 	
@@ -47,17 +47,6 @@ const effectNames = new WeakMap<EffectTrigger | EffectCleanup, string>()
 const objectNames = new WeakMap<object, string>()
 let effectCounter = 0
 let objectCounter = 0
-
-// Debug options system
-export const debugOptions = {
-	/**
-	 * Whether DevTools are enabled
-	 */
-	get enabled() {
-		return devtoolsEnabled
-	},
-	logErrors: false
-}
 
 // Cause/consequence edges aggregated by (source, target, descriptor)
 interface TriggerRecord {
@@ -247,7 +236,7 @@ export function recordTriggerLink(
 	prop: any,
 	evolution: Evolution
 ) {
-	if (options.introspection.enableHistory) {
+	if (options.introspection?.enableHistory) {
 		addToMutationHistory(source, target, obj, prop, evolution)
 	}
 	if (!devtoolsEnabled) return
@@ -453,6 +442,9 @@ export function enableDevTools() {
 	if (!globalScope) return
 	if (devtoolsEnabled) return
 	devtoolsEnabled = true
+	if (options.introspection) {
+		options.introspection.logErrors = true
+	}
 
 	globalScope.__MUTTS_DEVTOOLS__ = {
 		getGraph: buildReactivityGraph,
@@ -471,8 +463,6 @@ export function enableDevTools() {
 		setObjectName,
 		registerEffect: registerEffectForDebug,
 		registerObject: registerObjectForDebug,
-		// Debug options for controlling runtime behavior
-		debug: debugOptions
 	}
 
 	// @ts-ignore - devtoolsFormatters is a Chrome-specific array
@@ -575,7 +565,7 @@ function addToMutationHistory(
 	}
 
 	mutationHistory.push(record)
-	if (mutationHistory.length > options.introspection.historySize) {
+	if (mutationHistory.length > (options.introspection?.historySize ?? 50)) {
 		mutationHistory.shift()
 	}
 }

@@ -5,7 +5,7 @@ describe('CleanupReason', () => {
 		it('formats propChange with single trigger', () => {
 			const reason: CleanupReason = {
 				type: 'propChange',
-				triggers: [{ obj: { x: 1 }, prop: 'x', evolution: { type: 'set', prop: 'x' } }],
+				triggers: [{ obj: { x: 1 }, evolution: { type: 'set', prop: 'x' } }],
 			}
 			expect(formatCleanupReason(reason)).toBe('propChange: set x on Object')
 		})
@@ -14,8 +14,8 @@ describe('CleanupReason', () => {
 			const reason: CleanupReason = {
 				type: 'propChange',
 				triggers: [
-					{ obj: { a: 1 }, prop: 'a', evolution: { type: 'set', prop: 'a' } },
-					{ obj: { b: 2 }, prop: 'b', evolution: { type: 'del', prop: 'b' } },
+					{ obj: { a: 1 }, evolution: { type: 'set', prop: 'a' } },
+					{ obj: { b: 2 }, evolution: { type: 'del', prop: 'b' } },
 				],
 			}
 			expect(formatCleanupReason(reason)).toBe('propChange: set a on Object, del b on Object')
@@ -55,7 +55,7 @@ describe('CleanupReason', () => {
 					parent: {
 						type: 'propChange',
 						triggers: [
-							{ obj: { n: 1 }, prop: 'n', evolution: { type: 'set', prop: 'n' } },
+							{ obj: { n: 1 }, evolution: { type: 'set', prop: 'n' } },
 						],
 					},
 				},
@@ -72,7 +72,7 @@ describe('CleanupReason', () => {
 			const reason: CleanupReason = {
 				type: 'propChange',
 				triggers: [
-					{ obj: new Foo(), prop: 'value', evolution: { type: 'set', prop: 'value' } },
+					{ obj: new Foo(), evolution: { type: 'set', prop: 'value' } },
 				],
 			}
 			expect(formatCleanupReason(reason)).toBe('propChange: set value on Foo')
@@ -82,7 +82,7 @@ describe('CleanupReason', () => {
 	describe('reaction carries CleanupReason', () => {
 		it('reaction is false on first run, CleanupReason on re-run', () => {
 			const state = reactive({ count: 0 })
-			const reactions: (CleanupReason | false)[] = []
+			const reactions: (boolean | CleanupReason)[] = []
 
 			const stop = effect(({ reaction }) => {
 				reactions.push(reaction)
@@ -97,7 +97,7 @@ describe('CleanupReason', () => {
 			const reason = reactions[1] as CleanupReason
 			expect(reason.type).toBe('propChange')
 			if (reason.type === 'propChange') {
-				expect(reason.triggers.some((t) => t.prop === 'count')).toBe(true)
+				expect(reason.triggers.some((t) => 'prop' in t.evolution && t.evolution.prop === 'count')).toBe(true)
 			}
 
 			stop()
@@ -105,7 +105,7 @@ describe('CleanupReason', () => {
 
 		it('reaction preserves reason across multiple re-runs', () => {
 			const state = reactive({ a: 0, b: 0 })
-			const reasons: (CleanupReason | false)[] = []
+			const reasons: (boolean | CleanupReason)[] = []
 
 			const stop = effect(({ reaction }) => {
 				reasons.push(reaction)

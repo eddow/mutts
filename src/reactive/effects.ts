@@ -572,7 +572,7 @@ function addToBatch(
 	const root = getRoot(effect)
 
 	// Build reason from pending triggers if not provided
-	if (!reason && node.pendingTriggers?.length) {
+	if (!reason && node.pendingTriggers) {
 		reason = { type: 'propChange', triggers: node.pendingTriggers }
 	}
 	node.pendingTriggers = undefined
@@ -1098,6 +1098,7 @@ export const effect = named(effectMarker.leave, flavored(
 			let errorToThrow: Error | undefined
 			try {
 				result = tracked(named(effectMarker.enter, () => fn.call(null, access)))
+				access.reaction = true
 				optionCall('leave', fn)
 				if (
 					result &&

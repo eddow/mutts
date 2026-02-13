@@ -4,7 +4,7 @@ import { getActiveEffect, isRunning } from './effect-context'
 import { batch, hasBatched, recordActivation } from './effects'
 import { unwrap } from './proxy-state'
 import { getEffectNode, watchers } from './registry'
-import { allProps, type EffectTrigger, type Evolution, optionCall, type State } from './types'
+import { allProps, type EffectTrigger, type Evolution, optionCall, options, type State } from './types'
 
 const states = new WeakMap<object, State>()
 
@@ -87,12 +87,12 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 		else collectEffects(obj, evolution, effects, objectWatchers, objectWatchers.keys())
 		optionCall('touched', obj, evolution, props as any[] | undefined, effects)
 		// Store pending triggers for CleanupReason before batching
-		const stack = debugHooks.isDevtoolsEnabled() ? new Error().stack : undefined
-		for (const effect of effects) {
-			const node = getEffectNode(effect)
-			if (!node.pendingTriggers) node.pendingTriggers = []
-			for (const prop of props || [allProps]) {
-				node.pendingTriggers.push({ obj, prop, evolution, stack })
+		if (options.introspection?.gatherReasons) {
+			const stack = debugHooks.isDevtoolsEnabled() ? new Error().stack : undefined
+			for (const effect of effects) {
+				const node = getEffectNode(effect)
+				if (!node.pendingTriggers) node.pendingTriggers = []
+				node.pendingTriggers.push({ obj, evolution, stack })
 			}
 		}
 		batch(Array.from(effects))
@@ -119,7 +119,8 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 	const effects = new Set<EffectTrigger>()
 	const sourceEffect = getActiveEffect()
 
-	const stack = debugHooks.isDevtoolsEnabled() ? new Error().stack : undefined
+	const gather = options.introspection?.gatherReasons
+	const stack = gather && debugHooks.isDevtoolsEnabled() ? new Error().stack : undefined
 	for (const effect of deps) {
 		const node = getEffectNode(effect)
 		if (!node.isOpaque) continue
@@ -130,8 +131,10 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 			continue
 		}
 		effects.add(effect)
-		if (!node.pendingTriggers) node.pendingTriggers = []
-		node.pendingTriggers.push({ obj, prop, evolution, stack })
+		if (gather) {
+			if (!node.pendingTriggers) node.pendingTriggers = []
+			node.pendingTriggers.push({ obj, evolution, stack })
+		}
 		recordActivation(effect, obj, evolution, prop)
 		debugHooks.recordTriggerLink(sourceEffect, effect, obj, prop, evolution)
 	}

@@ -5,7 +5,7 @@ import { reactiveOptions } from 'mutts'
 
 // Force production settings for accurate profiling
 reactiveOptions.cycleHandling = 'production'
-reactiveOptions.introspection.enableHistory = false
+reactiveOptions.introspection!.enableHistory = false
 reactiveOptions.maxDeepWatchDepth = 1000 // Allow deep structures in benchmarks
 
 /**

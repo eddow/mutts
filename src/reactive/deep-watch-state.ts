@@ -1,5 +1,7 @@
+import { debugHooks } from './debug-hooks'
 import { batch } from './effects'
-import type { EffectTrigger, Evolution } from './types'
+import { getEffectNode } from './registry'
+import { type EffectTrigger, type Evolution, options } from './types'
 
 // Track which objects contain which other objects (back-references)
 export const objectParents = new WeakMap<object, Set<{ parent: object; prop: PropertyKey }>>()
@@ -64,10 +66,20 @@ export function bubbleUpChange(changedObject: object, evolution: Evolution) {
 	const parents = objectParents.get(changedObject)
 	if (!parents) return
 
-	for (const { parent } of parents) {
+	for (const { parent, prop } of parents) {
 		// Trigger deep watchers on parent
 		const parentDeepWatchers = deepWatchers.get(parent)
-		if (parentDeepWatchers) for (const watcher of parentDeepWatchers) batch(watcher)
+		if (parentDeepWatchers) {
+			if (options.introspection?.gatherReasons) {
+				const stack = debugHooks.isDevtoolsEnabled() ? new Error().stack : undefined
+				for (const watcher of parentDeepWatchers) {
+					const node = getEffectNode(watcher)
+					if (!node.pendingTriggers) node.pendingTriggers = []
+					node.pendingTriggers.push({ obj: parent, evolution, stack })
+				}
+			}
+			for (const watcher of parentDeepWatchers) batch(watcher)
+		}
 
 		// Continue bubbling up
 		bubbleUpChange(parent, evolution)

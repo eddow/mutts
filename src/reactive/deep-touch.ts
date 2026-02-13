@@ -281,12 +281,14 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 		if (objectsWithDeepWatchers.has(obj)) bubbleUpChange(obj, evolution)
 	}
 	if (combinedEffects.size) {
-		const stack = debugHooks.isDevtoolsEnabled() ? new Error().stack : undefined
-		for (const effect of combinedEffects) {
-			const node = getEffectNode(effect)
-			if (!node.pendingTriggers) node.pendingTriggers = []
-			for (const { target, evolution, prop } of effectCauses.get(effect)!) {
-				node.pendingTriggers.push({ obj: unwrap(target), prop, evolution, stack })
+		if (options.introspection?.gatherReasons) {
+			const stack = debugHooks.isDevtoolsEnabled() ? new Error().stack : undefined
+			for (const effect of combinedEffects) {
+				const node = getEffectNode(effect)
+				if (!node.pendingTriggers) node.pendingTriggers = []
+				for (const { target, evolution, prop } of effectCauses.get(effect)!) {
+					node.pendingTriggers.push({ obj: unwrap(target), evolution, stack })
+				}
 			}
 		}
 		batch([...combinedEffects])

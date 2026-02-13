@@ -40,11 +40,13 @@ export type {
  * @param config Configuration options
  */
 export function enableIntrospection(config: { historySize?: number } = {}) {
-	options.introspection.enableHistory = true
-	forceEnableGraphTracking()
-	if (config.historySize) {
-		options.introspection.historySize = config.historySize
+	if (!options.introspection) {
+		options.introspection = { gatherReasons: true, logErrors: false, enableHistory: true, historySize: config.historySize ?? 50 }
+	} else {
+		options.introspection.enableHistory = true
+		if (config.historySize) options.introspection.historySize = config.historySize
 	}
+	forceEnableGraphTracking()
 }
 
 /**

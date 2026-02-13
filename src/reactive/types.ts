@@ -44,22 +44,23 @@ export interface EffectAccess {
 	 */
 	ascend: FunctionWrapper
 	/**
-	 * `false` on the first execution, `CleanupReason` on subsequent runs.
-	 * The reason describes *why* the previous run was torn down.
+	 * `false` on the first execution, `true` or `CleanupReason` on subsequent runs.
+	 * `true` means this is a re-run but detailed reason gathering is disabled or unavailable.
+	 * A `CleanupReason` describes *why* the previous run was torn down.
 	 * @example
 	 * ```typescript
 	 * effect(({ reaction }) => {
 	 *   if (!reaction) {
 	 *     // First run — setup
-	 *   } else if (reaction.type === 'propChange') {
-	 *     // Re-run due to dependency change
-	 *     for (const { prop, evolution } of reaction.triggers)
-	 *       console.log(`${String(prop)}: ${evolution.type}`)
+	 *   } else if (reaction !== true && reaction.type === 'propChange') {
+	 *     // Re-run due to dependency change (with details)
+	 *     for (const { evolution } of reaction.triggers)
+	 *       console.log(`${'prop' in evolution ? evolution.prop : evolution.method}: ${evolution.type}`)
 	 *   }
 	 * })
 	 * ```
 	 */
-	reaction: CleanupReason | false
+	reaction: boolean | CleanupReason
 }
 // Zone-based async context preservation is implemented in zone.ts
 // It automatically preserves effect context across Promise boundaries (.then, .catch, .finally)
@@ -69,7 +70,7 @@ export interface EffectAccess {
  */
 export type ScopedCallback = (reason?: CleanupReason) => void
 
-export type PropTrigger = { obj: object; prop: PropertyKey; evolution: Evolution; stack?: string }
+export type PropTrigger = { obj: object; evolution: Evolution; stack?: string }
 
 /**
  * Reason for an effect cleanup/reaction
@@ -81,9 +82,10 @@ export type CleanupReason =
 	| { type: 'lineage'; parent: CleanupReason } // parent effect cleaned up (recursive)
 	| { type: 'error'; error: unknown } // error handler chain (reactionCleanup called with error)
 
-function formatTrigger({ obj, prop, evolution, stack }: PropTrigger): string {
+function formatTrigger({ obj, evolution, stack }: PropTrigger): string {
 	const name = obj?.constructor?.name || 'Object'
-	const base = `${evolution.type} ${String(prop)} on ${name}`
+	const detail = evolution.type === 'bunch' ? evolution.method : String(evolution.prop)
+	const base = `${evolution.type} ${detail} on ${name}`
 	return stack ? `${base}\n    ${stack.split('\n').slice(1).map(l => l.trim()).join('\n    ')}` : base
 }
 
@@ -499,20 +501,32 @@ export const options = {
 	warn: (...args: any[]) => console.warn(...args),
 
 	/**
-	 * Configuration for the introspection system
+	 * Introspection and debug aids. Set to `null` to disable all debug overhead in production.
+	 *
+	 * - `gatherReasons`: collect `PropTrigger[]` for `CleanupReason` on effect re-runs (default `true`)
+	 * - `logErrors`: log errors with detailed context (default `true`)
+	 * - `enableHistory`: keep a history of mutations (default `true`)
+	 * - `historySize`: number of mutations to keep in history (default `50`)
+	 *
+	 * `enableDevTools()` sets `logErrors` to `true` automatically.
+	 *
+	 * @example
+	 * ```typescript
+	 * // Production: disable all introspection
+	 * reactiveOptions.introspection = null
+	 * ```
 	 */
 	introspection: {
-		/**
-		 * Whether to keep a history of mutations for debugging
-		 * @default false
-		 */
-		enableHistory: false,
-		/**
-		 * Number of mutations to keep in history
-		 * @default 50
-		 */
+		gatherReasons: true,
+		logErrors: true,
+		enableHistory: true,
 		historySize: 50,
-	},
+	} as {
+		gatherReasons: boolean
+		logErrors: boolean
+		enableHistory: boolean
+		historySize: number
+	} | null,
 
 	/**
 	 * Configuration for zone hooks - control which async APIs are hooked
