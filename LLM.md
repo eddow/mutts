@@ -15,6 +15,17 @@
     *   `import { ... } from 'mutts/node'`
     *   `import { ... } from 'mutts/browser'`
 
+#### Development / Debug Entry Points
+Each entry point has a `.dev` variant (`entry-browser.dev.ts`, `entry-node.dev.ts`) that auto-imports `debug/debug.ts`, enabling devtools without any consumer-side configuration.
+
+*   **Conditional exports**: `package.json` uses the `"development"` condition so bundlers that support it (Vite enables it by default in dev mode) automatically resolve to the dev variant.
+*   **Tests**: `vitest.config.ts` aliases `mutts` to the `.dev` entries, so tests always get devtools.
+*   **Production**: The standard (non-dev) entries contain zero debug code. No `import 'mutts/debug'` needed in consumer apps.
+*   **Force dev/prod**: All 4 combinations available as explicit imports:
+    *   `mutts/dev`, `mutts/prod` (browser implied)
+    *   `mutts/browser/dev`, `mutts/browser/prod`
+    *   `mutts/node/dev`, `mutts/node/prod`
+
 ### 1. Reactivity (`mutts/reactive`)
 *   **Proxy-based**: Uses `Proxy` to track dependencies.
 *   **API**:
@@ -24,6 +35,7 @@
     *   `project(array, itemEffect)`: Efficient array-to-collection mapping. (reactive .map)
     *   `scan(array, callback, initialValue)`: Reactive scan/accumulation (optimized for moves).
     *   **Opaque Effects**: `effect(fn, { opaque: true })` bypasses deep-touch optimizations to strict identity tracking.
+    *   **`keysOf` tracking**: `Object.keys()`, `for..in`, `Map.keys()` only depend on structure (add/delete), not value changes. `Object.entries()`, `Object.values()`, `Map.entries()` still track values via `get`.
 
 ### 2. Decorators (`mutts/decorator`)
 *   **Unified System**: Works with both **Legacy** (`experimentalDecorators: true`) and **Modern** (Stage 3) decorators.

@@ -21,7 +21,7 @@ import {
 } from './proxy-state'
 import { dependant } from './tracking'
 import {
-	allProps,
+	keysOf,
 	nativeReactive,
 	nonReactiveMark,
 	options,
@@ -193,7 +193,7 @@ const reactiveHandlers = {
 		return true
 	},
 	ownKeys(obj: any): (string | symbol)[] {
-		dependant(obj, allProps)
+		dependant(obj, keysOf)
 		return Reflect.ownKeys(obj)
 	},
 } as const

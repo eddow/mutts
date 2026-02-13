@@ -4,7 +4,7 @@ import { getActiveEffect, isRunning } from './effect-context'
 import { batch, hasBatched, recordActivation } from './effects'
 import { unwrap } from './proxy-state'
 import { getEffectNode, watchers } from './registry'
-import { allProps, type EffectTrigger, type Evolution, optionCall, options, type State } from './types'
+import { allProps, keysOf, type EffectTrigger, type Evolution, optionCall, options, type State } from './types'
 
 const states = new WeakMap<object, State>()
 
@@ -83,7 +83,9 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 	if (objectWatchers) {
 		// Note: we have to collect effects to remove duplicates in the specific case when no batch is running
 		const effects = new Set<EffectTrigger>()
-		if (props) collectEffects(obj, evolution, effects, objectWatchers, [allProps], props)
+		const structural = evolution.type !== 'set'
+		const broad = structural ? [allProps, keysOf] : [allProps]
+		if (props) collectEffects(obj, evolution, effects, objectWatchers, broad, props)
 		else collectEffects(obj, evolution, effects, objectWatchers, objectWatchers.keys())
 		optionCall('touched', obj, evolution, props as any[] | undefined, effects)
 		// Store pending triggers for CleanupReason before batching

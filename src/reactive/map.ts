@@ -4,6 +4,7 @@ import { notifyPropertyChange } from './deep-touch'
 import { makeReactiveEntriesIterator, makeReactiveIterator } from './non-reactive'
 import { reactive } from './proxy'
 import { dependant } from './tracking'
+import { keysOf } from './types'
 
 /**
  * Reactive wrapper around JavaScript's WeakMap class
@@ -78,7 +79,7 @@ export abstract class ReactiveMap<K, V> extends Map<K, V> {
 	}
 
 	keys(): MapIterator<K> {
-		dependant(contentRef(this))
+		dependant(contentRef(this), keysOf)
 		return this.keys()
 	}
 

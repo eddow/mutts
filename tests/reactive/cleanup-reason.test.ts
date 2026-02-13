@@ -3,40 +3,42 @@ import { effect, formatCleanupReason, reactive, type CleanupReason } from 'mutts
 describe('CleanupReason', () => {
 	describe('formatCleanupReason', () => {
 		it('formats propChange with single trigger', () => {
+			const obj = { x: 1 }
 			const reason: CleanupReason = {
 				type: 'propChange',
-				triggers: [{ obj: { x: 1 }, evolution: { type: 'set', prop: 'x' } }],
+				triggers: [{ obj, evolution: { type: 'set', prop: 'x' } }],
 			}
-			expect(formatCleanupReason(reason)).toBe('propChange: set x on Object')
+			expect(formatCleanupReason(reason)).toEqual(['propChange:', 'set x on', obj])
 		})
 
 		it('formats propChange with multiple triggers', () => {
+			const objA = { a: 1 }
+			const objB = { b: 2 }
 			const reason: CleanupReason = {
 				type: 'propChange',
 				triggers: [
-					{ obj: { a: 1 }, evolution: { type: 'set', prop: 'a' } },
-					{ obj: { b: 2 }, evolution: { type: 'del', prop: 'b' } },
+					{ obj: objA, evolution: { type: 'set', prop: 'a' } },
+					{ obj: objB, evolution: { type: 'del', prop: 'b' } },
 				],
 			}
-			expect(formatCleanupReason(reason)).toBe('propChange: set a on Object, del b on Object')
+			expect(formatCleanupReason(reason)).toEqual(['propChange:', 'set a on', objA, ',', 'del b on', objB])
 		})
 
 		it('formats stopped', () => {
-			expect(formatCleanupReason({ type: 'stopped' })).toBe('stopped')
+			expect(formatCleanupReason({ type: 'stopped' })).toEqual(['stopped'])
 		})
 
 		it('formats gc', () => {
-			expect(formatCleanupReason({ type: 'gc' })).toBe('gc')
+			expect(formatCleanupReason({ type: 'gc' })).toEqual(['gc'])
 		})
 
 		it('formats error with Error instance', () => {
-			expect(formatCleanupReason({ type: 'error', error: new Error('boom') })).toBe(
-				'error: boom'
-			)
+			const err = new Error('boom')
+			expect(formatCleanupReason({ type: 'error', error: err })).toEqual(['error:', err])
 		})
 
 		it('formats error with string', () => {
-			expect(formatCleanupReason({ type: 'error', error: 'oops' })).toBe('error: oops')
+			expect(formatCleanupReason({ type: 'error', error: 'oops' })).toEqual(['error:', 'oops'])
 		})
 
 		it('formats lineage with indentation', () => {
@@ -44,10 +46,11 @@ describe('CleanupReason', () => {
 				type: 'lineage',
 				parent: { type: 'stopped' },
 			}
-			expect(formatCleanupReason(reason)).toBe('lineage ←\n  stopped')
+			expect(formatCleanupReason(reason)).toEqual(['lineage ←\n', '  stopped'])
 		})
 
 		it('formats nested lineage', () => {
+			const obj = { n: 1 }
 			const reason: CleanupReason = {
 				type: 'lineage',
 				parent: {
@@ -55,27 +58,30 @@ describe('CleanupReason', () => {
 					parent: {
 						type: 'propChange',
 						triggers: [
-							{ obj: { n: 1 }, evolution: { type: 'set', prop: 'n' } },
+							{ obj, evolution: { type: 'set', prop: 'n' } },
 						],
 					},
 				},
 			}
-			expect(formatCleanupReason(reason)).toBe(
-				'lineage ←\n  lineage ←\n    propChange: set n on Object'
+			expect(formatCleanupReason(reason)).toEqual(
+				['lineage ←\n', '  lineage ←\n', '    propChange:', 'set n on', obj]
 			)
 		})
 
-		it('uses constructor name for typed objects', () => {
+		it('passes raw object references for console inspection', () => {
 			class Foo {
 				value = 42
 			}
+			const foo = new Foo()
 			const reason: CleanupReason = {
 				type: 'propChange',
 				triggers: [
-					{ obj: new Foo(), evolution: { type: 'set', prop: 'value' } },
+					{ obj: foo, evolution: { type: 'set', prop: 'value' } },
 				],
 			}
-			expect(formatCleanupReason(reason)).toBe('propChange: set value on Foo')
+			const result = formatCleanupReason(reason)
+			expect(result).toEqual(['propChange:', 'set value on', foo])
+			expect(result[2]).toBe(foo)
 		})
 	})
 

@@ -2,7 +2,7 @@ import { effect, memoize, reactive, reactiveOptions } from 'mutts'
 
 describe('Reactivity Analysis: allProps & deepTouch', () => {
     
-    it('should trigger allProps on property set (even if keys same)', () => {
+    it('should NOT trigger keysOf on property set (keys unchanged)', () => {
         const obj = reactive<{ a: number }>({ a: 1 })
         const fn = vi.fn(() => { Object.keys(obj) })
         
@@ -10,8 +10,8 @@ describe('Reactivity Analysis: allProps & deepTouch', () => {
         expect(fn).toHaveBeenCalledTimes(1)
 
         obj.a = 2
-        // Confirmed: Mutts triggers allProps on ANY property touch
-        expect(fn).toHaveBeenCalledTimes(2) 
+        // keysOf: Object.keys() only re-runs on structural changes (add/delete), not value set
+        expect(fn).toHaveBeenCalledTimes(1) 
     })
 
     describe('with Deep Touch', () => {
@@ -42,7 +42,7 @@ describe('Reactivity Analysis: allProps & deepTouch', () => {
             expect(keysFn).toHaveBeenCalledTimes(1)
         })
 
-        it('should STILL trigger nested allProps on deep touch even if keys same', () => {
+        it('should NOT trigger nested keysOf on deep touch when keys same', () => {
             const nested = { b: 1 }
             const obj = reactive({ a: nested })
             
@@ -54,9 +54,9 @@ describe('Reactivity Analysis: allProps & deepTouch', () => {
             // Replace obj.a with object having same keys but different value
             obj.a = { b: 2 }
 
-            // confirmed: deepTouch simulates 'set' on nested object 'b'.
-            // Since Set triggers allProps, nestedKeysFn re-runs correctly on the child level.
-            expect(nestedKeysFn).toHaveBeenCalledTimes(2)
+            // deepTouch simulates 'set' on nested 'b', but keysOf is not triggered by set.
+            // Keys of obj.a are still ['b'], so no re-run.
+            expect(nestedKeysFn).toHaveBeenCalledTimes(1)
         })
     })
 
@@ -73,15 +73,16 @@ describe('Reactivity Analysis: allProps & deepTouch', () => {
             data = reactive<{a?: number}>({ a: 1 })
          }
 
-         it('should invalidate memoize on property set', () => {
+         it('should NOT invalidate memoize on property set when only keys tracked', () => {
              const instance = new TestClass()
              instance.computed // fill cache
              instance.count = 0
              
              instance.data.a = 2 
              instance.computed
-             // Confirming that memoize invalidates on SET because of allProps behavior
-             expect(instance.count).toBe(1)
+             // keysOf: memoize using Object.keys() is not invalidated by value set
+             // because the keys haven't changed — correct optimization
+             expect(instance.count).toBe(0)
          })
     })
 

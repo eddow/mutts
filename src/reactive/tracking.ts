@@ -1,7 +1,7 @@
 import { getActiveEffect } from './effect-context'
 import { unwrap } from './proxy-state'
 import { effectToReactiveObjects, watchers } from './registry'
-import { allProps, type EffectTrigger } from './types'
+import { allProps, keysOf, type EffectTrigger } from './types'
 
 /**
  * Marks a property as a dependency of the current effect
@@ -13,7 +13,7 @@ export function dependant(obj: any, prop: any = allProps) {
 	const currentActiveEffect = getActiveEffect()
 
 	// Early return if no active effect, tracking disabled, or invalid prop
-	if (!currentActiveEffect || (typeof prop === 'symbol' && prop !== allProps)) return
+	if (!currentActiveEffect || (typeof prop === 'symbol' && prop !== allProps && prop !== keysOf)) return
 
 	if ('dependencyHook' in currentActiveEffect) {
 		// @ts-expect-error We declared it nowhere - it's okay as it's really internal and for edge-case debug purpose only

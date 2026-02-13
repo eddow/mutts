@@ -5,7 +5,7 @@ import { batch } from './effects'
 import { isNonReactive } from './non-reactive-state'
 import { unwrap } from './proxy-state'
 import { getEffectNode, watchers } from './registry'
-import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, optionCall, options } from './types'
+import { allProps, keysOf, type EffectCleanup, type EffectTrigger, type Evolution, optionCall, options } from './types'
 
 function isObject(value: any): value is object {
 	return typeof value === 'object' && value !== null
@@ -252,7 +252,8 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 		if (objectWatchers) {
 			// console.log(`[DEBUG] dispatchNotifications: processing ${obj.constructor.name} (has watchers)`)
 			currentEffects = new Set<EffectTrigger>()
-			collectEffects(obj, evolution, currentEffects, objectWatchers, [allProps], propsArray)
+			const broad = evolution.type !== 'set' ? [allProps, keysOf] : [allProps]
+			collectEffects(obj, evolution, currentEffects, objectWatchers, broad, propsArray)
 
 			// Filter effects by ancestor chain if origin exists
 			// Include effects that either directly depend on origin or have an ancestor that does

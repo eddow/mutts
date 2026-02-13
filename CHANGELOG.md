@@ -7,9 +7,11 @@
 
 ## Refactoring
 
-- **Refactored Cleanup Mechanism**: replaced legacy `why()` with structured `CleanupReason` passed to effects and cleanup funciones.
+- **Refactored Cleanup Mechanism**: replaced legacy `why()` with structured `CleanupReason` passed to effects and cleanup functions.
 - `CleanupReason` types: `propChange`, `stopped`, `gc`, `lineage`, `error`.
 - `access.reaction` now provides detailed `PropTrigger[]` info for reactions.
+- **Unified Introspection**: Debug features (`gatherReasons`, `logErrors`, etc.) consolidated under `reactiveOptions.introspection`.
+- **formatCleanupReason**: New debug utility for human-readable reason formatting.
 
 ## Optimisations
 

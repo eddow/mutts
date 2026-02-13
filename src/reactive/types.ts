@@ -82,42 +82,44 @@ export type CleanupReason =
 	| { type: 'lineage'; parent: CleanupReason } // parent effect cleaned up (recursive)
 	| { type: 'error'; error: unknown } // error handler chain (reactionCleanup called with error)
 
-function formatTrigger({ obj, evolution, stack }: PropTrigger): string {
-	const name = obj?.constructor?.name || 'Object'
+function formatTrigger({ obj, evolution, stack }: PropTrigger): unknown[] {
 	const detail = evolution.type === 'bunch' ? evolution.method : String(evolution.prop)
-	const base = `${evolution.type} ${detail} on ${name}`
-	return stack ? `${base}\n    ${stack.split('\n').slice(1).map(l => l.trim()).join('\n    ')}` : base
+	const parts: unknown[] = [`${evolution.type} ${detail} on`, obj]
+	if (stack) parts.push(`\n    ${stack.split('\n').slice(1).map(l => l.trim()).join('\n    ')}`)
+	return parts
 }
 
 /**
- * Human-friendly description of a `CleanupReason`.
- * Handles recursive `lineage` with indentation.
+ * Console-friendly description of a `CleanupReason`.
+ * Returns an array of arguments to spread into `console.log` / `console.warn`,
+ * mixing strings and raw object references so the console can render them as inspectable values.
  *
  * @example
  * ```typescript
  * effect(({ reaction }) => {
- *   if (reaction) console.log(formatCleanupReason(reaction))
+ *   if (reaction !== true) console.log(...formatCleanupReason(reaction))
  * })
- * // "propChange: set count on Object, set name on Object"
- * // "lineage ← stopped"
  * ```
  */
-export function formatCleanupReason(reason: CleanupReason, depth = 0): string {
+export function formatCleanupReason(reason: CleanupReason, depth = 0): unknown[] {
 	const indent = depth ? '  '.repeat(depth) : ''
 	switch (reason.type) {
 		case 'propChange': {
-			const hasStacks = reason.triggers.some(t => t.stack)
-			const sep = hasStacks ? '\n' + indent : ', '
-			return `${indent}propChange: ${reason.triggers.map(formatTrigger).join(sep)}`
+			const parts: unknown[] = [`${indent}propChange:`]
+			for (let i = 0; i < reason.triggers.length; i++) {
+				if (i > 0) parts.push(',')
+				parts.push(...formatTrigger(reason.triggers[i]))
+			}
+			return parts
 		}
 		case 'stopped':
-			return `${indent}stopped`
+			return [`${indent}stopped`]
 		case 'gc':
-			return `${indent}gc`
+			return [`${indent}gc`]
 		case 'error':
-			return `${indent}error: ${reason.error instanceof Error ? reason.error.message : String(reason.error)}`
+			return [`${indent}error:`, reason.error]
 		case 'lineage':
-			return `${indent}lineage ←\n${formatCleanupReason(reason.parent, depth + 1)}`
+			return [`${indent}lineage ←\n`, ...formatCleanupReason(reason.parent, depth + 1)]
 	}
 }
 
@@ -136,7 +138,6 @@ export type StackFrame = {
     columnNumber: number
     raw: string
 }
-
 
 /**
  * Centralized node for all effect metadata and relationships
@@ -245,6 +246,12 @@ export const unreactiveProperties = Symbol('unreactive-properties')
  * Symbol representing all properties in reactive tracking
  */
 export const allProps = Symbol('all-props')
+
+/**
+ * Symbol for structure-only tracking (triggered on key add/delete, not value changes).
+ * Used by ownKeys proxy trap — Object.keys(), for..in, Map.keys() depend on this.
+ */
+export const keysOf = Symbol('keys-of')
 
 /**
  * Symbol for accessing projection information on reactive objects

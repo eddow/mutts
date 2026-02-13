@@ -7,50 +7,80 @@
   "types": "dist/browser.d.ts",
   "exports": {
     ".": {
-      "test-node": {
-        "import": "./src/entry-node.ts"
-      },
-      "test-browser": {
-        "import": "./src/entry-browser.ts"
-      },
       "node": {
         "types": "./dist/node.d.ts",
-        "import": "./dist/node.esm.js",
-        "require": "./dist/node.cjs"
+        "development": {
+          "import": "./dist/node.dev.esm.js",
+          "require": "./dist/node.dev.cjs"
+        },
+        "default": {
+          "import": "./dist/node.esm.js",
+          "require": "./dist/node.cjs"
+        }
       },
       "default": {
         "types": "./dist/browser.d.ts",
-        "import": "./dist/browser.esm.js",
-        "require": "./dist/browser.cjs"
+        "development": {
+          "import": "./dist/browser.dev.esm.js",
+          "require": "./dist/browser.dev.cjs"
+        },
+        "default": {
+          "import": "./dist/browser.esm.js",
+          "require": "./dist/browser.cjs"
+        }
       }
     },
     "./browser": {
       "types": "./dist/browser.d.ts",
-      "import": "./dist/browser.esm.js",
-      "require": "./dist/browser.cjs"
+      "development": {
+        "import": "./dist/browser.dev.esm.js",
+        "require": "./dist/browser.dev.cjs"
+      },
+      "default": {
+        "import": "./dist/browser.esm.js",
+        "require": "./dist/browser.cjs"
+      }
     },
     "./node": {
       "types": "./dist/node.d.ts",
-      "import": "./dist/node.esm.js",
-      "require": "./dist/node.cjs"
-    },
-    "./src": {
-      "node": {
-        "types": "./src/entry-node.ts",
-        "import": "./src/entry-node.ts"
+      "development": {
+        "import": "./dist/node.dev.esm.js",
+        "require": "./dist/node.dev.cjs"
       },
       "default": {
-        "types": "./src/entry-browser.ts",
-        "import": "./src/entry-browser.ts"
+        "import": "./dist/node.esm.js",
+        "require": "./dist/node.cjs"
       }
     },
-    "./src/browser": {
-      "types": "./src/entry-browser.ts",
-      "import": "./src/entry-browser.ts"
+    "./dev": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.dev.esm.js",
+      "require": "./dist/browser.dev.cjs"
     },
-    "./src/node": {
-      "types": "./src/entry-node.ts",
-      "import": "./src/entry-node.ts"
+    "./prod": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.esm.js",
+      "require": "./dist/browser.cjs"
+    },
+    "./browser/dev": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.dev.esm.js",
+      "require": "./dist/browser.dev.cjs"
+    },
+    "./browser/prod": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.esm.js",
+      "require": "./dist/browser.cjs"
+    },
+    "./node/dev": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.dev.esm.js",
+      "require": "./dist/node.dev.cjs"
+    },
+    "./node/prod": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.esm.js",
+      "require": "./dist/node.cjs"
     },
     "./debug": {
       "types": "./dist/debug.d.ts",
