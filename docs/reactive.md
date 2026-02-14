@@ -13,7 +13,6 @@ The Mutts Reactive System documentation has been split into focused sections for
 *   **[Register](./reactive/collections.md#register)**: ID-keyed ordered collections
 *   **[Projections](./reactive/collections.md#projection)**: `project`, `organized`
 *   **[Attend](./reactive/attend.md)**: Reactive enumeration (`attend`)
-*   **[Describe](./reactive/describe.md)**: Reactive property definition (`describe`)
 *   **[Scan](./reactive/scan.md)**: Reactive scan and accumulation
 *   **[Resource](./reactive/resource.md)**: Async state tracking (`resource`)
 

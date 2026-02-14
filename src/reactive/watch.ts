@@ -1,16 +1,18 @@
 import { decorator, type GenericClassDecorator } from '../decorator'
 import { deepWatch } from './deep-watch'
 import { effect } from './effects'
-import { addUnreactiveProps, isNonReactive, nonReactiveClass, nonReactiveObjects, unreactiveProps } from './non-reactive-state'
+import {
+	addUnreactiveProps,
+	isNonReactive,
+	nonReactiveClass,
+	nonReactiveObjects,
+	unreactiveProps,
+} from './non-reactive-state'
 import { reactive } from './proxy'
-import { unwrap } from './proxy-state'
+import { unwrap } from './types'
 import { markWithRoot } from './registry'
 import { dependant } from './tracking'
-import {
-	type EffectAccess,
-	type EffectCleanup,
-	stopped,
-} from './types'
+import { type EffectAccess, type EffectCleanup, stopped } from './types'
 
 //#region watch
 
@@ -236,55 +238,54 @@ export function resource<T>(
 			reloadSignal.value++
 		},
 	})
-	
+
 	const reloadSignal = reactive({ value: 0 })
 	let counter = 0
 
-	const stop = effect(
-		function resourceEffect(access) {
-			// Track reload signal to enable manual reloading
-			if (reloadSignal.value) { /* just tracking */ }
-			
-			const id = ++counter
-			state.loading = true
-			state.error = undefined
-			
-			try {
-				const result = fetcher(access)
-				
-				if (result instanceof Promise) {
-					result.then(
-						(val) => {
-							if (id === counter) {
-								state.value = val
-								state.latest = val
-								state.loading = false
-							}
-						},
-						(err) => {
-							if (id === counter) {
-								state.error = err
-								state.loading = false
-							}
+	const stop = effect(function resourceEffect(access) {
+		// Track reload signal to enable manual reloading
+		if (reloadSignal.value) {
+			/* just tracking */
+		}
+
+		const id = ++counter
+		state.loading = true
+		state.error = undefined
+
+		try {
+			const result = fetcher(access)
+
+			if (result instanceof Promise) {
+				result.then(
+					(val) => {
+						if (id === counter) {
+							state.value = val
+							state.latest = val
+							state.loading = false
 						}
-					)
-				} else {
-					state.value = result
-					state.latest = result
-					state.loading = false
-				}
-			} catch (err) {
-				state.error = err
+					},
+					(err) => {
+						if (id === counter) {
+							state.error = err
+							state.loading = false
+						}
+					}
+				)
+			} else {
+				state.value = result
+				state.latest = result
 				state.loading = false
 			}
+		} catch (err) {
+			state.error = err
+			state.loading = false
 		}
-	)
-	
+	})
+
 	// Expose stop method for manual cleanup if needed
 	;(state as any).stop = stop
-	
+
 	return state as Resource<T>
 }
 
 //#endregion
-

@@ -41,7 +41,12 @@ export type {
  */
 export function enableIntrospection(config: { historySize?: number } = {}) {
 	if (!options.introspection) {
-		options.introspection = { gatherReasons: true, logErrors: false, enableHistory: true, historySize: config.historySize ?? 50 }
+		options.introspection = {
+			gatherReasons: true,
+			logErrors: false,
+			enableHistory: true,
+			historySize: config.historySize ?? 50,
+		}
 	} else {
 		options.introspection.enableHistory = true
 		if (config.historySize) options.introspection.historySize = config.historySize

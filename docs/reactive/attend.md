@@ -10,7 +10,7 @@ The `attend` utility reactively iterates over the entries of a collection, runni
 - **Disposes** the inner effect when the key is removed from the collection.
 - Allows the callback to return a **cleanup function** (like a regular effect closer).
 
-This is the foundational lifecycle primitive that `describe` and `organized` are built on.
+This is the foundational lifecycle primitive that `organized` is built on.
 
 ## API
 
@@ -135,7 +135,6 @@ attend(
 | Primitive | Uses `attend`? | Purpose |
 |---|---|---|
 | `attend` | — | Reactive lifecycle per key |
-| `describe` | ✅ | Reactive `Object.defineProperty` per key |
 | `organized` | ✅ | Reactive record mapping with access objects |
 | `project` | ❌ | Reactive collection mapping (manages a target + projection context) |
 | `scan` | ❌ | Reactive accumulation (sequential key dependency) |

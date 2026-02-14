@@ -12,10 +12,12 @@
 - `access.reaction` now provides detailed `PropTrigger[]` info for reactions.
 - **Unified Introspection**: Debug features (`gatherReasons`, `logErrors`, etc.) consolidated under `reactiveOptions.introspection`.
 - **formatCleanupReason**: New debug utility for human-readable reason formatting.
+- **Removed `describe`**: niche API replaced by `lift` with descriptor-aware diffing.
 
 ## Optimisations
 
 - reactive - overall
+- **`keysOf` tracking**: `Object.keys()`, `for..in`, `Map.keys()` now only re-run on structural changes (key add/delete), not value changes. `Object.entries()`, `Object.values()`, `Map.entries()` still track values.
 
 # 1.0.9
 
@@ -30,7 +32,7 @@
 - `effect` now has a `named` and `opaque` "flavored" property
 - `onEffectThrow` - effect throw/catch feature
 - typings: `ScopedCallback` became `EffectTrigger` and `EffectCleanup`
-- `describe` - reactive property definition
+- `describe` - reactive property definition (removed in 1.0.10)
 - `attend` - reactive enumeration
 
 ## Refactoring

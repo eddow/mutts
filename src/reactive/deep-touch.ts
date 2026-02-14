@@ -3,9 +3,17 @@ import { debugHooks } from './debug-hooks'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { batch } from './effects'
 import { isNonReactive } from './non-reactive-state'
-import { unwrap } from './proxy-state'
+import { unwrap } from './types'
 import { getEffectNode, watchers } from './registry'
-import { allProps, keysOf, type EffectCleanup, type EffectTrigger, type Evolution, optionCall, options } from './types'
+import {
+	allProps,
+	type EffectCleanup,
+	type EffectTrigger,
+	type Evolution,
+	keysOf,
+	optionCall,
+	options,
+} from './types'
 
 function isObject(value: any): value is object {
 	return typeof value === 'object' && value !== null

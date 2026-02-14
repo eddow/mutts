@@ -85,7 +85,14 @@ export type CleanupReason =
 function formatTrigger({ obj, evolution, stack }: PropTrigger): unknown[] {
 	const detail = evolution.type === 'bunch' ? evolution.method : String(evolution.prop)
 	const parts: unknown[] = [`${evolution.type} ${detail} on`, obj]
-	if (stack) parts.push(`\n    ${stack.split('\n').slice(1).map(l => l.trim()).join('\n    ')}`)
+	if (stack)
+		parts.push(
+			`\n    ${stack
+				.split('\n')
+				.slice(1)
+				.map((l) => l.trim())
+				.join('\n    ')}`
+		)
 	return parts
 }
 
@@ -132,40 +139,40 @@ export type EffectCleanup = ScopedCallback & {
 
 // Debug type for stack frames
 export type StackFrame = {
-    functionName: string
-    fileName: string
-    lineNumber: number
-    columnNumber: number
-    raw: string
+	functionName: string
+	fileName: string
+	lineNumber: number
+	columnNumber: number
+	raw: string
 }
 
 /**
  * Centralized node for all effect metadata and relationships
  */
 export interface EffectNode {
-    // Graph relationships
-    parent?: EffectTrigger
-    children?: Set<EffectCleanup>
+	// Graph relationships
+	parent?: EffectTrigger
+	children?: Set<EffectCleanup>
 
-    // Lifecycle
-    cleanup?: ScopedCallback
-    stopped?: boolean
-    /** The reason why the effect is (re-)executing */
-    nextReason?: CleanupReason
-    
-    // Error handling
-    forwardThrow?: CatchFunction
-    catchers?: CatchFunction[]
+	// Lifecycle
+	cleanup?: ScopedCallback
+	stopped?: boolean
+	/** The reason why the effect is (re-)executing */
+	nextReason?: CleanupReason
 
-    // Debug / Metadata
-    creationStack?: StackFrame[]
-    dependencyHook?: (obj: any, prop: any) => void
-    
-    // Configuration
-    isOpaque?: boolean
+	// Error handling
+	forwardThrow?: CatchFunction
+	catchers?: CatchFunction[]
 
-    // Pending triggers to be batched into CleanupReason
-    pendingTriggers?: PropTrigger[]
+	// Debug / Metadata
+	creationStack?: StackFrame[]
+	dependencyHook?: (obj: any, prop: any) => void
+
+	// Configuration
+	isOpaque?: boolean
+
+	// Pending triggers to be batched into CleanupReason
+	pendingTriggers?: PropTrigger[]
 }
 
 /**
@@ -586,3 +593,30 @@ export function optionCall<K extends CallableOption>(
 }
 
 export { type State, nativeReactive }
+
+// --- Proxy State (Merged from proxy-state.ts) ---
+
+export const objectToProxy = new WeakMap<object, object>()
+export const proxyToObject = new WeakMap<object, object>()
+
+export function storeProxyRelationship(target: object, proxy: object) {
+	objectToProxy.set(target, proxy)
+	proxyToObject.set(proxy, target)
+}
+
+export function getExistingProxy<T extends object>(target: T): T | undefined {
+	return objectToProxy.get(target) as T | undefined
+}
+
+export function trackProxyObject(proxy: object, target: object) {
+	proxyToObject.set(proxy, target)
+}
+
+export function unwrap<T>(obj: T): T {
+	if (!obj || typeof obj !== 'object') return obj
+	return (proxyToObject.get(obj as object) as T) || obj
+}
+
+export function isReactive(obj: any): boolean {
+	return proxyToObject.has(obj)
+}

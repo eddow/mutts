@@ -18,7 +18,7 @@ import {
 	storeProxyRelationship,
 	trackProxyObject,
 	unwrap,
-} from './proxy-state'
+} from './types'
 import { dependant } from './tracking'
 import {
 	keysOf,
@@ -42,18 +42,15 @@ const reactiveHandlers = {
 					if (!Object.hasOwn(obj, prop)) return desc.get.call(obj)
 					// For own properties (e.g., array length): only override if writable/configurable
 					const ownDesc = Object.getOwnPropertyDescriptor(obj, prop)!
-					if (ownDesc.configurable || ownDesc.writable || ownDesc.get)
-						return desc.get.call(obj)
-				} else if (!Object.hasOwn(obj, prop))
-					return (...args: any[]) => desc.value.apply(obj, args)
+					if (ownDesc.configurable || ownDesc.writable || ownDesc.get) return desc.get.call(obj)
+				} else if (!Object.hasOwn(obj, prop)) return (...args: any[]) => desc.value.apply(obj, args)
 			}
 		}
 		// Symbols: fast-path — no reactivity tracking, no unreactive check needed
 		if (typeof prop === 'symbol')
 			return prop === nonReactiveMark ? false : FoolProof.get(obj, prop, receiver)
 		// Check if this property is marked as unreactive (WeakMap lookup — no proxy traps)
-		if (isUnreactiveProp(obj, prop))
-			return FoolProof.get(obj, prop, receiver)
+		if (isUnreactiveProp(obj, prop)) return FoolProof.get(obj, prop, receiver)
 
 		// Check if property exists using a trap-free walk to avoid triggering
 		// the has-trap cascade on prototype chains of reactive proxies.
@@ -99,7 +96,9 @@ const reactiveHandlers = {
 		}
 		// For arrays, use FoolProof.get (Indexer path) for numeric index reactivity.
 		// For all other objects, inline Reflect.get directly (skips 3 function calls).
-		const value = Array.isArray(obj) ? FoolProof.get(obj, prop, receiver) : Reflect.get(obj, prop, receiver)
+		const value = Array.isArray(obj)
+			? FoolProof.get(obj, prop, receiver)
+			: Reflect.get(obj, prop, receiver)
 		if (typeof value === 'object' && value !== null) {
 			const reactiveValue = reactiveObject(value)
 
@@ -239,10 +238,7 @@ function reactiveObject<T>(anyTarget: T): T {
 		}
 		walk = Object.getPrototypeOf(walk)
 	}
-	const proxied =
-		nativeClass && !(target instanceof nativeClass)
-			? new nativeClass(target)
-			: target
+	const proxied = nativeClass && !(target instanceof nativeClass) ? new nativeClass(target) : target
 	if (proxied !== target) trackProxyObject(proxied, target)
 	const proxy = new Proxy(proxied, reactiveHandlers)
 
@@ -290,4 +286,4 @@ export const reactive = decorator({
  * @param proxy - The reactive proxy
  * @returns The original object
  */
-export { isReactive, objectToProxy, proxyToObject, unwrap } from './proxy-state'
+export { isReactive, objectToProxy, proxyToObject, unwrap } from './types'

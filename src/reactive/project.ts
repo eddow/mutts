@@ -1,11 +1,11 @@
 import { FoolProof, named } from '../utils'
 import { cleanedBy, getActiveEffect } from './effect-context'
-import { effect, untracked } from './effects'
+import { effect } from './effects'
 import { reactive } from './proxy'
 import { Register } from './register'
 import {
+	type CleanupReason,
 	cleanup,
-	CleanupReason,
 	type EffectTrigger,
 	type ProjectionContext,
 	projectionInfo,
@@ -109,33 +109,37 @@ function projectArray<SourceValue, ResultValue>(
 	const parent = getActiveProjection()
 	const depth = parent ? parent.depth + 1 : 0
 
-	const cleanupLength = effect(named('project:Array.length', ({ ascend }) => {
-		const length = source.length
-		normalizeTargetLength(length)
-		const existing = Array.from(indexEffects.keys())
-		for (let i = 0; i < length; i++) {
-			if (indexEffects.has(i)) continue
-			ascend(function projectArrayIndexAscend() {
-				const index = i
-				const stop = effect(named(`project:${source[Symbol.toStringTag]}[${index}]`, ({ reaction }) => {
-					if (!reaction) setActiveProjection({ source, key: index, target, depth, parent })
-					const previous = rawTarget[index]
-					const accessBase = {
-						key: index,
-						source,
-						get: () => FoolProof.get(source as any, index, source),
-						set: (value: SourceValue) => FoolProof.set(source as any, index, value, source),
-						old: previous,
-					} as ProjectAccess<SourceValue, number, readonly SourceValue[], ResultValue[]>
-					defineAccessValue(accessBase)
-					const result = apply(accessBase, target)
-					if (result !== previous) target[index] = result
-				}))
-				indexEffects.set(i, stop)
-			})
-		}
-		for (const index of existing) if (index >= length) disposeIndex(index)
-	}))
+	const cleanupLength = effect(
+		named('project:Array.length', ({ ascend }) => {
+			const length = source.length
+			normalizeTargetLength(length)
+			const existing = Array.from(indexEffects.keys())
+			for (let i = 0; i < length; i++) {
+				if (indexEffects.has(i)) continue
+				ascend(function projectArrayIndexAscend() {
+					const index = i
+					const stop = effect(
+						named(`project:${source[Symbol.toStringTag]}[${index}]`, ({ reaction }) => {
+							if (!reaction) setActiveProjection({ source, key: index, target, depth, parent })
+							const previous = rawTarget[index]
+							const accessBase = {
+								key: index,
+								source,
+								get: () => FoolProof.get(source as any, index, source),
+								set: (value: SourceValue) => FoolProof.set(source as any, index, value, source),
+								old: previous,
+							} as ProjectAccess<SourceValue, number, readonly SourceValue[], ResultValue[]>
+							defineAccessValue(accessBase)
+							const result = apply(accessBase, target)
+							if (result !== previous) target[index] = result
+						})
+					)
+					indexEffects.set(i, stop)
+				})
+			}
+			for (const index of existing) if (index >= length) disposeIndex(index)
+		})
+	)
 
 	return makeCleanup(target, indexEffects, () => cleanupLength(), {
 		source,

@@ -6,10 +6,10 @@ export {
 	addBatchCleanup,
 	atomic,
 	biDi,
+	caught,
 	defer,
 	effect,
 	getActivationLog,
-	caught,
 	onEffectThrow,
 	reset,
 	root,
@@ -22,23 +22,22 @@ export { isReactive, ReactiveBase, reactive, unwrap } from './proxy'
 export { organize, organized } from './record'
 export { Register, register } from './register'
 export {
+	type CleanupReason,
 	cleanup,
-	stopped,
 	type EffectAccess as DependencyAccess,
 	type EffectCleanup,
 	type EffectOptions,
 	type EffectTrigger,
 	type Evolution,
+	formatCleanupReason,
 	options as reactiveOptions,
+	type PropTrigger,
 	ReactiveError,
 	ReactiveErrorCode,
 	type ScopedCallback,
-	type CleanupReason,
-	type PropTrigger,
-	formatCleanupReason,
+	stopped,
 } from './types'
-export { unreactive, watch, when, resource, type Resource } from './watch'
-export { describe } from './describe'
+export { type Resource, resource, unreactive, watch, when } from './watch'
 
 import { ReactiveArray } from './array'
 import {

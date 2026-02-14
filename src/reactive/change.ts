@@ -2,9 +2,17 @@ import { debugHooks } from './debug-hooks'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { getActiveEffect, isRunning } from './effect-context'
 import { batch, hasBatched, recordActivation } from './effects'
-import { unwrap } from './proxy-state'
+import { unwrap } from './types'
 import { getEffectNode, watchers } from './registry'
-import { allProps, keysOf, type EffectTrigger, type Evolution, optionCall, options, type State } from './types'
+import {
+	allProps,
+	type EffectTrigger,
+	type Evolution,
+	keysOf,
+	optionCall,
+	options,
+	type State,
+} from './types'
 
 const states = new WeakMap<object, State>()
 

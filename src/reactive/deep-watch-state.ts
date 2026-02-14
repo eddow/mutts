@@ -9,7 +9,9 @@ export const objectParents = new WeakMap<object, Set<{ parent: object; prop: Pro
 // Track which objects have deep watchers
 export const objectsWithDeepWatchers = new WeakSet<object>()
 let deepWatcherCount = 0
-export function registerDeepWatcher() { deepWatcherCount++ }
+export function registerDeepWatcher() {
+	deepWatcherCount++
+}
 
 // Track deep watchers per object
 export const deepWatchers = new WeakMap<object, Set<EffectTrigger>>()

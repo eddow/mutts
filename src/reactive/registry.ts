@@ -1,4 +1,4 @@
-import { type EffectCleanup, type EffectNode, type EffectTrigger } from './types'
+import type { EffectNode, EffectTrigger } from './types'
 
 // Track which effects are watching which reactive objects for cleanup
 export let effectToReactiveObjects = new WeakMap<EffectTrigger, Set<object>>()
@@ -13,12 +13,12 @@ export let effectNodes = new WeakMap<EffectTrigger, EffectNode>()
 export let rootFunctions = new WeakMap<Function, Function>()
 
 export function getEffectNode(effect: EffectTrigger): EffectNode {
-    let node = effectNodes.get(effect)
-    if (!node) {
-        node = {}
-        effectNodes.set(effect, node)
-    }
-    return node
+	let node = effectNodes.get(effect)
+	if (!node) {
+		node = {}
+		effectNodes.set(effect, node)
+	}
+	return node
 }
 
 // Track reverse mapping to ensure unicity: One Root -> One Function

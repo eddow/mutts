@@ -23,7 +23,7 @@ Proxy-based **fine-grained reactivity** — changes propagate synchronously thro
 ```ts
 import { reactive, effect, memoize, project, attend, lift, scan, cleanup,
   atomic, defer, untracked, unreactive, watch, when, biDi, caught, why,
-  cleanedBy, organized, describe, Register,
+  cleanedBy, organized, Register,
   Zone, asyncZone, ZoneHistory, ZoneAggregator,
   decorator, mixin, Eventful, Destroyable, flavored, Indexable, chainPromise,
   reactiveOptions, isReactive, unwrap, getState
@@ -314,15 +314,7 @@ const doubled = organized(source, (access, target) => {
 })
 ```
 
-### 5.4 describe() — Reactive Object.defineProperties
-
-```ts
-const descriptors = reactive({ foo: { value: 1, enumerable: true } })
-const target = describe(descriptors) // target.foo === 1
-// Add/remove descriptors → target properties appear/disappear reactively
-```
-
-### 5.5 scan() — Reactive accumulation
+### 5.4 scan() — Reactive accumulation
 
 ```ts
 const result = scan(source, (acc, item) => acc + item.val, 0)

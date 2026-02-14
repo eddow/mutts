@@ -2,9 +2,10 @@ import { decorator } from '../decorator'
 import { deepCompare, renamed } from '../utils'
 import { touched1 } from './change'
 import { effect, root, untracked } from './effects'
+import { proxyToObject } from './types'
 import { getRoot, markWithRoot, rootFunctions } from './registry'
 import { dependant } from './tracking'
-import { CleanupReason, optionCall, options } from './types'
+import { type CleanupReason, optionCall, options } from './types'
 
 export type Memoizable = object | any[] | ((...args: any[]) => any)
 
@@ -15,7 +16,7 @@ type MemoCacheTree<Result> = {
 }
 
 const memoizedRegistry = new WeakMap<any, Function>()
-const wrapperRegistry = new WeakMap<Function, Function>()
+const wrapperRegistry = new WeakMap<Function, (that: object)=> unknown>()
 
 function getBranch<Result>(tree: MemoCacheTree<Result>, key: Memoizable): MemoCacheTree<Result> {
 	tree.branches ??= new WeakMap()
@@ -66,7 +67,7 @@ function memoizeFunction<Result, Args extends Memoizable[]>(
 		// Create memoize internal effect to track dependencies and invalidate cache
 		// Use untracked to prevent the effect creation from being affected by parent effects
 		node.cleanup = root(() =>
-			effect(
+			effect.named('memoize')(
 				() => {
 					// Execute the function and track its dependencies
 					// The function execution will automatically track dependencies on reactive objects
@@ -180,5 +181,72 @@ export const memoize = decorator({
 			return memoized(this, ...args)
 		}
 	},
-	default: memoizeFunction,
+	default: (target: any) => {
+		if (
+			typeof target === 'object' &&
+			target !== null &&
+			!(target instanceof Date) &&
+			!(target instanceof RegExp)
+		) {
+			// Check identity first
+			const existing = memoizedRegistry.get(target)
+			if (existing) return existing
+
+			const proxy = new Proxy(target, {
+				get(source, prop, receiver) {
+					// 1. Walk prototype chain to find descriptor
+					let current = source
+					let desc: PropertyDescriptor | undefined
+					while (current) {
+						desc = Object.getOwnPropertyDescriptor(current, prop)
+						if (desc) break
+						current = Object.getPrototypeOf(current)
+					}
+
+					// 2. If getter, memoize
+					if (desc?.get) {
+						const originalGetter = desc.get
+						// Re-use wrapper registry idea from decorator
+						let wrapper = wrapperRegistry.get(originalGetter)
+						if (!wrapper) {
+							// wrapper must accept 'receiver' as argument to fit memoizeFunction signature
+							wrapper = markWithRoot(
+								renamed(
+									(that: any) => {
+										return originalGetter.call(that)
+									},
+									`${String(source?.constructor?.name ?? 'Object')}.${String(prop)}`
+								),
+								{
+									//method: originalGetter, // Optional: tracking origin
+									propertyKey: prop,
+								}
+							)
+							const origRoot = rootFunctions.get(originalGetter)
+							if (origRoot) rootFunctions.set(wrapper, origRoot)
+							wrapperRegistry.set(originalGetter, wrapper)
+						}
+						// memoizeFunction returns a function that takes keys (receiver)
+						const memoized = memoizeFunction(wrapper)
+						return memoized(receiver)
+					}
+
+					// 3. Otherwise forward
+					return Reflect.get(source, prop, receiver)
+				},
+				// Forward set to the target (source) to ensure it acts as the receiver for reactivity notifications
+				set(source, prop, value, receiver) {
+					// By strictly passing `source` as receiver, we ensure that if `source` is a reactive proxy,
+					// it recognizes itself and triggers change notifications.
+					return Reflect.set(source, prop, value, source)
+				},
+			})
+
+			// Register relationship to allow unwrap() to work
+			proxyToObject.set(proxy, target)
+			memoizedRegistry.set(target, proxy)
+			return proxy
+		}
+		return memoizeFunction(target as any)
+	},
 })

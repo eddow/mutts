@@ -130,7 +130,8 @@ export function getLineage(effect?: EffectTrigger): LineageSegment[] {
 
 	while (current) {
 		const rootFn = getRoot(current)
-		if(!rootFn.name) debugger
+		// Too aggressive for now
+		//if(!rootFn.name) debugger
 		const effectName = rootFn.name || 'anonymous'
 		const filteredStack = filterNodeModules(lastStack)
 		segments.push({

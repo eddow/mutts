@@ -1,9 +1,17 @@
 import { FoolProof } from '../utils'
+import { touched1 } from './change'
 import { cleanedBy } from './effect-context'
 import { effect, untracked } from './effects'
 import { memoize } from './memoize'
-import { reactive } from './proxy'
-import type { cleanup, CleanupReason, EffectAccess, EffectCleanup, EffectCloser, ScopedCallback } from './types'
+import { isReactive, reactive } from './proxy'
+import type {
+	CleanupReason,
+	cleanup,
+	EffectAccess,
+	EffectCleanup,
+	EffectCloser,
+	ScopedCallback,
+} from './types'
 
 /**
  * Reactively attends to each entry of a collection or each key yielded by an
@@ -45,10 +53,7 @@ export function attend<Key>(
 	enumerate: () => Iterable<Key>,
 	callback: (key: Key) => EffectCloser | void
 ): ScopedCallback
-export function attend(
-	source: any,
-	callback: (key: any) => EffectCloser | void
-): ScopedCallback {
+export function attend(source: any, callback: (key: any) => EffectCloser | void): ScopedCallback {
 	const enumerate: () => Iterable<any> =
 		typeof source === 'function'
 			? source
@@ -68,7 +73,10 @@ export function attend(
 
 		for (const key of keys) {
 			if (keyEffects.has(key)) continue
-			keyEffects.set(key, ascend(() => effect(() => callback(key))))
+			keyEffects.set(
+				key,
+				ascend(() => effect(() => callback(key)))
+			)
 		}
 
 		for (const key of Array.from(keyEffects.keys())) {
@@ -298,22 +306,49 @@ export function lift<Output extends any[] | object>(
 	cb: (access: EffectAccess) => Output
 ): Output & { [cleanup]: ScopedCallback } {
 	let result!: Output
+	let rawResult!: Output
 	const liftCleanup = effect((access) => {
 		const source = cb(access)
+		if (isReactive(source))
+			throw new Error('lift callback must return a non-reactive value to be lifted')
 		if (!source || typeof source !== 'object')
 			throw new Error('lift callback must return an array or object')
-		result ??= reactive(Array.isArray(source) ? [] : {}) as Output
-		if (Array.isArray(source) && Array.isArray(result)) {
-			if (result.length !== source.length) result.length = source.length
-			for (let i = 0; i < source.length; i++) if (result[i] !== source[i]) result[i] = source[i]
-		} else if (!Array.isArray(source) && !Array.isArray(result)) {
-			const src = source as Record<string, unknown>
-			const res = result as Record<string, unknown>
-			for (const key of Object.keys(src)) if (res[key] !== src[key]) res[key] = src[key]
-			for (const key of Object.keys(res)) if (!(key in src)) delete res[key]
-		} else {
+		const sourceProto = Object.getPrototypeOf(source)
+		if (!result) {
+			rawResult = Array.isArray(source) ? [] : Object.create(sourceProto)
+			result = reactive(rawResult)
+		}
+		if (sourceProto !== Object.getPrototypeOf(result))
 			throw new Error('lift callback must return the same type as the previous result')
+
+		if (Array.isArray(source)) {
+			const res = result as unknown[]
+			if (res.length !== source.length) res.length = source.length
+			for (let i = 0; i < source.length; i++) if (res[i] !== source[i]) res[i] = source[i]
+		} else {
+			for (const key of Object.keys(source)) {
+				const had = key in rawResult
+				const newDesc = Object.getOwnPropertyDescriptor(source, key)!
+				if (had) {
+					const oldDesc = Object.getOwnPropertyDescriptor(rawResult, key)
+					const sameAccessor = oldDesc && newDesc.get && oldDesc.get === newDesc.get
+					Object.defineProperty(rawResult, key, newDesc)
+					if (
+						!sameAccessor &&
+						rawResult[key] !== (oldDesc ? (oldDesc.get ? oldDesc.get() : oldDesc.value) : undefined)
+					)
+						touched1(rawResult, { type: 'set', prop: key }, key)
+				} else {
+					Object.defineProperty(rawResult, key, newDesc)
+					touched1(rawResult, { type: 'add', prop: key }, key)
+				}
+			}
+			for (const key of Object.keys(rawResult))
+				if (!(key in source)) {
+					delete rawResult[key]
+					touched1(rawResult, { type: 'del', prop: key }, key)
+				}
 		}
 	})
-	return cleanedBy(result as Output, liftCleanup)
+	return cleanedBy(result, liftCleanup)
 }

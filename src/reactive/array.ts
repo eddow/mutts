@@ -2,7 +2,7 @@ import { FoolProof } from '../utils'
 import { touched } from './change'
 import { makeReactiveEntriesIterator, makeReactiveIterator } from './non-reactive'
 import { reactive } from './proxy'
-import { unwrap } from './proxy-state'
+import { unwrap } from './types'
 import { dependant } from './tracking'
 
 function* index(i: number, { length = true } = {}): IterableIterator<number | 'length'> {
