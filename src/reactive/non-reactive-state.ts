@@ -1,4 +1,3 @@
-import { nativeReactive } from './types'
 
 export const nonReactiveObjects = new WeakSet<object>()
 const nonReactiveClasses = new WeakSet<object>()
@@ -46,18 +45,11 @@ export function isNonReactive(obj: any): boolean {
 	return false
 }
 
-export function registerNativeReactivity(
-	originalClass: new (...args: any[]) => any,
-	reactiveClass: new (...args: any[]) => any
-) {
-	originalClass.prototype[nativeReactive] = reactiveClass
-	nonReactiveClass(reactiveClass)
-}
 
 nonReactiveClass(Date, RegExp, Error, Promise, Function)
 if (typeof window !== 'undefined') {
 	markNonReactive(window, document)
-	nonReactiveClass(Node, Element, HTMLElement, EventTarget, HTMLCollection)
+	nonReactiveClass(Node, Element, HTMLElement, EventTarget, HTMLCollection, NodeList)
 }
 
 export { markNonReactive as nonReactive }

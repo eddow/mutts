@@ -1,17 +1,19 @@
 import { arrayDiff } from '../diff'
-import { FoolProof } from '../utils'
-import { touched1 } from './change'
+import { flavored } from '../flavored'
+import { FoolProof, tag } from '../utils'
+import { touched, touched1 } from './change'
 import { cleanedBy } from './effect-context'
 import { effect, untracked } from './effects'
 import { memoize } from './memoize'
-import { reactive } from './proxy'
-import type {
-	CleanupReason,
-	cleanup,
-	EffectAccess,
-	EffectCleanup,
-	EffectCloser,
-	ScopedCallback,
+import { isReactive, proxyToObject, reactive } from './proxy'
+import {
+	type CleanupReason,
+	type cleanup,
+	type EffectAccess,
+	type EffectCleanup,
+	type EffectCloser,
+	type ScopedCallback,
+	keysOf,
 } from './types'
 
 /**
@@ -312,7 +314,7 @@ export function lift<Output extends any[] | object>(
 ): Output & { [cleanup]: ScopedCallback } {
 	let result!: Output
 	let rawResult!: Output
-	const liftCleanup = effect((access) => {
+	const liftCleanup = effect.named('lift')((access) => {
 		const source = cb(access) /*
 		if (isReactive(source))
 			throw new Error('lift callback must return a non-reactive value to be lifted')*/
@@ -360,3 +362,75 @@ export function lift<Output extends any[] | object>(
 	})
 	return cleanedBy(result, liftCleanup)
 }
+
+export const morph = flavored(
+	function morph<I, O>(
+		source: readonly I[] | (() => readonly I[]),
+		fn: (arg: I) => O,
+		options?: { pure?: boolean }
+	) {
+		if (typeof source !== 'function' && !isReactive(source) && options?.pure) return source.map(fn)
+		const cache = [] as O[]
+		let input: readonly I[] = []
+		function* range(
+			a: number,
+			b: number,
+		): IterableIterator<number> {
+			const start = Math.min(a, b)
+			const end = Math.max(a, b)
+			for (let i = start; i < end; i++)yield i
+		}
+		const rv = reactive(
+				cache,
+				{
+					get(cache, prop) {
+						const n = typeof prop === 'string' ? Number(prop) : NaN
+						if (isNaN(n)) return cache[prop]
+						if (!(n in cache)) {
+							if (options?.pure) cache[n] = fn(input[n])
+							else {
+								const stop = effect(() => {
+									cache[n] = fn(input[n])
+									return () => {
+										delete cache[n]
+										touched1(cache, { type: 'invalidate', prop: 'morph' }, n)
+										stop({ type: 'stopped' })
+									}
+								})
+							}
+						}
+						return cache[n]
+					},
+					has(cache, prop) {
+						return Reflect.has(input, prop)
+					}
+				}
+			)
+		return cleanedBy(rv, effect.named('morph')(() => {
+			const newInput = [...(typeof source === 'function' ? source() : source)]
+			const evolution = { type: 'bunch', method: 'morph-input' } as const
+			let madeAll = false
+			for (const diff of arrayDiff(input, newInput)) {
+				cache.splice(diff.indexA, diff.sliceA.length, ...new Array(diff.sliceB.length).fill(undefined))
+				if(!madeAll) {
+					if(diff.sliceA.length === diff.sliceB.length)
+						touched(cache, evolution, range(diff.indexA, diff.indexA + diff.sliceA.length))
+					else {
+						touched(cache, evolution, range(diff.indexA, newInput.length))
+						madeAll = true
+					}
+				}
+				for(const i of range(diff.indexA, diff.indexA + diff.sliceB.length))
+					delete cache[i]
+			}
+			if (input.length !== newInput.length) touched(cache, evolution, ['length', keysOf])
+			input = newInput
+		}))
+	},
+	{
+		get pure() {
+			return <I, O>(source: readonly I[] | (() => readonly I[]), fn: (arg: I) => O) =>
+				this(source, fn, { pure: true })
+		},
+	}
+)

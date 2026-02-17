@@ -1,4 +1,4 @@
-export { attend, lift, type ScanResult, scan } from './buffer'
+export { attend, lift, morph, type ScanResult, scan } from './buffer'
 export { getState, touched, touched1 } from './change'
 export { deepWatch } from './deep-watch'
 export { cleanedBy, effectAggregator, getActiveEffect } from './effect-context'
@@ -16,7 +16,7 @@ export {
 	untracked,
 } from './effects'
 export { type Memoizable, type MemoizableArgument, memoize } from './memoize'
-export { immutables, isNonReactive, registerNativeReactivity } from './non-reactive'
+export { immutables, isNonReactive } from './non-reactive'
 export { getActiveProjection, project } from './project'
 export { isReactive, ReactiveBase, reactive, unwrap } from './proxy'
 export { organize, organized } from './record'

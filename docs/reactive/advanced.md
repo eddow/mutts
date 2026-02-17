@@ -1077,6 +1077,8 @@ Mutts provides several ways to derive values from reactive state. They differ in
 | `memoize(fn)(args)` | **Lazy** | Raw value | Yes (return) | No | Auto (WeakMap GC) | Parameterized caching |
 | `lift(() => [...])` | Eager | Reactive array proxy | Yes (per-index) | **Yes** | `result[cleanup]()` | Derived collections (filter, map) |
 | `lift(() => ({...}))` | Eager | Reactive object proxy | Yes (per-prop) | **Yes** | `result[cleanup]()` | Derived objects, computed shapes |
+| `morph(source, fn)` | **Lazy** | Reactive array proxy | Yes (per-index) | **Yes** | `cleanedBy` | Lazy per-element map with identity tracking |
+| `morph.pure(source, fn)` | **Lazy** | Reactive array proxy | Yes (per-index) | **Yes** | `cleanedBy` | Same, but skips per-item dependency tracking |
 | `project(source, fn)` | Eager | Reactive container | Yes (per-key) | **Yes** | `result[cleanup]()` | Per-element transforms on arrays/maps/records |
 | `attend(source, fn)` | Eager | Side-effects per key | N/A | N/A | `result[cleanup]()` | Per-element side effects (DOM binding) |
 | `scan(source, fn, init)` | Eager | Reactive array | Yes (per-index) | **Yes** | `result[cleanup]()` | Running accumulations (prefix sums) |
@@ -1157,6 +1159,100 @@ state.items = fetchedItems // deep touch diffs old vs new per-index — no lift 
 
 `lift` is for **derived** data where there's no single property to assign to — the output is computed from scratch each time.
 
+## Morph
+
+### `morph(source, fn)`
+
+`morph` creates a **lazy, identity-stable** reactive array by mapping each element of a source array through a callback. Unlike `lift` (which re-runs the entire callback and diffs the result) or `project` (which eagerly creates per-key effects), `morph` only computes an element when it is accessed, and tracks the source array via `arrayDiff` to efficiently handle insertions, removals, and moves.
+
+**Signature**
+
+```typescript
+import { morph } from 'mutts/reactive'
+
+function morph<I, O>(
+  source: readonly I[] | (() => readonly I[]),
+  fn: (arg: I) => O
+): O[]
+```
+
+**Parameters**
+
+- `source`: a reactive array or a function returning one. Array mutations are tracked via `arrayDiff`.
+- `fn`: mapping callback. In the default (non-pure) mode, each element's computation runs inside its own effect, so reactive reads inside `fn` are tracked and will invalidate that element's cache when they change.
+
+**Behaviour**
+
+- **Lazy**: elements are only computed when accessed (e.g. `result[0]`). Unaccessed indices remain `undefined` in the cache.
+- **Identity stable**: the returned reactive array proxy is the same object across source mutations. Only affected indices are invalidated.
+- **Per-item effects** (default): each accessed element gets its own effect. If `fn` reads reactive values beyond its argument, changes to those values invalidate and recompute only the affected elements.
+- **Cleanup**: the returned array is `cleanedBy` the internal morph effect. When the parent effect is disposed, the morph effect and all per-item effects are cleaned up.
+
+**Basic usage**
+
+```typescript
+import { morph, reactive, effect } from 'mutts/reactive'
+
+const items = reactive(['alice', 'bob', 'charlie'])
+const upper = morph(items, name => name.toUpperCase())
+
+effect(() => {
+  console.log(upper[0]) // "ALICE" — only element 0 is computed
+})
+
+items.push('dave')
+console.log(upper[3]) // "DAVE"
+
+items.splice(1, 1) // Remove 'bob' — indices shift, cache invalidated for affected positions
+```
+
+**With reactive callback dependencies**
+
+```typescript
+const source = reactive([1, 2, 3])
+const multiplier = reactive({ value: 2 })
+
+const scaled = morph(source, x => x * multiplier.value)
+
+console.log(scaled[0]) // 2
+multiplier.value = 10
+console.log(scaled[0]) // 10 — per-item effect re-ran
+```
+
+### `morph.pure`
+
+A flavored variant that skips per-item effects. Use when the callback is a **pure function** of its argument with no external reactive dependencies.
+
+```typescript
+const doubled = morph.pure(source, x => x * 2)
+```
+
+**Differences from default `morph`:**
+
+| | `morph` | `morph.pure` |
+|---|---|---|
+| **Per-item effects** | Yes — tracks `fn`'s reactive reads | No — `fn` runs once, result is cached |
+| **Callback dependency invalidation** | Automatic | None — stale if `fn` reads reactive values |
+| **Non-reactive source optimization** | Returns reactive proxy | Returns plain `source.map(fn)` |
+| **Best for** | Callbacks that read reactive state | Pure transforms (`x => x * 2`, `e => e.render()`) |
+
+**Example: pure vs reactive**
+
+```typescript
+const source = reactive([1, 2])
+const factor = reactive({ value: 10 })
+
+// Reactive: tracks factor.value per element
+const reactive = morph(source, x => x * factor.value)
+
+// Pure: ignores factor.value changes
+const pure = morph.pure(source, x => x * factor.value)
+
+factor.value = 20
+reactive[0] // 20 — recomputed
+pure[0]     // 10 — stale, no per-item effect to invalidate
+```
+
 ## Memoization
 
 ### `memoize()`
@@ -1232,9 +1328,30 @@ describe({ id: 'x' } as any, { language: 'en' }) // locale is ignored, only the 
 
 Use `maxArgs` when the memoized function should only consider the first _n_ arguments. Subsequent arguments are ignored and not forwarded to `fn`.
 
+### `memoize.lenient`
+
+A flavored variant that gracefully handles non-WeakKey arguments (primitives, `null`, `undefined`). Instead of throwing, it falls back to recomputing the function without caching.
+
+```typescript
+import { memoize } from 'mutts/reactive'
+
+const process = memoize.lenient((value: string | { data: string }) => {
+  return typeof value === 'string' ? value.toUpperCase() : value.data
+})
+
+const obj = { data: 'hello' }
+process(obj)     // Cached (object is a WeakKey)
+process(obj)     // Returns cached result
+
+process('world') // Recomputed each time (string is not a WeakKey)
+process('world') // Recomputed again — no caching for primitives
+```
+
+This is useful when a memoized function may receive both objects and primitives, and you want caching where possible without errors for the rest.
+
 ### Decorator usage
 
-Apply `@memoize` to class getters or methods to share the same cache semantics. Getters cache per instance; methods cache per instance and argument tuple.
+Apply `@memoize` (or `@memoize.lenient`) to class getters or methods to share the same cache semantics. Getters cache per instance; methods cache per instance and argument tuple.
 
 ```typescript
 import { memoize, reactive } from 'mutts/reactive'
@@ -1250,6 +1367,13 @@ class Example {
   @memoize
   total(a: { value: number }, b: { value: number }) {
     return a.value + b.value + this.state.count
+  }
+}
+
+class Flexible {
+  @memoize.lenient
+  process(value: string) {
+    return value.toUpperCase() // No throw — recomputes each time
   }
 }
 ```

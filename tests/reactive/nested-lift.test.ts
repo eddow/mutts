@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { reactive, effect, lift, scan, project, cleanup } from 'mutts'
+import { reactive, effect, lift, scan, project, cleanup, atomic } from 'mutts'
 
 describe('nested lift propagation', () => {
 	it('baseline: effect tracks .length', () => {
@@ -11,7 +11,7 @@ describe('nested lift propagation', () => {
 		})
 
 		expect(runs).toEqual([3])
-		source.push(4)
+		atomic(() => source.push(7))()
 		expect(runs).toEqual([3, 4])
 	})
 
@@ -26,7 +26,7 @@ describe('nested lift propagation', () => {
 		})
 
 		expect(runs).toEqual([3])
-		source.push(4)
+		atomic(() => source.push(4))()
 		expect(runs).toEqual([3, 4])
 	})
 
@@ -41,7 +41,7 @@ describe('nested lift propagation', () => {
 		})
 
 		expect(runs).toEqual([3])
-		source.push(4)
+		atomic(() => source.push(4))()
 		expect(runs).toEqual([3, 4])
 	})
 
@@ -60,7 +60,7 @@ describe('nested lift propagation', () => {
 		expect([...inner]).toEqual([10, 20, 30])
 		expect(innerRuns).toEqual([3])
 
-		source.push(4)
+		atomic(() => source.push(4))()
 
 		expect(innerRuns).toEqual([3, 4])
 		expect(inner.length).toBe(4)
@@ -170,7 +170,7 @@ describe('nested lift propagation', () => {
 		expect(flatRuns).toEqual([3])
 
 		// Mutate inner array in-place (like inner lift writing new nodes)
-		inner1.push(25)
+		atomic(() => inner1.push(25))()
 		expect(flatRuns.length).toBe(2)
 		expect([...flattened]).toEqual([10, 20, 25, 30])
 

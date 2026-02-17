@@ -238,7 +238,6 @@ type State =
 	| {}
 
 // Track native reactivity
-const nativeReactive = Symbol('native-reactive')
 
 /**
  * Symbol to mark class properties as non-reactive
@@ -588,7 +587,7 @@ export function optionCall<K extends CallableOption>(
 	}
 }
 
-export { type State, nativeReactive }
+export { type State }
 
 // --- Proxy State (Merged from proxy-state.ts) ---
 

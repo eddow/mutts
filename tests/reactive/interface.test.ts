@@ -1,4 +1,4 @@
-import { cleanup, effect, reactive, watch } from 'mutts'
+import { atomic, cleanup, effect, reactive, watch } from 'mutts'
 
 describe('watch', () => {
 	describe('watch with value function', () => {
@@ -134,7 +134,7 @@ describe('watch', () => {
 			@reactive
 			class TestClass {
 				public slots: { item: string; count: number }[] = []
-
+				@atomic
 				addItem(item: string) {
 					this.slots.push({ item, count: 1 })
 				}
@@ -253,7 +253,7 @@ describe('watch', () => {
 				{ deep: true }
 			)
 
-			state.items.push(4)
+			atomic(() => state.items.push(4))()
 			expect(callCount).toBe(1)
 
 			state.items[0] = 10
@@ -349,7 +349,7 @@ describe('watch', () => {
 			})
 
 			// These should trigger watch but currently don't
-			state.push(4)
+			atomic(() => state.push(4))()
 			expect(callCount).toBe(1)
 
 			state[0] = 10
@@ -381,10 +381,12 @@ describe('watch', () => {
 			class TestClass {
 				public items: { name: string; count: number }[] = []
 
+				@atomic
 				addItem(name: string) {
 					this.items.push({ name, count: 1 })
 				}
 
+				@atomic
 				incrementCount(name: string) {
 					const item = this.items.find((i) => i.name === name)
 					if (item) item.count++
@@ -417,10 +419,12 @@ describe('watch', () => {
 			class TestClass {
 				public slots: { item: string; count: number }[] = []
 
+				@atomic
 				addItem(item: string) {
 					this.slots.push({ item, count: 1 })
 				}
 
+				@atomic
 				incrementCount(item: string) {
 					const slot = this.slots.find((s) => s.item === item)
 					if (slot) slot.count++
@@ -515,7 +519,7 @@ describe('watch', () => {
 			expect(callCount).toBe(0)
 
 			// Add item directly (not through method)
-			obj.items.push({ name: 'wood', count: 1 })
+			atomic(() => obj.items.push({ name: 'wood', count: 1 }))()
 			expect(callCount).toBe(1)
 
 			// Modify property directly (not through method)
@@ -731,7 +735,7 @@ describe('deep watch via watch({ deep: true })', () => {
 				{ deep: true }
 			)
 
-			state.items.push(4)
+			atomic(() => state.items.push(4))()
 			expect(callCount).toBe(1)
 
 			state.items[0] = 10
@@ -950,7 +954,7 @@ describe('deep watch via watch({ deep: true })', () => {
 			)
 
 			// Push an object with nested properties
-			state.items.push({ id: 1, nested: { value: 'test' } })
+			atomic(() => state.items.push({ id: 1, nested: { value: 'test' } }))()
 
 			// This should trigger deep watch because we're adding a new object to the array
 			// If this fails, it means push() is not properly tracking deep changes
@@ -975,14 +979,14 @@ describe('deep watch via watch({ deep: true })', () => {
 			)
 
 			// Push a nested object
-			state.items.push({
+			atomic(()=> state.items.push({
 				id: 1,
 				data: {
 					config: {
 						enabled: true,
 					},
 				},
-			})
+			}))()
 
 			// This should trigger deep watch because we're adding a deeply nested object
 			// If this fails, it means push() is not properly tracking deep changes for nested objects
@@ -1005,7 +1009,7 @@ describe('deep watch via watch({ deep: true })', () => {
 			)
 
 			expect(callCount).toBe(0)
-			state.items.push({ nested: { value: 0 } })
+			atomic(() => state.items.push({ nested: { value: 0 } }))()
 
 			expect(callCount).toBe(1)
 			// Change one item
@@ -1032,7 +1036,7 @@ describe('deep watch via watch({ deep: true })', () => {
 
 			expect(callCount).toBe(0)
 
-			state.items.push(item)
+			atomic(() => state.items.push(item))()
 			//state.items[0] = item
 
 			expect(callCount).toBe(1)
@@ -1089,7 +1093,7 @@ describe('deep watch via watch({ deep: true })', () => {
 			expect(callCount).toBe(1) // Initial call
 
 			// This should trigger the watch but doesn't
-			state.items.push(4)
+			atomic(() => state.items.push(4))()
 			expect(callCount).toBe(2) // FAILS: Expected 2, Received 1
 
 			stopWatch()
@@ -1114,7 +1118,7 @@ describe('deep watch via watch({ deep: true })', () => {
 			expect(callCount).toBe(1) // Initial call
 
 			// This should trigger the deep watch but doesn't
-			state.items.push(4)
+			atomic(() => state.items.push(4))()
 			expect(callCount).toBe(2) // FAILS: Expected 2, Received 1
 
 			stopWatch()
@@ -1136,7 +1140,7 @@ describe('deep watch via watch({ deep: true })', () => {
 			expect(effectCount).toBe(1) // Initial call
 
 			// This DOES trigger the effect because push changes length
-			state.items.push(4)
+			atomic(() => state.items.push(4))()
 			expect(effectCount).toBe(2) // Should PASS
 
 			stopEffect()

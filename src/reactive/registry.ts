@@ -1,5 +1,8 @@
 import type { EffectNode, EffectTrigger } from './types'
 
+// Symbol for storing root function on the function itself
+export const rootFunctionSymbol = Symbol('root-function')
+
 // Track which effects are watching which reactive objects for cleanup
 export let effectToReactiveObjects = new WeakMap<EffectTrigger, Set<object>>()
 
@@ -8,9 +11,6 @@ export let watchers = new WeakMap<object, Map<any, Set<EffectTrigger>>>()
 
 // Track effect metadata and relationships
 export let effectNodes = new WeakMap<EffectTrigger, EffectNode>()
-
-// Root function mapping (replaces Object.defineProperty with rootFunction symbol)
-export let rootFunctions = new WeakMap<Function, Function>()
 
 export function getEffectNode(effect: EffectTrigger): EffectNode {
 	let node = effectNodes.get(effect)
@@ -29,7 +29,6 @@ export function resetRegistry() {
 	watchers = new WeakMap()
 	effectNodes = new WeakMap()
 	reverseRoots = new WeakMap()
-	rootFunctions = new WeakMap()
 }
 
 /**
@@ -58,8 +57,8 @@ export function markWithRoot<T extends Function>(fn: T, root: any): T {
 	// (Last writer wins for the check)
 	reverseRoots.set(root, new WeakRef(fn))
 
-	// Store root mapping in WeakMap (avoids expensive Object.defineProperty)
-	rootFunctions.set(fn, getRoot(root))
+	// Store root mapping as symbol property on the function
+	fn[rootFunctionSymbol] = getRoot(root)
 	return fn
 }
 
@@ -70,7 +69,7 @@ export function markWithRoot<T extends Function>(fn: T, root: any): T {
  */
 export function getRoot<T extends Function | undefined>(fn: T): T {
 	while (fn) {
-		const r = rootFunctions.get(fn)
+		const r = fn[rootFunctionSymbol]
 		if (!r) break
 		fn = r as T
 	}

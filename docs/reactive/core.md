@@ -19,6 +19,7 @@
 - [Class Reactivity](./advanced.md#class-reactivity)
 - [Non-Reactive System](./advanced.md#non-reactive-system)
 - [Array Mapping](./advanced.md#array-mapping)
+- [Morph](./advanced.md#morph)
 - [Projection](./advanced.md#projection)
 - [Record Organization](./advanced.md#record-organization)
 - [Memoization](./advanced.md#memoization)

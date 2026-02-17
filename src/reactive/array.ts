@@ -9,17 +9,6 @@ function* index(i: number, { length = true } = {}): IterableIterator<number | 'l
 	if (length) yield 'length'
 	yield i
 }
-
-function* range(
-	a: number,
-	b: number,
-	{ length = false } = {}
-): IterableIterator<number | 'length'> {
-	const start = Math.min(a, b)
-	const end = Math.max(a, b)
-	if (length) yield 'length'
-	for (let i = start; i <= end; i++) yield i
-}
 export abstract class Indexer extends Array {
 	get(i: number): any {
 		dependant(this, i)
@@ -63,7 +52,10 @@ export abstract class ReactiveArray extends Array {
 		return this
 	}
 }
-
+/**
+ * This is a wrapper class for Array that adds reactive behavior.
+ * It extends Array and overrides methods to add reactive behavior, while making sure that the internal representation is not reactive.
+ */
 export abstract class ReactiveArrayWrapper extends Array {
 	at(index: number): any {
 		return reactive(super.at(index))

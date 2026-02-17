@@ -1,3 +1,17 @@
+# 1.0.11
+
+## Functionality
+
+- `morph(source, fn)`: lazy, identity-stable reactive array mapping. Tracks source mutations via `arrayDiff`, computes elements on access with per-item effects for dependency tracking.
+- `morph.pure`: flavored variant that skips per-item effects — for pure callbacks with no external reactive dependencies. Returns a plain array for non-reactive sources.
+- `memoize.lenient`: flavored variant that gracefully handles non-WeakKey arguments (primitives, `null`, `undefined`) by falling back to recomputation instead of throwing.
+
+## Refactoring
+
+- `memoize` is now a `flavored` function (decorator support preserved).
+- `morph` is a `flavored` function exported from `mutts/reactive`.
+- `project` marked as deprecated in favour of `morph`.
+
 # 1.0.10
 
 ## Functionality

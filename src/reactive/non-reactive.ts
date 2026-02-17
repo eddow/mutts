@@ -5,7 +5,6 @@ import {
 	nonReactive,
 	nonReactiveClass,
 	nonReactiveObjects,
-	registerNativeReactivity,
 } from './non-reactive-state'
 import { reactive } from './proxy'
 
@@ -39,5 +38,4 @@ export {
 	nonReactive,
 	nonReactiveClass,
 	nonReactiveObjects,
-	registerNativeReactivity,
 }

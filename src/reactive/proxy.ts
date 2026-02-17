@@ -16,7 +16,6 @@ import { dependant } from './tracking'
 import {
 	getExistingProxy,
 	keysOf,
-	nativeReactive,
 	options,
 	proxyToObject,
 	ReactiveError,
@@ -27,8 +26,16 @@ import {
 } from './types'
 export const metaProtos = new WeakMap()
 export const wrapProtos = new WeakMap()
-
+const arrayLengths = new WeakMap<unknown[], number>()
 const hasReentry = new Set<PropertyKey>()
+export type SubProxy = {
+	get?(obj: any, prop: PropertyKey, receiver: any): any
+	has?(obj: any, prop: PropertyKey): boolean
+}
+const subsRegister = new WeakMap<any, SubProxy>()
+
+// TODO: When an effect sets something (touch), should it remove its dependencies to the exact same thing
+
 const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
@@ -41,8 +48,7 @@ const reactiveHandlers = {
 					// For own properties (e.g., array length): only override if writable/configurable
 					const ownDesc = Object.getOwnPropertyDescriptor(obj, prop)!
 					if (ownDesc.configurable || ownDesc.writable || ownDesc.get) return desc.get.call(obj)
-				} else if (!Object.hasOwn(obj, prop))
-					return (...args: any[]) => desc.value.apply(obj, args)
+				} else if (!Object.hasOwn(obj, prop)) return (...args: any[]) => desc.value.apply(obj, args)
 			}
 			const wrapProto = wrapProtos.get(obj.constructor)
 			if (wrapProto && Object.hasOwn(wrapProto, prop)) return wrapProto[prop]
@@ -96,9 +102,7 @@ const reactiveHandlers = {
 		}
 		// For arrays, use FoolProof.get (Indexer path) for numeric index reactivity.
 		// For all other objects, inline Reflect.get directly (skips 3 function calls).
-		const value = Array.isArray(obj)
-			? FoolProof.get(obj, prop, receiver)
-			: Reflect.get(obj, prop, receiver)
+		const value = (subsRegister.get(obj)?.get || FoolProof.get)(obj, prop, receiver)
 		if (typeof value === 'object' && value !== null) {
 			const reactiveValue = reactiveObject(value)
 
@@ -132,10 +136,14 @@ const reactiveHandlers = {
 		// Read old value, using withEffect(undefined, ...) for getter-only accessors to avoid
 		// breaking memoization dependency tracking during SET operations
 		let oldVal = absent
+		// TODO: Pffft... Find a way to "generalize" this case?
+		const isArrayLength = prop === 'length' && Array.isArray(obj)
 		if (Reflect.has(unwrappedReceiver, prop)) {
 			// We *need* to use `receiver` and not `obj` here, otherwise we break
 			// the dependency tracking for memoized getters
-			oldVal = untracked(() => Reflect.get(obj, prop, receiver))
+			oldVal = isArrayLength ? 
+				arrayLengths.get(obj) === newValue ? newValue : absent: 
+				untracked(() => Reflect.get(obj, prop, receiver))
 		}
 		if (objectsWithDeepWatchers.has(obj)) {
 			if (typeof oldVal === 'object' && oldVal !== null) {
@@ -146,11 +154,11 @@ const reactiveHandlers = {
 				addBackReference(reactiveValue, obj, prop)
 			}
 		}
-
 		if (oldVal !== newValue) {
 			// For getter-only accessors, Reflect.set() may fail, but we still return true
 			// to avoid throwing errors. Only proceed with change notifications if set succeeded.
 			if (FoolProof.set(obj, prop, newValue, receiver)) {
+				if(isArrayLength) arrayLengths.set(obj, newValue)
 				notifyPropertyChange(obj, prop, oldVal, newValue, oldVal !== absent)
 			}
 		}
@@ -167,7 +175,7 @@ const reactiveHandlers = {
 			)
 		hasReentry.add(obj)
 		dependant(obj, prop)
-		const rv = Reflect.has(obj, prop)
+		const rv = (subsRegister.get(obj)?.has || Reflect.has)(obj, prop)
 		hasReentry.delete(obj)
 		return rv
 	},
@@ -216,7 +224,7 @@ export const ReactiveBase = mixin((base) => {
 	}
 	return ReactiveMixin
 })
-function reactiveObject<T>(anyTarget: T): T {
+function reactiveObject<T>(anyTarget: T, subProxy?: SubProxy): T {
 	if (!anyTarget || typeof anyTarget !== 'object') return anyTarget
 	const target = anyTarget as any
 	// If target is already a proxy, return it
@@ -228,20 +236,9 @@ function reactiveObject<T>(anyTarget: T): T {
 	const existing = getExistingProxy(target)
 	if (existing !== undefined) return existing as T
 
-	// Find nativeReactive via trap-free walk (avoids has-trap cascade on proxy chains)
-	let nativeClass: (new (t: any) => any) | undefined
-	let walk: any = target
-	while (walk) {
-		if (Object.hasOwn(walk, nativeReactive)) {
-			nativeClass = walk[nativeReactive]
-			break
-		}
-		walk = Object.getPrototypeOf(walk)
-	}
-	const proxied = nativeClass && !(target instanceof nativeClass) ? new nativeClass(target) : target
-	if (proxied !== target) trackProxyObject(proxied, target)
-	const proxy = new Proxy(proxied, reactiveHandlers)
-
+	if(subProxy) subsRegister.set(target, subProxy)
+	const proxy = new Proxy(target, reactiveHandlers)
+	if(Array.isArray(target)) arrayLengths.set(target, target.length)
 	// Store the relationships
 	storeProxyRelationship(target, proxy)
 	return proxy as T

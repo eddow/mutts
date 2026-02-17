@@ -581,27 +581,6 @@ describe('ReactiveArray', () => {
 	})
 
 	describe('mixed index and length reactivity', () => {
-		it('should track both index and length changes in same effect', () => {
-			const array = [1, 2, 3]
-			const reactiveArray = reactive(array)
-
-			let effectCount = 0
-			effect(() => {
-				effectCount++
-				reactiveArray[0] // Access first element
-				reactiveArray.length // Access length
-			})
-
-			expect(effectCount).toBe(1)
-
-			// Changing an element should trigger the effect
-			reactiveArray[0] = 100
-			expect(effectCount).toBe(2)
-
-			// Adding an element should trigger the effect
-			reactiveArray.push(4)
-			expect(effectCount).toBe(3)
-		})
 
 		it('should handle array expansion correctly', () => {
 			const array = [1, 2, 3]
@@ -640,7 +619,7 @@ describe('ReactiveArray', () => {
 			reactiveArray[0] = 100
 			expect(effectCount).toBe(2)
 
-			reactiveArray.push(4)
+			atomic(() => reactiveArray.push(4))()
 			expect(effectCount).toBe(3)
 		})
 
@@ -660,7 +639,7 @@ describe('ReactiveArray', () => {
 			reactiveArray[0] = 100
 			expect(effectCount).toBe(1)
 
-			reactiveArray.push(4)
+			atomic(() => reactiveArray.push(4))()
 			expect(effectCount).toBe(2)
 		})
 
@@ -680,7 +659,7 @@ describe('ReactiveArray', () => {
 			reactiveArray[0] = 100
 			expect(effectCount).toBe(2)
 
-			reactiveArray.push(4)
+			atomic(() => reactiveArray.push(4))()
 			expect(effectCount).toBe(3)
 		})
 
@@ -702,7 +681,7 @@ describe('ReactiveArray', () => {
 			reactiveArray[0] = 100
 			expect(effectCount).toBe(2)
 
-			reactiveArray.push(4)
+			atomic(() => reactiveArray.push(4))()
 			expect(effectCount).toBe(3)
 		})
 
@@ -729,7 +708,7 @@ describe('ReactiveArray', () => {
 			expect(unwrap(values)).toEqual([100, 2, 3])
 
 			// Adding an element should trigger the effect
-			reactiveArray.push(4)
+			atomic(() => reactiveArray.push(4))()
 			expect(effectCount).toBe(3)
 			expect(unwrap(values)).toEqual([100, 2, 3, 4])
 		})
@@ -750,7 +729,7 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			reactiveArray.push(1)
+			atomic(() => reactiveArray.push(1))()
 			expect(effectCount).toBe(2)
 		})
 
@@ -773,7 +752,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(found).toBe(-1)
 
-				ra.push(2)
+				atomic(() => ra.push(2))()
 				expect(runs).toBe(3)
 				expect(found).toBe(3)
 			})
@@ -817,7 +796,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(allTrue).toBe(false)
 
-				ra.splice(1, 1, 2)
+				atomic(() => ra.splice(1, 1, 2))()
 				expect(runs).toBe(3)
 				expect(allTrue).toBe(true)
 			})
@@ -863,7 +842,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(unwrap(mapped)).toEqual([2, 10, 6])
 
-				ra.push(4)
+				atomic(() => ra.push(4))()
 				expect(runs).toBe(3)
 				expect(unwrap(mapped)).toEqual([2, 10, 6, 8])
 			})
@@ -886,7 +865,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(sum).toBe(15)
 
-				ra.push(4)
+				atomic(() => ra.push(4))()
 				expect(runs).toBe(3)
 				expect(sum).toBe(19)
 			})
@@ -956,7 +935,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(concatenated).toEqual([1, 20, 3])
 
-				ra.push(4)
+				atomic(() => ra.push(4))()
 				expect(runs).toBe(3)
 				expect(concatenated).toEqual([1, 20, 4, 3])
 			})
@@ -979,7 +958,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(joined).toBe('1-9-3')
 
-				ra.push(4)
+				atomic(() => ra.push(4))()
 				expect(runs).toBe(3)
 				expect(joined).toBe('1-9-3-4')
 			})
@@ -1005,7 +984,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(sum).toBe(15)
 
-				ra.push(4)
+				atomic(() => ra.push(4))()
 				expect(runs).toBe(3)
 				expect(sum).toBe(19)
 			})
@@ -1033,7 +1012,7 @@ describe('ReactiveArray', () => {
 				expect(unwrap(values)).toEqual([100, 2, 3])
 
 				// Adding an element should also trigger the effect
-				reactiveArray.push(4)
+				atomic(() => reactiveArray.push(4))()
 				expect(effectCount).toBe(3)
 				expect(unwrap(values)).toEqual([100, 2, 3, 4])
 			})

@@ -11,6 +11,9 @@ import {
 	projectionInfo,
 	type ScopedCallback,
 } from './types'
+
+//TODO: deprecated: remove slowly
+
 /**
  * Maps projection effects (item effects) to their projection context
  */

@@ -1,4 +1,3 @@
-import { isObject } from 'util'
 import { addState, collectEffects, touched1, touchedOpaque } from './change'
 import { debugHooks } from './debug-hooks'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
@@ -254,7 +253,7 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 
 	for (const notification of notifications) {
 		const { target, evolution, prop } = notification
-		if (!isObject(target) && !Array.isArray(target)) continue
+		if (typeof target !== 'object' && !Array.isArray(target)) continue
 		const obj = unwrap(target)
 		addState(obj, evolution)
 		const objectWatchers = watchers.get(obj)

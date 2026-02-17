@@ -824,6 +824,8 @@ function executeNext(effectuatedRoots: Function[]): any {
 
 // Track which sub-effects have been executed to prevent infinite loops
 // These are all the effects triggered under `activeEffect` and all their sub-effects
+// TODO: We shouldn't finish all the batch queue - each batch should make its sub-queue and finish it, while "cleaning" parent batches queue if it executes one of them
+//  Point is, the point of the batch is to delay as much as possible to make sure it occurs as few as possible
 export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'immediate') {
 	if (broken) {
 		throw new ReactiveError(
@@ -1078,6 +1080,11 @@ export const effect = named(
 				if (effectStopped) return
 
 				let reactionCleanup: EffectCloser | undefined
+				function cleanupReaction(reason?: CleanupReason) {
+					const toCleanup = reactionCleanup
+					reactionCleanup = undefined
+					toCleanup?.(reason)
+				}
 				// Set reaction reason for the upcoming run
 				access.reaction = node.nextReason || access.reaction
 				node.nextReason = undefined
@@ -1153,8 +1160,7 @@ export const effect = named(
 				// Create cleanup function for next run
 				node.cleanup = (reason?: CleanupReason) => {
 					node.cleanup = undefined
-					reactionCleanup?.(reason)
-					reactionCleanup = undefined
+					cleanupReaction(reason)
 					delete node.catchers
 					// Remove this effect from all reactive objects it's watching
 					const effectObjects = effectToReactiveObjects.get(runEffect)
@@ -1194,8 +1200,7 @@ export const effect = named(
 					const reason: CleanupReason = { type: 'error', error }
 					if (catches)
 						while (caught < catches.length) {
-							reactionCleanup?.(reason)
-							reactionCleanup = undefined
+							cleanupReaction(reason)
 							try {
 								reactionCleanup = catches[caught](error) as EffectCloser | undefined
 								return
