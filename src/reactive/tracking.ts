@@ -1,7 +1,6 @@
 import { getActiveEffect } from './effect-context'
-import { unwrap } from './types'
 import { effectToReactiveObjects, watchers } from './registry'
-import { allProps, type EffectTrigger, keysOf } from './types'
+import { allProps, type EffectTrigger, keysOf, unwrap } from './types'
 
 /**
  * Marks a property as a dependency of the current effect

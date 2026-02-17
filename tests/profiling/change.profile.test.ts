@@ -210,6 +210,7 @@ describe('Change Detection Performance', () => {
 
 			console.log('Property change:', propertyChange)
 			console.log('Object replacement:', objectReplace)
+            // Profiling tests are sensitive to environment; avoiding hard assertions for now
 		})
 	})
 })

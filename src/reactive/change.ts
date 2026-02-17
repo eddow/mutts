@@ -2,7 +2,6 @@ import { debugHooks } from './debug-hooks'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { getActiveEffect, isRunning } from './effect-context'
 import { batch, hasBatched, recordActivation } from './effects'
-import { unwrap } from './types'
 import { getEffectNode, watchers } from './registry'
 import {
 	allProps,
@@ -12,6 +11,7 @@ import {
 	optionCall,
 	options,
 	type State,
+	unwrap,
 } from './types'
 
 const states = new WeakMap<object, State>()
@@ -50,10 +50,8 @@ export function collectEffects(
 	for (const keys of keyChains)
 		for (const key of keys) {
 			const deps = objectWatchers.get(key)
-			// console.log(`[DEBUG] collectEffects: checking ${String(key)}. Found deps: ${deps ? deps.size : 'none'}`)
-			if (deps)
+			if (deps) {
 				for (const effect of deps) {
-					// console.log(`[DEBUG] collectEffects: found dependency ${effect.name || 'anonymous'} for ${String(key)}`)
 					const runningChain = isRunning(effect)
 					if (runningChain) {
 						optionCall('skipRunningEffect', effect)
@@ -65,6 +63,7 @@ export function collectEffects(
 					}
 					debugHooks.recordTriggerLink(sourceEffect, effect, obj, key, evolution)
 				}
+			}
 		}
 }
 

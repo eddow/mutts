@@ -10,10 +10,6 @@ import { reactive, unwrap } from './proxy'
 import { markWithRoot } from './registry'
 import { type EffectCleanup, type EffectTrigger, options } from './types'
 
-function isObject(value: any): value is object {
-	return typeof value === 'object' && value !== null
-}
-
 export {
 	addBackReference,
 	bubbleUpChange,
@@ -72,7 +68,8 @@ export function deepWatch<T extends object>(
 		const visited = new WeakSet()
 		function traverseAndTrack(obj: any, depth = 0) {
 			// Prevent infinite recursion and excessive depth
-			if (!obj || visited.has(obj) || !isObject(obj) || depth > options.maxDeepWatchDepth) return
+			if (!obj || visited.has(obj) || typeof obj !== 'object' || depth > options.maxDeepWatchDepth)
+				return
 			// Do not traverse into unreactive objects
 			if (isNonReactive(obj)) return
 			visited.add(obj)

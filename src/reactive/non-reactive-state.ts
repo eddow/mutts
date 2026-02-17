@@ -37,7 +37,6 @@ export function isNonReactive(obj: any): boolean {
 	if (obj === null || typeof obj !== 'object') return true
 	if (nonReactiveObjects.has(obj)) return true
 	// Walk the prototype chain on the raw object to check for non-reactive classes
-	// This avoids triggering proxy traps (unlike obj[nonReactiveMark])
 	let proto = Object.getPrototypeOf(obj)
 	while (proto) {
 		if (nonReactiveClasses.has(proto)) return true
@@ -58,7 +57,7 @@ export function registerNativeReactivity(
 nonReactiveClass(Date, RegExp, Error, Promise, Function)
 if (typeof window !== 'undefined') {
 	markNonReactive(window, document)
-	nonReactiveClass(Node, Element, HTMLElement, EventTarget)
+	nonReactiveClass(Node, Element, HTMLElement, EventTarget, HTMLCollection)
 }
 
 export { markNonReactive as nonReactive }

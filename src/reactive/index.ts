@@ -15,7 +15,7 @@ export {
 	root,
 	untracked,
 } from './effects'
-export { type Memoizable, memoize } from './memoize'
+export { type Memoizable, type MemoizableArgument, memoize } from './memoize'
 export { immutables, isNonReactive, registerNativeReactivity } from './non-reactive'
 export { getActiveProjection, project } from './project'
 export { isReactive, ReactiveBase, reactive, unwrap } from './proxy'
@@ -39,7 +39,7 @@ export {
 } from './types'
 export { type Resource, resource, unreactive, watch, when } from './watch'
 
-import { ReactiveArray } from './array'
+import { ReactiveArray, ReactiveArrayWrapper } from './array'
 import {
 	deepWatchers,
 	effectToDeepWatchedObjects,
@@ -48,7 +48,7 @@ import {
 } from './deep-watch'
 import { ReactiveMap, ReactiveWeakMap } from './map'
 import { nonReactiveObjects } from './non-reactive-state'
-import { metaProtos, objectToProxy, proxyToObject } from './proxy'
+import { metaProtos, objectToProxy, proxyToObject, wrapProtos } from './proxy'
 import { effectToReactiveObjects, watchers } from './registry'
 import { ReactiveSet, ReactiveWeakSet } from './set'
 
@@ -59,6 +59,7 @@ metaProtos.set(Set, ReactiveSet.prototype)
 metaProtos.set(WeakSet, ReactiveWeakSet.prototype)
 metaProtos.set(Map, ReactiveMap.prototype)
 metaProtos.set(WeakMap, ReactiveWeakMap.prototype)
+wrapProtos.set(Array, ReactiveArrayWrapper.prototype)
 console.timeEnd('mutts-reactive-init')
 
 /**

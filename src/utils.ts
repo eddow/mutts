@@ -72,7 +72,24 @@ export function isConstructor(fn: Function): boolean {
 		(nativeConstructors.has(fn) || fn.toString?.().startsWith('class '))
 	)
 }
-
+export function isObject(value: any): value is object {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		!Array.isArray(value) &&
+		!(
+			value instanceof Date ||
+			value instanceof RegExp ||
+			value instanceof Error ||
+			value instanceof Set ||
+			value instanceof Map ||
+			value instanceof WeakSet ||
+			value instanceof WeakMap ||
+			value instanceof Promise ||
+			value instanceof Function
+		)
+	)
+}
 /**
  * Renames a function with a new name
  * @param fct - The function to rename

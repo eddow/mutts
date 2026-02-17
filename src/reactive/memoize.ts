@@ -2,23 +2,26 @@ import { decorator } from '../decorator'
 import { deepCompare, renamed } from '../utils'
 import { touched1 } from './change'
 import { effect, root, untracked } from './effects'
-import { proxyToObject } from './types'
 import { getRoot, markWithRoot, rootFunctions } from './registry'
 import { dependant } from './tracking'
-import { type CleanupReason, optionCall, options } from './types'
+import { type CleanupReason, optionCall, options, proxyToObject } from './types'
 
-export type Memoizable = object | any[] | ((...args: any[]) => any)
+export type MemoizableArgument = object | any[] | ((...args: any[]) => any)
+export type Memoizable = ((...args: MemoizableArgument[]) => unknown) | Record<string, any>
 
 type MemoCacheTree<Result> = {
 	result?: Result
 	cleanup?: (reason?: CleanupReason) => void
-	branches?: WeakMap<Memoizable, MemoCacheTree<Result>>
+	branches?: WeakMap<MemoizableArgument, MemoCacheTree<Result>>
 }
 
-const memoizedRegistry = new WeakMap<any, Function>()
-const wrapperRegistry = new WeakMap<Function, (that: object)=> unknown>()
+const memoizedRegistry = new WeakMap<any, Memoizable>()
+const wrapperRegistry = new WeakMap<Function, (that: object) => unknown>()
 
-function getBranch<Result>(tree: MemoCacheTree<Result>, key: Memoizable): MemoCacheTree<Result> {
+function getBranch<Result>(
+	tree: MemoCacheTree<Result>,
+	key: MemoizableArgument
+): MemoCacheTree<Result> {
 	tree.branches ??= new WeakMap()
 	let branch = tree.branches.get(key)
 	if (!branch) {
@@ -28,7 +31,7 @@ function getBranch<Result>(tree: MemoCacheTree<Result>, key: Memoizable): MemoCa
 	return branch
 }
 
-function memoizeFunction<Result, Args extends Memoizable[]>(
+function memoizeFunction<Result, Args extends MemoizableArgument[]>(
 	fn: (...args: Args) => Result
 ): (...args: Args) => Result {
 	const fnRoot = getRoot(fn)
@@ -181,16 +184,11 @@ export const memoize = decorator({
 			return memoized(this, ...args)
 		}
 	},
-	default: (target: any) => {
-		if (
-			typeof target === 'object' &&
-			target !== null &&
-			!(target instanceof Date) &&
-			!(target instanceof RegExp)
-		) {
+	default: <T extends Memoizable>(target: T): T => {
+		if (typeof target === 'object') {
 			// Check identity first
 			const existing = memoizedRegistry.get(target)
-			if (existing) return existing
+			if (existing) return existing as T
 
 			const proxy = new Proxy(target, {
 				get(source, prop, receiver) {
@@ -235,7 +233,7 @@ export const memoize = decorator({
 					return Reflect.get(source, prop, receiver)
 				},
 				// Forward set to the target (source) to ensure it acts as the receiver for reactivity notifications
-				set(source, prop, value, receiver) {
+				set(source, prop, value, _receiver) {
 					// By strictly passing `source` as receiver, we ensure that if `source` is a reactive proxy,
 					// it recognizes itself and triggers change notifications.
 					return Reflect.set(source, prop, value, source)
@@ -247,6 +245,6 @@ export const memoize = decorator({
 			memoizedRegistry.set(target, proxy)
 			return proxy
 		}
-		return memoizeFunction(target as any)
+		return memoizeFunction(target) as T
 	},
 })

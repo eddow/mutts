@@ -5,7 +5,6 @@ import { IterableWeakSet } from '../iterableWeak'
 import { named } from '../utils'
 import { debugHooks } from './debug-hooks'
 import { effectAggregator, effectHistory, getActiveEffect } from './effect-context'
-import { unwrap } from './types'
 import {
 	effectToReactiveObjects,
 	getEffectNode,
@@ -30,6 +29,7 @@ import {
 	// type AsyncExecutionMode,
 	type ScopedCallback,
 	stopped,
+	unwrap,
 } from './types'
 
 /**

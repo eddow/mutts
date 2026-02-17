@@ -1,9 +1,10 @@
+import { arrayDiff } from '../diff'
 import { FoolProof } from '../utils'
 import { touched1 } from './change'
 import { cleanedBy } from './effect-context'
 import { effect, untracked } from './effects'
 import { memoize } from './memoize'
-import { isReactive, reactive } from './proxy'
+import { reactive } from './proxy'
 import type {
 	CleanupReason,
 	cleanup,
@@ -176,57 +177,61 @@ export function scan<Input extends object, Output>(
 		const occurrenceCount = new Map<Input, number>()
 		let prev: Intermediate | undefined
 
-		for (let i = 0; i < length; i++) {
-			const val = FoolProof.get(observedSource, i, observedSource) as Input
+		for (let i = 0; i < length; i++)
+			if (i in observedSource) {
+				const val = observedSource[i]
 
-			if (
-				!(val && (typeof val === 'object' || typeof val === 'function' || typeof val === 'symbol'))
-			) {
-				throw new Error('scan: items must be objects (WeakKey) for intermediate caching')
-			}
-
-			const count = occurrenceCount.get(val) ?? 0
-			occurrenceCount.set(val, count + 1)
-
-			let list = intermediaries.get(val)
-			if (!list) {
-				list = []
-				intermediaries.set(val, list)
-			}
-
-			let intermediate = list[count]
-			if (!intermediate) {
-				intermediate = reactive(new Intermediate(val, prev))
-				list[count] = intermediate
-			} else {
-				// Update the link.
-				if (untracked(() => intermediate.prev) !== prev) {
-					intermediate.prev = prev
+				if (
+					!(
+						val &&
+						(typeof val === 'object' || typeof val === 'function' || typeof val === 'symbol')
+					)
+				) {
+					throw new Error('scan: items must be objects (WeakKey) for intermediate caching')
 				}
-			}
 
-			// Update the reactive mapping for this index
-			if (indexToIntermediate[i] !== intermediate) {
-				indexToIntermediate[i] = intermediate
-			}
+				const count = occurrenceCount.get(val) ?? 0
+				occurrenceCount.set(val, count + 1)
 
-			// If we don't have an effect for this index yet, create one
-			if (!indexEffects.has(i)) {
-				ascend(() => {
-					const index = i
-					const stop = effect(function scanIndexSyncEffect() {
-						const inter = indexToIntermediate[index]
-						if (inter) {
-							const accValue = inter.acc
-							result[index] = accValue
-						}
+				let list = intermediaries.get(val)
+				if (!list) {
+					list = []
+					intermediaries.set(val, list)
+				}
+
+				let intermediate = list[count]
+				if (!intermediate) {
+					intermediate = reactive(new Intermediate(val, prev))
+					list[count] = intermediate
+				} else {
+					// Update the link.
+					if (untracked(() => intermediate.prev) !== prev) {
+						intermediate.prev = prev
+					}
+				}
+
+				// Update the reactive mapping for this index
+				if (indexToIntermediate[i] !== intermediate) {
+					indexToIntermediate[i] = intermediate
+				}
+
+				// If we don't have an effect for this index yet, create one
+				if (!indexEffects.has(i)) {
+					ascend(() => {
+						const index = i
+						const stop = effect(function scanIndexSyncEffect() {
+							const inter = indexToIntermediate[index]
+							if (inter) {
+								const accValue = inter.acc
+								result[index] = accValue
+							}
+						})
+						indexEffects.set(index, stop)
 					})
-					indexEffects.set(index, stop)
-				})
-			}
+				}
 
-			prev = intermediate
-		}
+				prev = intermediate
+			}
 
 		// Cleanup trailing indices
 		for (const index of Array.from(indexEffects.keys())) {
@@ -308,9 +313,9 @@ export function lift<Output extends any[] | object>(
 	let result!: Output
 	let rawResult!: Output
 	const liftCleanup = effect((access) => {
-		const source = cb(access)
+		const source = cb(access) /*
 		if (isReactive(source))
-			throw new Error('lift callback must return a non-reactive value to be lifted')
+			throw new Error('lift callback must return a non-reactive value to be lifted')*/
 		if (!source || typeof source !== 'object')
 			throw new Error('lift callback must return an array or object')
 		const sourceProto = Object.getPrototypeOf(source)
@@ -323,8 +328,11 @@ export function lift<Output extends any[] | object>(
 
 		if (Array.isArray(source)) {
 			const res = result as unknown[]
-			if (res.length !== source.length) res.length = source.length
-			for (let i = 0; i < source.length; i++) if (res[i] !== source[i]) res[i] = source[i]
+			const patches = arrayDiff(res, source)
+			for (let i = patches.length - 1; i >= 0; i--) {
+				const { indexA, sliceA, sliceB } = patches[i]
+				res.splice(indexA, sliceA.length, ...sliceB)
+			}
 		} else {
 			for (const key of Object.keys(source)) {
 				const had = key in rawResult

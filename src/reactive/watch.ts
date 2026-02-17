@@ -9,10 +9,9 @@ import {
 	unreactiveProps,
 } from './non-reactive-state'
 import { reactive } from './proxy'
-import { unwrap } from './types'
 import { markWithRoot } from './registry'
 import { dependant } from './tracking'
-import { type EffectAccess, type EffectCleanup, stopped } from './types'
+import { type EffectAccess, type EffectCleanup, stopped, unwrap } from './types'
 
 //#region watch
 

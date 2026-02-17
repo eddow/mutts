@@ -1,4 +1,4 @@
-import { effect, reactive, unwrap } from 'mutts'
+import { atomic, effect, isReactive, reactive, unwrap } from 'mutts'
 
 describe('ReactiveArray', () => {
 	describe('numeric index reactivity', () => {
@@ -109,7 +109,7 @@ describe('ReactiveArray', () => {
 			expect(effectCount).toBe(1)
 
 			// Push should trigger the effect
-			reactiveArray.push(4, 5)
+			atomic(() => reactiveArray.push(4, 5))()
 			expect(effectCount).toBe(2)
 			expect(reactiveArray.length).toBe(5)
 		})
@@ -203,7 +203,8 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			const shifted = reactiveArray.shift()
+			let shifted: number
+			atomic(() => shifted = reactiveArray.shift())()
 			expect(effectCount).toBe(2)
 			expect(shifted).toBe(1)
 			expect(reactiveArray[0]).toBe(2)
@@ -224,7 +225,7 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			reactiveArray.unshift(0)
+			atomic(() => reactiveArray.unshift(0))()
 			expect(effectCount).toBe(2)
 			expect(reactiveArray[0]).toBe(0)
 			expect(reactiveArray[1]).toBe(1)
@@ -247,9 +248,10 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			const removed = reactiveArray.splice(1, 2)
+			let removed: number[]
+			atomic(() => removed = reactiveArray.splice(1, 2))()
 			expect(effectCount).toBe(2)
-			expect(unwrap(removed)).toEqual([2, 3])
+			expect(removed).toEqual([2, 3])
 			expect(reactiveArray[1]).toBe(4)
 			expect(reactiveArray[2]).toBe(5)
 			expect(reactiveArray.length).toBe(3)
@@ -268,8 +270,10 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			reactiveArray.splice(1, 0, 10, 20)
+			let removed: number[]
+			atomic(() => removed = reactiveArray.splice(1, 0, 10, 20))()
 			expect(effectCount).toBe(2)
+			expect(removed).toEqual([])
 			expect(reactiveArray[1]).toBe(10)
 			expect(reactiveArray[2]).toBe(20)
 			expect(reactiveArray[3]).toBe(2)
@@ -289,9 +293,10 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			const removed = reactiveArray.splice(1, 2, 10, 20)
+			let removed: number[]
+			atomic(() => removed = reactiveArray.splice(1, 2, 10, 20))()
 			expect(effectCount).toBe(2)
-			expect(unwrap(removed)).toEqual([2, 3])
+			expect(removed).toEqual([2, 3])
 			expect(reactiveArray[1]).toBe(10)
 			expect(reactiveArray[2]).toBe(20)
 			expect(reactiveArray.length).toBe(4)
@@ -348,8 +353,10 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			reactiveArray.reverse()
+			let removed: number[]
+			atomic(() => removed = reactiveArray.reverse())()
 			expect(effectCount).toBe(2)
+			expect(removed).toEqual([4, 3, 2, 1])
 			expect(reactiveArray[0]).toBe(4)
 			expect(reactiveArray[3]).toBe(1)
 		})
@@ -369,8 +376,10 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			reactiveArray.sort()
+			let removed: number[]
+			atomic(() => removed = reactiveArray.sort())()
 			expect(effectCount).toBe(2)
+			expect(removed).toEqual([1, 2, 3, 4])
 			expect(reactiveArray[0]).toBe(1)
 			expect(reactiveArray[2]).toBe(3)
 		})
@@ -387,8 +396,10 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			reactiveArray.sort((a, b) => b - a) // Descending order
+			let removed: number[]
+			atomic(() => removed = reactiveArray.sort((a, b) => b - a))() // Descending order
 			expect(effectCount).toBe(2)
+			expect(removed).toEqual([4, 3, 2, 1])
 			expect(reactiveArray[0]).toBe(4)
 		})
 	})
@@ -407,7 +418,7 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			reactiveArray.fill(0, 1, 4)
+			atomic(() => reactiveArray.fill(0, 1, 4))()
 			expect(effectCount).toBe(2)
 			expect(reactiveArray[1]).toBe(0)
 			expect(reactiveArray[3]).toBe(0)
@@ -428,7 +439,7 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			reactiveArray.fill(0)
+			atomic(() => reactiveArray.fill(0))()
 			expect(effectCount).toBe(2)
 			expect(reactiveArray[0]).toBe(0)
 			expect(reactiveArray[4]).toBe(0)
@@ -447,7 +458,7 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			reactiveArray.fill(0, 2)
+			atomic(() => reactiveArray.fill(0, 2))()
 			expect(effectCount).toBe(2)
 			expect(reactiveArray[2]).toBe(0)
 			expect(reactiveArray[4]).toBe(0)
@@ -469,7 +480,7 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			reactiveArray.copyWithin(0, 3, 5)
+			atomic(() => reactiveArray.copyWithin(0, 3, 5))()
 			expect(effectCount).toBe(2)
 			expect(reactiveArray[0]).toBe(4)
 			expect(reactiveArray[1]).toBe(5)
@@ -487,7 +498,7 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			reactiveArray.copyWithin(0, 2)
+			atomic(() => reactiveArray.copyWithin(0, 2))()
 			expect(effectCount).toBe(2)
 			expect(reactiveArray[0]).toBe(3)
 			expect(reactiveArray[1]).toBe(4)
@@ -508,9 +519,12 @@ describe('ReactiveArray', () => {
 			})
 
 			expect(effectCount).toBe(1)
-			reactiveArray.length = 0
+
+			let removed: number[]
+			atomic(() => removed = reactiveArray.splice(1, 2))()
 			expect(effectCount).toBe(2)
-			expect(reactiveArray.length).toBe(0)
+			expect(removed).toEqual([2, 3])
+			expect(reactiveArray.length).toBe(1)
 		})
 
 		it('should notify index-tracking effects when truncated', () => {
@@ -526,7 +540,8 @@ describe('ReactiveArray', () => {
 			expect(effectCount).toBe(1)
 			expect(val).toBe(2)
 
-			reactiveArray.length = 0
+			let removed: number[]
+			atomic(() => removed = reactiveArray.splice(1, 2))()
 			expect(effectCount).toBe(2)
 			expect(val).toBeUndefined()
 		})
@@ -616,7 +631,7 @@ describe('ReactiveArray', () => {
 			let effectCount = 0
 			effect(() => {
 				effectCount++
-				reactiveArray.entries()
+				void [...reactiveArray.entries()]
 			})
 
 			expect(effectCount).toBe(1)
@@ -636,7 +651,7 @@ describe('ReactiveArray', () => {
 			let effectCount = 0
 			effect(() => {
 				effectCount++
-				reactiveArray.keys()
+				void [...reactiveArray.keys()]
 			})
 
 			expect(effectCount).toBe(1)
@@ -656,7 +671,7 @@ describe('ReactiveArray', () => {
 			let effectCount = 0
 			effect(() => {
 				effectCount++
-				reactiveArray.values()
+				void [...reactiveArray.values()]
 			})
 
 			expect(effectCount).toBe(1)
@@ -825,7 +840,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(unwrap(filtered)).toEqual([4])
 
-				ra.unshift(6)
+				atomic(() => ra.unshift(6))()
 				expect(runs).toBe(3)
 				expect(unwrap(filtered)).toEqual([6, 4])
 			})
@@ -894,7 +909,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(concat).toBe('329')
 
-				ra.unshift(0)
+				atomic(() => ra.unshift(0))()
 				expect(runs).toBe(3)
 				expect(concat).toBe('3290')
 			})
@@ -917,7 +932,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(unwrap(sliced)).toEqual([2, 9])
 
-				ra.unshift(0)
+				atomic(() => ra.unshift(0))()
 				expect(runs).toBe(3)
 				expect(unwrap(sliced)).toEqual([1, 2])
 			})
@@ -1023,15 +1038,99 @@ describe('ReactiveArray', () => {
 				expect(unwrap(values)).toEqual([100, 2, 3, 4])
 			})
 		})
-		it('should work with reactive() function', () => {
-			const array = [1, 2, 3]
-			const reactiveArray = reactive(array)
+	})
 
-			expect(reactiveArray).toBeInstanceOf(Array)
-			expect(reactiveArray[0]).toBe(1)
-			expect(reactiveArray[1]).toBe(2)
-			expect(reactiveArray[2]).toBe(3)
-			expect(reactiveArray.length).toBe(3)
+	describe('re-reactivity', () => {
+		it('should provide reactive elements and return reactive array when mapping', () => {
+			const ra = reactive([{ a: 1 }, { b: 2 }])
+			const mapped = ra.map((v) => {
+				expect(isReactive(v)).toBe(true)
+				return v
+			})
+			expect(isReactive(mapped)).toBe(true)
+			expect(isReactive(mapped[0])).toBe(true)
+		})
+
+		it('should return reactive element from pop()', () => {
+			const ra = reactive([{ a: 1 }])
+			const popped = ra.pop()
+			expect(isReactive(popped)).toBe(true)
+		})
+
+		it('should returns reactive element from shift()', () => {
+			const ra = reactive([{ a: 1 }])
+			const shifted = ra.shift()
+			expect(isReactive(shifted)).toBe(true)
+		})
+
+		it('should unwrap elements on push()', () => {
+			const obj = { a: 1 }
+			const rObj = reactive(obj)
+			const ra = reactive<any[]>([])
+			ra.push(rObj)
+			expect(unwrap(ra[0])).toBe(obj)
+		})
+
+		it('should unwrap elements on unshift()', () => {
+			const obj = { a: 1 }
+			const rObj = reactive(obj)
+			const ra = reactive<any[]>([])
+			ra.unshift(rObj)
+			expect(unwrap(ra[0])).toBe(obj)
+		})
+
+		it('should unwrap elements on splice()', () => {
+			const obj = { a: 1 }
+			const rObj = reactive(obj)
+			const ra = reactive<any[]>([{}, {}])
+			ra.splice(1, 1, rObj)
+			expect(unwrap(ra[1])).toBe(obj)
+		})
+
+		it('should provide reactive elements in find()', () => {
+			const ra = reactive([{ a: 1 }])
+			const found = ra.find((v) => {
+				expect(isReactive(v)).toBe(true)
+				return true
+			})
+			expect(isReactive(found)).toBe(true)
+		})
+
+		it('should provide reactive elements in forEach()', () => {
+			const ra = reactive([{ a: 1 }])
+			ra.forEach((v) => {
+				expect(isReactive(v)).toBe(true)
+			})
+		})
+
+		it('should provide reactive elements and result in reduce()', () => {
+			const ra = reactive([{ a: 1 }, { b: 2 }])
+			const result = ra.reduce((acc, v) => {
+				expect(isReactive(v)).toBe(true)
+				return v
+			}, {})
+			expect(isReactive(result)).toBe(true)
+		})
+
+		it('should yield reactive values in for...of loop', () => {
+			const ra = reactive([{ a: 1 }])
+			for (const v of ra) {
+				expect(isReactive(v)).toBe(true)
+			}
+		})
+
+		it('should yield reactive values from values() iterator', () => {
+			const ra = reactive([{ a: 1 }])
+			for (const v of ra.values()) {
+				expect(isReactive(v)).toBe(true)
+			}
+		})
+
+		it('should yield reactive values from entries() iterator', () => {
+			const ra = reactive([{ a: 1 }])
+			for (const [_, v] of ra.entries()) {
+				expect(isReactive(v)).toBe(true)
+			}
 		})
 	})
 })

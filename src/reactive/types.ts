@@ -241,10 +241,6 @@ type State =
 const nativeReactive = Symbol('native-reactive')
 
 /**
- * Symbol to mark individual objects as non-reactive
- */
-export const nonReactiveMark = Symbol('non-reactive')
-/**
  * Symbol to mark class properties as non-reactive
  */
 export const unreactiveProperties = Symbol('unreactive-properties')

@@ -1,9 +1,9 @@
+import { isObject } from 'util'
 import { addState, collectEffects, touched1, touchedOpaque } from './change'
 import { debugHooks } from './debug-hooks'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
-import { batch } from './effects'
+import { batch, untracked } from './effects'
 import { isNonReactive } from './non-reactive-state'
-import { unwrap } from './types'
 import { getEffectNode, watchers } from './registry'
 import {
 	allProps,
@@ -13,19 +13,12 @@ import {
 	keysOf,
 	optionCall,
 	options,
+	unwrap,
 } from './types'
 
-function isObject(value: any): value is object {
-	return typeof value === 'object' && value !== null
-}
-
-function isObjectLike(value: unknown): value is object {
-	return isObject(value)
-}
-
 function getPrototypeToken(value: any): object | null | undefined {
-	if (!isObjectLike(value)) return undefined
 	if (Array.isArray(value)) return Array.prototype
+	if (typeof value !== 'object') return undefined
 	try {
 		return value.constructor
 	} catch {
@@ -35,7 +28,11 @@ function getPrototypeToken(value: any): object | null | undefined {
 
 export function shouldRecurseTouch(oldValue: any, newValue: any): boolean {
 	if (oldValue === newValue) return false
-	if (!isObjectLike(oldValue) || !isObjectLike(newValue)) return false
+	if (
+		(typeof oldValue !== 'object' && !Array.isArray(oldValue)) ||
+		(typeof newValue !== 'object' && !Array.isArray(newValue))
+	)
+		return false
 	if (isNonReactive(oldValue) || isNonReactive(newValue)) return false
 	return getPrototypeToken(oldValue) === getPrototypeToken(newValue)
 }
@@ -66,7 +63,9 @@ export function notifyPropertyChange(
 		const origin = { obj: unwrappedObj, prop }
 		// Deep touch: only notify nested property changes with origin filtering
 		// Don't notify direct property change - the whole point is to avoid parent effects re-running
-		dispatchNotifications(recursiveTouch(oldValue, newValue, new WeakMap(), [], origin))
+		dispatchNotifications(
+			untracked(() => recursiveTouch(oldValue, newValue, new WeakMap(), [], origin))
+		)
 
 		// Notify opaque listeners (like memoize) that always want to know about identity changes
 		touchedOpaque(targetObj, evolution, prop)
@@ -115,7 +114,11 @@ export function recursiveTouch(
 	origin?: { obj: object; prop: PropertyKey }
 ): PendingNotification[] {
 	if (!shouldRecurseTouch(oldValue, newValue)) return notifications
-	if (!isObjectLike(oldValue) || !isObjectLike(newValue)) return notifications
+	if (
+		(typeof oldValue !== 'object' && !Array.isArray(oldValue)) ||
+		(typeof newValue !== 'object' && !Array.isArray(newValue))
+	)
+		return notifications
 	if (hasVisitedPair(visited, oldValue, newValue)) return notifications
 
 	if (Array.isArray(oldValue) && Array.isArray(newValue)) {
@@ -251,7 +254,7 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 
 	for (const notification of notifications) {
 		const { target, evolution, prop } = notification
-		if (!isObjectLike(target)) continue
+		if (!isObject(target) && !Array.isArray(target)) continue
 		const obj = unwrap(target)
 		addState(obj, evolution)
 		const objectWatchers = watchers.get(obj)

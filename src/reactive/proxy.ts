@@ -12,25 +12,23 @@ import {
 } from './deep-watch-state'
 import { untracked } from './effects'
 import { absent, isNonReactive, isUnreactiveProp } from './non-reactive-state'
+import { dependant } from './tracking'
 import {
 	getExistingProxy,
+	keysOf,
+	nativeReactive,
+	options,
 	proxyToObject,
+	ReactiveError,
+	ReactiveErrorCode,
 	storeProxyRelationship,
 	trackProxyObject,
 	unwrap,
 } from './types'
-import { dependant } from './tracking'
-import {
-	keysOf,
-	nativeReactive,
-	nonReactiveMark,
-	options,
-	ReactiveError,
-	ReactiveErrorCode,
-} from './types'
 export const metaProtos = new WeakMap()
+export const wrapProtos = new WeakMap()
 
-const hasReentry: any[] = []
+const hasReentry = new Set<PropertyKey>()
 const reactiveHandlers = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj: any, prop: PropertyKey, receiver: any) {
@@ -43,12 +41,14 @@ const reactiveHandlers = {
 					// For own properties (e.g., array length): only override if writable/configurable
 					const ownDesc = Object.getOwnPropertyDescriptor(obj, prop)!
 					if (ownDesc.configurable || ownDesc.writable || ownDesc.get) return desc.get.call(obj)
-				} else if (!Object.hasOwn(obj, prop)) return (...args: any[]) => desc.value.apply(obj, args)
+				} else if (!Object.hasOwn(obj, prop))
+					return (...args: any[]) => desc.value.apply(obj, args)
 			}
+			const wrapProto = wrapProtos.get(obj.constructor)
+			if (wrapProto && Object.hasOwn(wrapProto, prop)) return wrapProto[prop]
 		}
 		// Symbols: fast-path — no reactivity tracking, no unreactive check needed
-		if (typeof prop === 'symbol')
-			return prop === nonReactiveMark ? false : FoolProof.get(obj, prop, receiver)
+		if (typeof prop === 'symbol') return FoolProof.get(obj, prop, receiver)
 		// Check if this property is marked as unreactive (WeakMap lookup — no proxy traps)
 		if (isUnreactiveProp(obj, prop)) return FoolProof.get(obj, prop, receiver)
 
@@ -157,7 +157,7 @@ const reactiveHandlers = {
 		return true
 	},
 	has(obj: any, prop: PropertyKey): boolean {
-		if (hasReentry.includes(obj))
+		if (hasReentry.has(obj))
 			throw new ReactiveError(
 				`[reactive] Circular dependency detected in 'has' check for property '${String(prop)}'`,
 				{
@@ -165,10 +165,10 @@ const reactiveHandlers = {
 					cycle: [], // We don't have the full cycle here, but we know it involves obj
 				}
 			)
-		hasReentry.push(obj)
+		hasReentry.add(obj)
 		dependant(obj, prop)
 		const rv = Reflect.has(obj, prop)
-		hasReentry.pop()
+		hasReentry.delete(obj)
 		return rv
 	},
 	deleteProperty(obj: any, prop: PropertyKey): boolean {
@@ -282,8 +282,6 @@ export const reactive = decorator({
 })
 
 /**
- * Gets the original, non-reactive object from a reactive proxy
- * @param proxy - The reactive proxy
- * @returns The original object
+ * @deprecated TODO: remove these, there should be no internal re-export (only from index for "external exports" selection)
  */
 export { isReactive, objectToProxy, proxyToObject, unwrap } from './types'
