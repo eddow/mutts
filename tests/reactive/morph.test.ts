@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { reactive, morph } from 'mutts'
+import { reactive, morph, effect } from 'mutts'
 
 describe('morph', () => {
 	describe('basic functionality', () => {
@@ -287,6 +287,184 @@ describe('morph.pure', () => {
 			source[5] = 999
 			expect(processed[5]).toBe(1998)
 			expect(computeCount).toBe(11) // Only recomputed one element
+		})
+	})
+
+	describe('pure predicate function', () => {
+		test('selectively applies pure mode per item', () => {
+			const source = reactive([1, 2, 3, 4])
+			const factor = reactive({ value: 10 })
+			let computeCount = 0
+
+			// Items > 2 are pure (no effect), items <= 2 are reactive
+			const result = morph(source, x => {
+				computeCount++
+				return x * factor.value
+			}, { pure: (x: number) => x > 2 })
+
+			expect(result[0]).toBe(10)
+			expect(result[1]).toBe(20)
+			expect(result[2]).toBe(30)
+			expect(result[3]).toBe(40)
+			expect(computeCount).toBe(4)
+
+			// Change dependency — only reactive items (1, 2) recompute
+			factor.value = 5
+			expect(result[0]).toBe(5)
+			expect(result[1]).toBe(10)
+			expect(result[2]).toBe(30) // pure — stale
+			expect(result[3]).toBe(40) // pure — stale
+			expect(computeCount).toBe(6) // only 2 recomputed
+		})
+
+		test('predicate receives the input item', () => {
+			const source = reactive(['static', 'dynamic', 'static'])
+			const suffix = reactive({ value: '!' })
+			let computeCount = 0
+
+			const result = morph(source, s => {
+				computeCount++
+				return s + suffix.value
+			}, { pure: (s: string) => s === 'static' })
+
+			expect(result[0]).toBe('static!')
+			expect(result[1]).toBe('dynamic!')
+			expect(result[2]).toBe('static!')
+			expect(computeCount).toBe(3)
+
+			suffix.value = '?'
+			// Only 'dynamic' (index 1) has an effect
+			expect(result[0]).toBe('static!') // pure — stale
+			expect(result[1]).toBe('dynamic?') // reactive — updated
+			expect(result[2]).toBe('static!') // pure — stale
+			expect(computeCount).toBe(4)
+		})
+
+		test('all items pure via predicate behaves like morph.pure', () => {
+			const source = reactive([1, 2, 3])
+			const dep = reactive({ value: 10 })
+			let computeCount = 0
+
+			const result = morph(source, x => {
+				computeCount++
+				return x + dep.value
+			}, { pure: () => true })
+
+			expect(result[0]).toBe(11)
+			expect(result[1]).toBe(12)
+			expect(result[2]).toBe(13)
+			expect(computeCount).toBe(3)
+
+			dep.value = 20
+			expect(result[0]).toBe(11) // stale
+			expect(computeCount).toBe(3) // no recomputation
+		})
+
+		test('no items pure via predicate behaves like default morph', () => {
+			const source = reactive([1, 2])
+			const dep = reactive({ value: 10 })
+			let computeCount = 0
+
+			const result = morph(source, x => {
+				computeCount++
+				return x + dep.value
+			}, { pure: () => false })
+
+			expect(result[0]).toBe(11)
+			expect(result[1]).toBe(12)
+			expect(computeCount).toBe(2)
+
+			dep.value = 20
+			expect(result[0]).toBe(21)
+			expect(result[1]).toBe(22)
+			expect(computeCount).toBe(4)
+		})
+
+		test('new items after source push use predicate', () => {
+			const source = reactive([1, 2])
+			const dep = reactive({ value: 10 })
+			let computeCount = 0
+
+			// Items > 3 are pure
+			const result = morph(source, x => {
+				computeCount++
+				return x * dep.value
+			}, { pure: (x: number) => x > 3 })
+
+			expect(result[0]).toBe(10) // reactive (1 <= 3)
+			expect(result[1]).toBe(20) // reactive (2 <= 3)
+			expect(computeCount).toBe(2)
+
+			// Push a value that the predicate considers pure
+			source.push(5)
+			expect(result[2]).toBe(50) // pure (5 > 3)
+			expect(computeCount).toBe(3)
+
+			// dep change should recompute reactive items but not pure ones
+			dep.value = 1
+			expect(result[0]).toBe(1) // reactive — updated
+			expect(result[1]).toBe(2) // reactive — updated
+			expect(result[2]).toBe(50) // pure — stale
+			expect(computeCount).toBe(5)
+		})
+	})
+
+	describe('cleanup invalidation propagation', () => {
+		test('outer effect re-runs when morph item effect is invalidated by source splice', () => {
+			const source = reactive([1, 2, 3])
+			const dep = reactive({ value: 10 })
+			let outerRunCount = 0
+
+			const mapped = morph(source, x => x * dep.value)
+
+			// Outer effect reads mapped[0]
+			let observed = 0
+			effect(() => {
+				observed = mapped[0]
+				outerRunCount++
+			})
+
+			expect(observed).toBe(10) // 1 * 10
+			expect(outerRunCount).toBe(1)
+
+			// Splice replaces the first element — the inner effect for index 0
+			// is cleaned up (which calls touched1 with a number key), then a new
+			// inner effect is lazily created on next access.
+			source.splice(0, 1, 5)
+
+			// The outer effect should have been notified and re-run
+			expect(observed).toBe(50) // 5 * 10
+			expect(outerRunCount).toBe(2)
+		})
+
+		test('outer effect re-runs when morph item inner dep changes after source mutation', () => {
+			const source = reactive([1, 2])
+			const dep = reactive({ value: 10 })
+			let outerRunCount = 0
+
+			const mapped = morph(source, x => x * dep.value)
+
+			let observed = 0
+			effect(() => {
+				observed = mapped[0]
+				outerRunCount++
+			})
+
+			expect(observed).toBe(10)
+			expect(outerRunCount).toBe(1)
+
+			// Mutate source to invalidate index 0's inner effect
+			source[0] = 3
+
+			expect(observed).toBe(30) // 3 * 10
+			expect(outerRunCount).toBe(2)
+
+			// Now change the inner dependency — the new inner effect should
+			// still propagate to the outer effect
+			dep.value = 5
+
+			expect(observed).toBe(15) // 3 * 5
+			expect(outerRunCount).toBe(3)
 		})
 	})
 

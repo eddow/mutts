@@ -117,6 +117,61 @@ function memoizeFunction<Result, Args extends MemoizableArgument[]>(
 	return memoized as (...args: Args) => Result
 }
 
+function memoizeObject<T extends Record<string, any>>(target: T, opts?: { lenient?: boolean }): T {
+	const existing = memoizedRegistry.get(target)
+	if (existing) return existing as T
+
+	const proxy = new Proxy(target, {
+		get(source, prop, receiver) {
+			// 1. Walk prototype chain to find descriptor
+			let current = source
+			let desc: PropertyDescriptor | undefined
+			while (current) {
+				desc = Object.getOwnPropertyDescriptor(current, prop)
+				if (desc) break
+				current = Object.getPrototypeOf(current)
+			}
+			if (!desc) return Reflect.get(source, prop, receiver)
+			// 2. If getter, memoize
+			if (desc.get) {
+				const originalGetter = desc.get
+				let wrapper = wrapperRegistry.get(originalGetter)
+				if (!wrapper) {
+					wrapper = markWithRoot(
+						renamed(
+							(that: any) => {
+								return originalGetter.call(that)
+							},
+							`${String(source?.constructor?.name ?? 'Object')}.${String(prop)}`
+						),
+						{
+							propertyKey: prop,
+						}
+					)
+					const origRoot = originalGetter[rootFunctionSymbol]
+					if (origRoot) wrapper[rootFunctionSymbol] = origRoot
+					wrapperRegistry.set(originalGetter, wrapper)
+				}
+				const memoized = memoizeFunction(wrapper, opts)
+				return memoized(receiver)
+			}
+
+			// 3. Otherwise forward
+			return Reflect.get(source, prop, receiver)
+		},
+		// Forward set to the target (source) to ensure it acts as the receiver for reactivity notifications
+		set(source, prop, value, _receiver) {
+			// By strictly passing `source` as receiver, we ensure that if `source` is a reactive proxy,
+			// it recognizes itself and triggers change notifications.
+			return Reflect.set(source, prop, value, source)
+		},
+	})
+
+	proxyToObject.set(proxy, target)
+	memoizedRegistry.set(target, proxy)
+	return proxy
+}
+
 /**
  * Decorator and function wrapper for memoizing computed values based on reactive dependencies.
  *
@@ -192,69 +247,10 @@ function makeMemoizeDecorator(memoizeOpts?: { lenient?: boolean }) {
 				return memoized(this, ...args)
 			}
 		},
-		default: <T extends Memoizable>(target: T): T => {
-			if (typeof target === 'object') {
-				// Check identity first
-				const existing = memoizedRegistry.get(target)
-				if (existing) return existing as T
-
-				const proxy = new Proxy(target, {
-					get(source, prop, receiver) {
-						// 1. Walk prototype chain to find descriptor
-						let current = source
-						let desc: PropertyDescriptor | undefined
-						while (current) {
-							desc = Object.getOwnPropertyDescriptor(current, prop)
-							if (desc) break
-							current = Object.getPrototypeOf(current)
-						}
-
-						// 2. If getter, memoize
-						if (desc?.get) {
-							const originalGetter = desc.get
-							// Re-use wrapper registry idea from decorator
-							let wrapper = wrapperRegistry.get(originalGetter)
-							if (!wrapper) {
-								// wrapper must accept 'receiver' as argument to fit memoizeFunction signature
-								wrapper = markWithRoot(
-									renamed(
-										(that: any) => {
-											return originalGetter.call(that)
-										},
-										`${String(source?.constructor?.name ?? 'Object')}.${String(prop)}`
-									),
-									{
-										//method: originalGetter, // Optional: tracking origin
-										propertyKey: prop,
-									}
-								)
-								const origRoot = originalGetter[rootFunctionSymbol]
-								if (origRoot) wrapper[rootFunctionSymbol] = origRoot
-								wrapperRegistry.set(originalGetter, wrapper)
-							}
-							// memoizeFunction returns a function that takes keys (receiver)
-							const memoized = memoizeFunction(wrapper, memoizeOpts)
-							return memoized(receiver)
-						}
-
-						// 3. Otherwise forward
-						return Reflect.get(source, prop, receiver)
-					},
-					// Forward set to the target (source) to ensure it acts as the receiver for reactivity notifications
-					set(source, prop, value, _receiver) {
-						// By strictly passing `source` as receiver, we ensure that if `source` is a reactive proxy,
-						// it recognizes itself and triggers change notifications.
-						return Reflect.set(source, prop, value, source)
-					},
-				})
-
-				// Register relationship to allow unwrap() to work
-				proxyToObject.set(proxy, target)
-				memoizedRegistry.set(target, proxy)
-				return proxy
-			}
-			return memoizeFunction(target, memoizeOpts) as T
-		},
+		default: <T extends Memoizable>(target: T): T =>
+			typeof target === 'object'
+				? (memoizeObject(target, memoizeOpts) as T)
+				: (memoizeFunction(target, memoizeOpts) as T),
 	})
 }
 

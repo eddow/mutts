@@ -295,12 +295,12 @@ export function tag<T extends object>(name: string, obj: T): T {
 		[Symbol.toStringTag]: {
 			value: name,
 			writable: false,
-			configurable: false,
+			configurable: true,
 		},
 		toString: {
 			value: () => name,
 			writable: false,
-			configurable: false,
+			configurable: true,
 		},
 	})
 	return obj
@@ -313,4 +313,12 @@ export function named<T extends Function>(name: string, fn: T): T {
 		configurable: true,
 	})
 	return fn
+}
+
+export function* stringKeys(o: object) {
+	for(const key in o) yield key
+}
+
+export function* range(start: number, end: number) {
+	for (let i = start; i < end; i++) yield `${i}`
 }

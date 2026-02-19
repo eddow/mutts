@@ -16,26 +16,31 @@ export {
 	untracked,
 } from './effects'
 export { type Memoizable, type MemoizableArgument, memoize } from './memoize'
-export { immutables, isNonReactive } from './non-reactive'
+export { immutables, isNonReactive } from './non-reactive-state'
 export { getActiveProjection, project } from './project'
-export { isReactive, ReactiveBase, reactive, unwrap } from './proxy'
+export { ReactiveBase, reactive } from './proxy'
 export { organize, organized } from './record'
 export { Register, register } from './register'
 export {
 	type CleanupReason,
 	cleanup,
-	type EffectAccess as DependencyAccess,
+	type EffectAccess,
 	type EffectCleanup,
+	type EffectCloser,
 	type EffectOptions,
 	type EffectTrigger,
 	type Evolution,
 	formatCleanupReason,
+	isReactive,
+	objectToProxy,
 	options as reactiveOptions,
 	type PropTrigger,
+	proxyToObject,
 	ReactiveError,
 	ReactiveErrorCode,
 	type ScopedCallback,
 	stopped,
+	unwrap,
 } from './types'
 export { type Resource, resource, unreactive, watch, when } from './watch'
 
@@ -45,12 +50,13 @@ import {
 	effectToDeepWatchedObjects,
 	objectParents,
 	objectsWithDeepWatchers,
-} from './deep-watch'
+} from './deep-watch-state'
 import { ReactiveMap, ReactiveWeakMap } from './map'
 import { nonReactiveObjects } from './non-reactive-state'
-import { metaProtos, objectToProxy, proxyToObject, wrapProtos } from './proxy'
+import { metaProtos, wrapProtos } from './proxy'
 import { effectToReactiveObjects, watchers } from './registry'
 import { ReactiveSet, ReactiveWeakSet } from './set'
+import { objectToProxy, proxyToObject } from './types'
 
 // Register native collection types to use specialized reactive wrappers
 console.time('mutts-reactive-init')

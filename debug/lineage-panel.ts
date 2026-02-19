@@ -1,4 +1,5 @@
 import { effect } from '../src/reactive/effects'
+import { getRoot } from '../src/reactive/registry'
 import type { LineageSegment } from './lineage'
 import { reactive } from '../src/reactive/proxy'
 
@@ -137,7 +138,8 @@ export function showLineagePanel() {
 				marginBottom: '6px',
 				color: colors.titleText,
 			})
-			title.innerText = i === 0 ? `📍 Current: ${segment.effectName}` : `↖ Effect: ${segment.effectName}`
+			const effectName = segment.effect ? (getRoot(segment.effect).name || 'anonymous') : 'root'
+			title.innerText = i === 0 ? `📍 Current: ${effectName}` : `↖ Effect: ${effectName}`
 			segDiv.appendChild(title)
 
 			segment.stack.forEach(frame => {

@@ -1,7 +1,8 @@
 import { debugHooks } from './debug-hooks'
 import { batch } from './effects'
 import { getEffectNode } from './registry'
-import { type EffectTrigger, type Evolution, options } from './types'
+import { getDependencyStack } from './tracking'
+import { allProps, EffectTrigger, type Evolution, options } from './types'
 
 // Track which objects contain which other objects (back-references)
 export const objectParents = new WeakMap<object, Set<{ parent: object; prop: PropertyKey }>>()
@@ -73,11 +74,22 @@ export function bubbleUpChange(changedObject: object, evolution: Evolution) {
 		const parentDeepWatchers = deepWatchers.get(parent)
 		if (parentDeepWatchers) {
 			if (options.introspection?.gatherReasons) {
-				const stack = debugHooks.isDevtoolsEnabled() ? new Error().stack : undefined
+				const gatherReasons = options.introspection.gatherReasons
+				const lineageConfig = gatherReasons.lineages
+				
+				let touchStack: unknown | undefined
+				if (lineageConfig === 'touch' || lineageConfig === 'both') {
+					touchStack = debugHooks.captureLineage()
+				}
+				
 				for (const watcher of parentDeepWatchers) {
+					const dependencyStack = (lineageConfig === 'dependency' || lineageConfig === 'both')
+						? getDependencyStack(watcher, parent, allProps)
+						: undefined
+						
 					const node = getEffectNode(watcher)
 					if (!node.pendingTriggers) node.pendingTriggers = []
-					node.pendingTriggers.push({ obj: parent, evolution, stack })
+					node.pendingTriggers.push({ obj: parent, evolution, dependency: dependencyStack, touch: touchStack })
 				}
 			}
 			for (const watcher of parentDeepWatchers) batch(watcher)

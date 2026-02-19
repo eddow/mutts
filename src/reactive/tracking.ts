@@ -1,6 +1,18 @@
 import { getActiveEffect } from './effect-context'
 import { effectToReactiveObjects, watchers } from './registry'
-import { allProps, type EffectTrigger, keysOf, unwrap } from './types'
+import { allProps, type EffectTrigger, keysOf, unwrap, options } from './types'
+import { debugHooks } from './debug-hooks'
+
+// Track dependency stacks per (obj, prop, effect)
+const dependencyStacks = new WeakMap<object, Map<any, Map<EffectTrigger, unknown>>>()
+
+function getDependencyStack(effect: EffectTrigger, obj: object, prop: any): unknown | undefined {
+	const objStacks = dependencyStacks.get(obj)
+	if (!objStacks) return undefined
+	return objStacks.get(prop)?.get(effect) ?? objStacks.get(allProps)?.get(effect)
+}
+
+export { getDependencyStack }
 
 /**
  * Marks a property as a dependency of the current effect
@@ -37,5 +49,24 @@ export function dependant(obj: any, prop: any = allProps) {
 		effectObjects.add(obj)
 	} else {
 		effectToReactiveObjects.set(currentActiveEffect, new Set([obj]))
+	}
+
+	// Store dependency stack if introspection is enabled
+	const gatherReasons = options.introspection?.gatherReasons
+	if (gatherReasons) {
+		const lineageConfig = gatherReasons.lineages
+		if (lineageConfig === 'dependency' || lineageConfig === 'both') {
+			let objStacks = dependencyStacks.get(obj)
+			if (!objStacks) {
+				objStacks = new Map()
+				dependencyStacks.set(obj, objStacks)
+			}
+			let propStacks = objStacks.get(prop)
+			if (!propStacks) {
+				propStacks = new Map()
+				objStacks.set(prop, propStacks)
+			}
+			propStacks.set(currentActiveEffect, debugHooks.captureLineage())
+		}
 	}
 }

@@ -1,4 +1,3 @@
-import { effectMarker, getStackFrame, type StackFrame } from '../../debug/lineage'
 import { decorator } from '../decorator'
 import { flavored, flavorOptions } from '../flavored'
 import { IterableWeakSet } from '../iterableWeak'
@@ -22,6 +21,7 @@ import {
 	type EffectOptions,
 	type EffectTrigger,
 	type Evolution,
+	effectMarker,
 	optionCall,
 	options,
 	ReactiveError,
@@ -109,13 +109,13 @@ export function recordActivation(effect: EffectTrigger, obj: any, evolution: Evo
 	activationLog.pop()
 
 	if (count >= options.maxTriggerPerBatch) {
-		const effectName = (root as any)?.name || 'anonymous'
+		const effectName = root.name
 		const message = `Aggressive trigger detected: effect "${effectName}" triggered ${count} times in the batch by the same cause.`
 		if (options.maxEffectReaction === 'throw') {
 			throw new ReactiveError(message, {
 				code: ReactiveErrorCode.MaxReactionExceeded,
 				count,
-				effect: effectName,
+				effect: root,
 			})
 		}
 		options.warn(`[reactive] ${message}`)
@@ -148,7 +148,7 @@ let batchDepth = 0
 let broken = false
 
 // Debug: Capture where an effect was created
-export const effectCreationStacks = new WeakMap<Function, StackFrame[]>()
+export const effectCreationStacks = new WeakMap<Function, unknown[]>()
 
 /**
  * Gets or creates an IterableWeakSet for a closure map
@@ -621,14 +621,14 @@ function addToBatch(
 
 			batchQueue.all.delete(root)
 			const causalChain = debugHooks.getTriggerChain(effect)
-			const creationStack = getEffectNode(effect).creationStack
+			const lineage = getEffectNode(effect).creationStack
 
 			throw new ReactiveError(`[reactive] ${cycleMessage}`, {
 				code: ReactiveErrorCode.CycleDetected,
 				cycle: cyclePath.map((r) => r.name || r.toString()),
 				details: cycleMessage,
 				causalChain,
-				creationStack,
+				lineage,
 			})
 		}
 
@@ -1224,8 +1224,8 @@ export const effect = named(
 			const node = getEffectNode(runEffect)
 
 			if (debugHooks.isDevtoolsEnabled()) {
-				const stack = getStackFrame() // Robustly skips internal mutts frames
-				if (stack.length > 0) {
+				const stack = debugHooks.captureStack() // Robustly skips internal mutts frames
+				if (Array.isArray(stack) && stack.length > 0) {
 					node.creationStack = stack
 				}
 			}

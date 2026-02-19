@@ -4,6 +4,7 @@ import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { batch, untracked } from './effects'
 import { isNonReactive } from './non-reactive-state'
 import { getEffectNode, watchers } from './registry'
+import { getDependencyStack } from './tracking'
 import {
 	allProps,
 	type EffectCleanup,
@@ -236,7 +237,7 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 		allowedEffects = new Set<EffectTrigger>()
 		const originWatchers = watchers.get(origin.obj)
 		if (originWatchers) {
-			const originEffects = new Set<EffectTrigger>()
+			const originEffects = new Map<EffectTrigger, unknown>()
 			collectEffects(
 				origin.obj,
 				{ type: 'set', prop: origin.prop },
@@ -245,7 +246,7 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 				[allProps],
 				[origin.prop]
 			)
-			for (const effect of originEffects) allowedEffects.add(effect)
+			for (const effect of originEffects.keys()) allowedEffects.add(effect)
 		}
 		// If no allowed effects, skip all notifications (no one should be notified)
 		if (allowedEffects.size === 0) return
@@ -257,28 +258,28 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 		const obj = unwrap(target)
 		addState(obj, evolution)
 		const objectWatchers = watchers.get(obj)
-		let currentEffects: Set<EffectTrigger> | undefined
+		let currentEffects: Map<EffectTrigger, unknown> | undefined
 		const propsArray = [prop]
 		if (objectWatchers) {
 			// console.log(`[DEBUG] dispatchNotifications: processing ${obj.constructor.name} (has watchers)`)
-			currentEffects = new Set<EffectTrigger>()
+			currentEffects = new Map<EffectTrigger, unknown>()
 			const broad = evolution.type !== 'set' ? [allProps, keysOf] : [allProps]
 			collectEffects(obj, evolution, currentEffects, objectWatchers, broad, propsArray)
 
 			// Filter effects by ancestor chain if origin exists
 			// Include effects that either directly depend on origin or have an ancestor that does
 			if (origin && allowedEffects) {
-				const filteredEffects = new Set<EffectTrigger>()
-				for (const effect of currentEffects) {
+				const filteredEffects = new Map<EffectTrigger, unknown>()
+				for (const [effect, associated] of currentEffects) {
 					// Check if effect itself is allowed OR has an ancestor that is allowed
 					if (allowedEffects.has(effect) || hasAncestorInSet(effect, allowedEffects)) {
-						filteredEffects.add(effect)
+						filteredEffects.set(effect, associated)
 					}
 				}
 				currentEffects = filteredEffects
 			}
 
-			for (const effect of currentEffects) {
+			for (const effect of currentEffects.keys()) {
 				combinedEffects.add(effect)
 				let causes = effectCauses.get(effect)
 				if (!causes) {
@@ -288,17 +289,27 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 				causes.push(notification)
 			}
 		}
-		optionCall('touched', obj, evolution, propsArray, currentEffects)
+		optionCall('touched', obj, evolution, propsArray, Array.from(currentEffects.keys()))
 		if (objectsWithDeepWatchers.has(obj)) bubbleUpChange(obj, evolution)
 	}
 	if (combinedEffects.size) {
 		if (options.introspection?.gatherReasons) {
-			const stack = debugHooks.isDevtoolsEnabled() ? new Error().stack : undefined
+			const gatherReasons = options.introspection.gatherReasons
+			const lineageConfig = gatherReasons.lineages
+			
+			let touchStack: unknown | undefined
+			if (lineageConfig === 'touch' || lineageConfig === 'both') {
+				touchStack = debugHooks.captureLineage()
+			}
+			
 			for (const effect of combinedEffects) {
 				const node = getEffectNode(effect)
 				if (!node.pendingTriggers) node.pendingTriggers = []
 				for (const { target, evolution, prop } of effectCauses.get(effect)!) {
-					node.pendingTriggers.push({ obj: unwrap(target), evolution, stack })
+					const dependencyStack = (lineageConfig === 'dependency' || lineageConfig === 'both')
+						? getDependencyStack(effect, unwrap(target), prop ?? allProps)
+						: undefined
+					node.pendingTriggers.push({ obj: unwrap(target), evolution, dependency: dependencyStack, touch: touchStack })
 				}
 			}
 		}

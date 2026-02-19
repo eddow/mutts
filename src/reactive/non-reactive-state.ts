@@ -1,4 +1,3 @@
-
 export const nonReactiveObjects = new WeakSet<object>()
 const nonReactiveClasses = new WeakSet<object>()
 export const unreactiveProps = new WeakMap<object, Set<PropertyKey>>()
@@ -44,7 +43,6 @@ export function isNonReactive(obj: any): boolean {
 	for (const fn of immutables) if (fn(obj)) return true
 	return false
 }
-
 
 nonReactiveClass(Date, RegExp, Error, Promise, Function)
 if (typeof window !== 'undefined') {

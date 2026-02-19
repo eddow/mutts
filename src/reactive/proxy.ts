@@ -21,7 +21,6 @@ import {
 	ReactiveError,
 	ReactiveErrorCode,
 	storeProxyRelationship,
-	trackProxyObject,
 	unwrap,
 } from './types'
 export const metaProtos = new WeakMap()
@@ -36,9 +35,9 @@ const subsRegister = new WeakMap<any, SubProxy>()
 
 // TODO: When an effect sets something (touch), should it remove its dependencies to the exact same thing
 
-const reactiveHandlers = {
+const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
-	get(obj: any, prop: PropertyKey, receiver: any) {
+	get(obj, prop, receiver) {
 		if (obj && typeof obj === 'object' && prop !== Symbol.toStringTag) {
 			const metaProto = metaProtos.get(obj.constructor)
 			if (metaProto && Object.hasOwn(metaProto, prop)) {
@@ -115,7 +114,7 @@ const reactiveHandlers = {
 		}
 		return value
 	},
-	set(obj: any, prop: PropertyKey, value: any, receiver: any): boolean {
+	set(obj, prop, value, receiver) {
 		const unwrappedReceiver = unwrap(receiver)
 
 		// Check if this property is marked as unreactive
@@ -141,9 +140,11 @@ const reactiveHandlers = {
 		if (Reflect.has(unwrappedReceiver, prop)) {
 			// We *need* to use `receiver` and not `obj` here, otherwise we break
 			// the dependency tracking for memoized getters
-			oldVal = isArrayLength ? 
-				arrayLengths.get(obj) === newValue ? newValue : absent: 
-				untracked(() => Reflect.get(obj, prop, receiver))
+			oldVal = isArrayLength
+				? arrayLengths.get(obj) === newValue
+					? newValue
+					: absent
+				: untracked(() => Reflect.get(obj, prop, receiver))
 		}
 		if (objectsWithDeepWatchers.has(obj)) {
 			if (typeof oldVal === 'object' && oldVal !== null) {
@@ -158,13 +159,13 @@ const reactiveHandlers = {
 			// For getter-only accessors, Reflect.set() may fail, but we still return true
 			// to avoid throwing errors. Only proceed with change notifications if set succeeded.
 			if (FoolProof.set(obj, prop, newValue, receiver)) {
-				if(isArrayLength) arrayLengths.set(obj, newValue)
+				if (isArrayLength) arrayLengths.set(obj, newValue)
 				notifyPropertyChange(obj, prop, oldVal, newValue, oldVal !== absent)
 			}
 		}
 		return true
 	},
-	has(obj: any, prop: PropertyKey): boolean {
+	has(obj, prop) {
 		if (hasReentry.has(obj))
 			throw new ReactiveError(
 				`[reactive] Circular dependency detected in 'has' check for property '${String(prop)}'`,
@@ -179,7 +180,7 @@ const reactiveHandlers = {
 		hasReentry.delete(obj)
 		return rv
 	},
-	deleteProperty(obj: any, prop: PropertyKey): boolean {
+	deleteProperty(obj, prop) {
 		if (!Object.hasOwn(obj, prop)) return false
 
 		const oldVal = (obj as any)[prop]
@@ -199,11 +200,11 @@ const reactiveHandlers = {
 
 		return true
 	},
-	ownKeys(obj: any): (string | symbol)[] {
+	ownKeys(obj) {
 		dependant(obj, keysOf)
 		return Reflect.ownKeys(obj)
 	},
-} as const
+}
 
 const reactiveClasses = new WeakSet<Function>()
 
@@ -236,9 +237,9 @@ function reactiveObject<T>(anyTarget: T, subProxy?: SubProxy): T {
 	const existing = getExistingProxy(target)
 	if (existing !== undefined) return existing as T
 
-	if(subProxy) subsRegister.set(target, subProxy)
+	if (subProxy) subsRegister.set(target, subProxy)
 	const proxy = new Proxy(target, reactiveHandlers)
-	if(Array.isArray(target)) arrayLengths.set(target, target.length)
+	if (Array.isArray(target)) arrayLengths.set(target, target.length)
 	// Store the relationships
 	storeProxyRelationship(target, proxy)
 	return proxy as T
@@ -277,8 +278,3 @@ export const reactive = decorator({
 	},
 	default: reactiveObject,
 })
-
-/**
- * @deprecated TODO: remove these, there should be no internal re-export (only from index for "external exports" selection)
- */
-export { isReactive, objectToProxy, proxyToObject, unwrap } from './types'

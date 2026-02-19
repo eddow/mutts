@@ -1,19 +1,22 @@
+import { FunctionWrapper } from '../zone'
 import { arrayDiff } from '../diff'
 import { flavored } from '../flavored'
-import { FoolProof, tag } from '../utils'
+import { FoolProof, range } from '../utils'
 import { touched, touched1 } from './change'
 import { cleanedBy } from './effect-context'
 import { effect, untracked } from './effects'
 import { memoize } from './memoize'
-import { isReactive, proxyToObject, reactive } from './proxy'
+import { reactive } from './proxy'
+import { markWithRoot } from './registry'
 import {
 	type CleanupReason,
 	type cleanup,
 	type EffectAccess,
 	type EffectCleanup,
 	type EffectCloser,
-	type ScopedCallback,
+	isReactive,
 	keysOf,
+	type ScopedCallback,
 } from './types'
 
 /**
@@ -314,7 +317,7 @@ export function lift<Output extends any[] | object>(
 ): Output & { [cleanup]: ScopedCallback } {
 	let result!: Output
 	let rawResult!: Output
-	const liftCleanup = effect.named('lift')((access) => {
+	const liftCleanup = effect.named('lift')(markWithRoot((access) => {
 		const source = cb(access) /*
 		if (isReactive(source))
 			throw new Error('lift callback must return a non-reactive value to be lifted')*/
@@ -359,7 +362,7 @@ export function lift<Output extends any[] | object>(
 					touched1(rawResult, { type: 'del', prop: key }, key)
 				}
 		}
-	})
+	}, cb))
 	return cleanedBy(result, liftCleanup)
 }
 
@@ -367,70 +370,70 @@ export const morph = flavored(
 	function morph<I, O>(
 		source: readonly I[] | (() => readonly I[]),
 		fn: (arg: I) => O,
-		options?: { pure?: boolean }
+		options?: { pure?: boolean | ((i: I) => boolean) }
 	) {
-		if (typeof source !== 'function' && !isReactive(source) && options?.pure) return source.map(fn)
+		if (typeof source !== 'function' && !isReactive(source) && options?.pure === true) return source.map(fn)
 		const cache = [] as O[]
 		let input: readonly I[] = []
-		function* range(
-			a: number,
-			b: number,
-		): IterableIterator<number> {
-			const start = Math.min(a, b)
-			const end = Math.max(a, b)
-			for (let i = start; i < end; i++)yield i
-		}
-		const rv = reactive(
-				cache,
-				{
-					get(cache, prop) {
-						const n = typeof prop === 'string' ? Number(prop) : NaN
-						if (isNaN(n)) return cache[prop]
-						if (!(n in cache)) {
-							if (options?.pure) cache[n] = fn(input[n])
+		// Because of lazy evaluation, we don't know when evaluation will occur, but we have to know in which effect lineage it should be: this!
+		let track!: FunctionWrapper
+		return cleanedBy(
+			reactive(cache, {
+				get(cache, prop) {
+					const n = typeof prop === 'string' ? Number(prop) : NaN
+					if (isNaN(n)) return cache[prop]
+					if (!(n in cache)) {
+						track(()=> {
+							if (options?.pure === true || (typeof options?.pure === 'function' && options.pure(input[n]))) cache[n] = fn(input[n])
 							else {
 								const stop = effect(() => {
 									cache[n] = fn(input[n])
 									return () => {
 										delete cache[n]
-										touched1(cache, { type: 'invalidate', prop: 'morph' }, n)
+										touched1(cache, { type: 'invalidate', prop: 'morph' }, `${n}`)
 										stop({ type: 'stopped' })
 									}
 								})
 							}
+						})
+					}
+					return cache[n]
+				},
+				has(_cache, prop) {
+					return Reflect.has(input, prop)
+				},
+			}),
+			effect.named('morph')(({ascend}) => {
+				track = ascend
+				const newInput = [...(typeof source === 'function' ? source() : source)]
+				const evolution = { type: 'bunch', method: 'morph-input' } as const
+				let madeAll = false
+				for (const diff of arrayDiff(input, newInput).toSorted((a,b)=> a.indexA-b.indexA)) {
+					cache.splice(
+						diff.indexA,
+						diff.sliceA.length,
+						...new Array(diff.sliceB.length).fill(undefined)
+					)
+					if (!madeAll) {
+						// TODO: test that `slice` touches "until the end" when the slice length is different than the given length to slice
+						if (diff.sliceA.length === diff.sliceB.length)
+							touched(cache, evolution, range(diff.indexA, diff.indexA + diff.sliceA.length))
+						else {
+							touched(cache, evolution, range(diff.indexA, newInput.length))
+							madeAll = true
 						}
-						return cache[n]
-					},
-					has(cache, prop) {
-						return Reflect.has(input, prop)
 					}
+					for (const i of range(diff.indexA, diff.indexA + diff.sliceB.length)) delete cache[i]
 				}
-			)
-		return cleanedBy(rv, effect.named('morph')(() => {
-			const newInput = [...(typeof source === 'function' ? source() : source)]
-			const evolution = { type: 'bunch', method: 'morph-input' } as const
-			let madeAll = false
-			for (const diff of arrayDiff(input, newInput)) {
-				cache.splice(diff.indexA, diff.sliceA.length, ...new Array(diff.sliceB.length).fill(undefined))
-				if(!madeAll) {
-					if(diff.sliceA.length === diff.sliceB.length)
-						touched(cache, evolution, range(diff.indexA, diff.indexA + diff.sliceA.length))
-					else {
-						touched(cache, evolution, range(diff.indexA, newInput.length))
-						madeAll = true
-					}
-				}
-				for(const i of range(diff.indexA, diff.indexA + diff.sliceB.length))
-					delete cache[i]
-			}
-			if (input.length !== newInput.length) touched(cache, evolution, ['length', keysOf])
-			input = newInput
-		}))
+				if (input.length !== newInput.length) touched(cache, evolution, ['length', keysOf])
+				input = newInput
+			})
+		)
 	},
 	{
 		get pure() {
 			return <I, O>(source: readonly I[] | (() => readonly I[]), fn: (arg: I) => O) =>
-				this(source, fn, { pure: true })
+				this(source, fn, { pure: true }) as readonly O[] & { [cleanup]?: ScopedCallback }
 		},
 	}
 )

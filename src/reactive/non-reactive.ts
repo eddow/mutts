@@ -1,11 +1,3 @@
-import {
-	absent,
-	immutables,
-	isNonReactive,
-	nonReactive,
-	nonReactiveClass,
-	nonReactiveObjects,
-} from './non-reactive-state'
 import { reactive } from './proxy'
 
 /**
@@ -29,13 +21,4 @@ export function* makeReactiveEntriesIterator<K, V>(iterator: Iterator<[K, V]>): 
 		yield [reactive(key), reactive(value)]
 		result = iterator.next()
 	}
-}
-
-export {
-	absent,
-	immutables,
-	isNonReactive,
-	nonReactive,
-	nonReactiveClass,
-	nonReactiveObjects,
 }

@@ -2,6 +2,7 @@
 // Argument of type '() => void' is not assignable to parameter of type '(dep: DependencyFunction) => ScopedCallback | undefined'.
 
 import type { FunctionWrapper } from '../zone'
+import { debugHooks } from './debug-hooks'
 
 export type EffectAccessEvents = {
 	triggered(event: string, ...args: any[]): void
@@ -70,7 +71,17 @@ export interface EffectAccess {
  */
 export type ScopedCallback = (reason?: CleanupReason) => void
 
-export type PropTrigger = { obj: object; evolution: Evolution; stack?: string }
+export const effectMarker = {
+	enter: 'effect:enter',
+	leave: 'effect:leave',
+}
+
+export type PropTrigger = {
+	obj: object
+	evolution: Evolution
+	dependency?: unknown  // Stack from when dependency was created
+	touch?: unknown       // Stack from when touch occurred
+}
 
 /**
  * Reason for an effect cleanup/reaction
@@ -82,17 +93,20 @@ export type CleanupReason =
 	| { type: 'lineage'; parent: CleanupReason } // parent effect cleaned up (recursive)
 	| { type: 'error'; error: unknown } // error handler chain (reactionCleanup called with error)
 
-function formatTrigger({ obj, evolution, stack }: PropTrigger): unknown[] {
+function formatTrigger({ obj, evolution, dependency, touch }: PropTrigger): unknown[] {
 	const detail = evolution.type === 'bunch' ? evolution.method : String(evolution.prop)
 	const parts: unknown[] = [`${evolution.type} ${detail} on`, obj]
-	if (stack)
-		parts.push(
-			`\n    ${stack
-				.split('\n')
-				.slice(1)
-				.map((l) => l.trim())
-				.join('\n    ')}`
-		)
+	
+	if (dependency) {
+		parts.push('\n  Dependency created at:')
+		parts.push(...debugHooks.formatStack(dependency))
+	}
+	
+	if (touch) {
+		parts.push('\n  Touched from:')
+		parts.push(...debugHooks.formatStack(touch))
+	}
+	
 	return parts
 }
 
@@ -137,15 +151,6 @@ export type EffectCleanup = ScopedCallback & {
 	[stopped]: boolean
 }
 
-// Debug type for stack frames
-export type StackFrame = {
-	functionName: string
-	fileName: string
-	lineNumber: number
-	columnNumber: number
-	raw: string
-}
-
 /**
  * Centralized node for all effect metadata and relationships
  */
@@ -165,7 +170,7 @@ export interface EffectNode {
 	catchers?: CatchFunction[]
 
 	// Debug / Metadata
-	creationStack?: StackFrame[]
+	creationStack?: unknown
 	dependencyHook?: (obj: any, prop: any) => void
 
 	// Configuration
@@ -303,25 +308,34 @@ export type CycleDebugInfo = {
 	code: ReactiveErrorCode.CycleDetected
 	cycle: string[]
 	details?: string
+	causalChain?: string[]
+	lineage?: unknown
 }
 
 export type MaxDepthDebugInfo = {
 	code: ReactiveErrorCode.MaxDepthExceeded
-	depth: number
-	chain: string[]
+	effectuatedRoots: any[]
+	cycle: any[] | null
+	trace: string
+	maxEffectChain: number
+	queued: string[]
+	queuedCount: number
+	causalChain?: string[]
+	lineage?: unknown
 }
 
 export type MaxReactionDebugInfo = {
 	code: ReactiveErrorCode.MaxReactionExceeded
 	count: number
 	effect: string
+	causalChain?: string[]
+	lineage?: unknown
 }
 
 export type GenericDebugInfo = {
 	code: ReactiveErrorCode
 	causalChain?: string[]
-	creationStack?: string | any[]
-	lineage?: any[]
+	lineage?: unknown
 	[key: string]: any
 }
 
@@ -390,7 +404,7 @@ export const options = {
 	 * @param props - The properties that changed
 	 * @param deps - The dependencies that changed
 	 */
-	touched: (_obj: any, _evolution: Evolution, _props?: any[], _deps?: Set<EffectTrigger>) => {},
+	touched: (_obj: any, _evolution: Evolution, _props?: any[], _deps?: EffectTrigger[]) => {},
 	/**
 	 * Debug purpose: called when an effect is skipped because it's already running
 	 * @param effect - The effect that is already running
@@ -513,6 +527,7 @@ export const options = {
 	 * Introspection and debug aids. Set to `null` to disable all debug overhead in production.
 	 *
 	 * - `gatherReasons`: collect `PropTrigger[]` for `CleanupReason` on effect re-runs (default `true`)
+	 *   - `lineages`: what lineages to capture in PropTrigger (default `'touch'`)
 	 * - `logErrors`: log errors with detailed context (default `true`)
 	 * - `enableHistory`: keep a history of mutations (default `true`)
 	 * - `historySize`: number of mutations to keep in history (default `50`)
@@ -526,12 +541,12 @@ export const options = {
 	 * ```
 	 */
 	introspection: {
-		gatherReasons: true,
+		gatherReasons: { lineages: 'touch' },
 		logErrors: true,
 		enableHistory: true,
 		historySize: 50,
 	} as {
-		gatherReasons: boolean
+		gatherReasons: { lineages: 'none' | 'touch' | 'dependency' | 'both' }
 		logErrors: boolean
 		enableHistory: boolean
 		historySize: number
@@ -587,7 +602,7 @@ export function optionCall<K extends CallableOption>(
 	}
 }
 
-export { type State }
+export type { State }
 
 // --- Proxy State (Merged from proxy-state.ts) ---
 

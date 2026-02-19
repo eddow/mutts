@@ -1,7 +1,36 @@
 /// <reference path="./devtools.d.ts" />
-import { Network, Options } from 'vis-network'
+import { type Edge, type Node, Network, type Options } from 'vis-network'
 
-// DevTools panel script (plain JS in a .ts file so Rollup can bundle it)
+type LayoutMode = 'hierarchical' | 'physics'
+
+interface RawNode {
+	id: string
+	label?: string
+	type?: string
+	depth?: number
+	debugName?: string
+	parentId?: string
+}
+
+interface RawEdge {
+	id?: string
+	source?: string
+	target?: string
+	type?: string
+	label?: string
+	count?: number
+}
+
+interface RawGraph {
+	nodes?: RawNode[]
+	edges?: RawEdge[]
+	meta?: Record<string, unknown>
+}
+
+interface VisGraph {
+	nodes: Node[]
+	edges: Edge[]
+}
 
 const graphEl = document.getElementById('graph')
 const refreshBtn = document.getElementById('refresh')
@@ -10,41 +39,56 @@ const hideIsolatedInput = document.getElementById('hideIsolated') as HTMLInputEl
 const searchInput = document.getElementById('search') as HTMLInputElement
 const statusEl = document.getElementById('status')
 
-let network
-let lastRawGraph = null
-let currentGraph = { nodes: [], edges: [] }
+let network: Network | null = null
+let lastRawGraph: RawGraph | null = null
+let currentGraph: VisGraph = { nodes: [], edges: [] }
 
-function setStatus(message, tone = 'info') {
-	if (!statusEl) return
-	statusEl.textContent = message
-	statusEl.dataset && (statusEl.dataset.tone = String(tone))
+const NODE_COLORS: Record<string, { background: string; border: string }> = {
+	effect: { background: '#1f6feb', border: '#388bfd' },
+	external: { background: '#8b5cf6', border: '#a78bfa' },
+	state: { background: '#238636', border: '#2ea043' },
 }
 
-function getOptions(mode: 'hierarchical' | 'physics') {
+function setStatus(message: string, tone: string = 'info') {
+	if (!statusEl) return
+	statusEl.textContent = message
+	if (statusEl.dataset) statusEl.dataset.tone = tone
+}
+
+function getOptions(mode: LayoutMode, nodeCount: number): Options {
+	// Fixed scale for consistent spacing
+	const scale = 1.0
+
 	const base: Options = {
 		autoResize: false,
 		width: '100%',
 		height: '100%',
-		interaction: { hover: true },
+		interaction: { hover: true, tooltipDelay: 150 },
 		nodes: {
 			shape: 'box',
-			margin: { top: 10, right: 10, bottom: 10, left: 10 },
-			font: { color: '#f4f4f4', face: 'system-ui', size: 13 },
+			margin: { top: 8, right: 14, bottom: 8, left: 14 },
+			font: { color: '#f4f4f4', face: 'system-ui', size: 14 },
+			borderWidth: 2,
 		},
 		edges: {
-			arrows: 'to',
-			smooth: false,
-			font: { size: 11, strokeWidth: 0, color: '#c9d1d9' },
+			arrows: { to: { enabled: true, scaleFactor: 0.7 } },
+			smooth: { enabled: true, type: 'cubicBezier', roundness: 0.4 },
+			font: { size: 11, strokeWidth: 2, strokeColor: '#0d1117', color: '#c9d1d9', align: 'top' },
+			color: { color: '#484f58', highlight: '#ff7b72', hover: '#ff7b72' },
 		},
 	}
 
 	if (mode === 'hierarchical') {
+		const levelSep = Math.round(100 * scale)
+		const nodeSep = Math.round(80 * scale)
+		const treeSep = Math.round(120 * scale)
+
 		base.layout = {
 			hierarchical: {
 				direction: 'UD',
-				levelSeparation: 300,
-				nodeSpacing: 150,
-				treeSpacing: 300,
+				levelSeparation: levelSep,
+				nodeSpacing: nodeSep,
+				treeSpacing: treeSep,
 				blockShifting: true,
 				edgeMinimization: true,
 				parentCentralization: true,
@@ -52,40 +96,31 @@ function getOptions(mode: 'hierarchical' | 'physics') {
 				shakeTowards: 'leaves',
 			},
 		}
-		// Enable light physics to add vertical variation to nodes at same level
 		base.physics = {
 			enabled: true,
 			solver: 'hierarchicalRepulsion',
 			hierarchicalRepulsion: {
-				nodeDistance: 120,
-				centralGravity: 0.0,
-				springLength: 100,
-				springConstant: 0.01,
+				nodeDistance: nodeSep,
+				centralGravity: 0.2,
+				springLength: levelSep * 0.8,
+				springConstant: 0.02,
 				damping: 0.09,
 			},
-			stabilization: {
-				enabled: true,
-				iterations: 100,
-				fit: true,
-			},
+			stabilization: { enabled: true, iterations: 150, fit: true },
 		}
 	} else {
-		// Force/physics layout
+		base.layout = { hierarchical: false }
 		base.physics = {
 			enabled: true,
 			solver: 'forceAtlas2Based',
-			stabilization: {
-				enabled: true,
-				iterations: 200,
-				fit: true,
-			},
 			forceAtlas2Based: {
-				gravitationalConstant: -50,
-				centralGravity: 0.01,
-				springLength: 100,
-				springConstant: 0.08,
+				gravitationalConstant: -800 * scale,
+				centralGravity: 0.003,
+				springLength: Math.round(400 * scale),
+				springConstant: 0.03,
 				damping: 0.4,
 			},
+			stabilization: { enabled: true, iterations: 300, fit: true },
 		}
 	}
 
@@ -94,111 +129,121 @@ function getOptions(mode: 'hierarchical' | 'physics') {
 
 function ensureNetwork() {
 	if (network || !graphEl) return
-	network = new Network(graphEl, { nodes: [], edges: [] }, getOptions('hierarchical'))
+	network = new Network(graphEl, { nodes: [], edges: [] }, getOptions('hierarchical', 0))
 }
 
-function toVisGraph(graph) {
-	const rawNodes = Array.isArray(graph && graph.nodes) ? graph.nodes : []
-	const rawEdges = Array.isArray(graph && graph.edges) ? graph.edges : []
+function toVisGraph(graph: RawGraph): VisGraph {
+	const rawNodes: RawNode[] = Array.isArray(graph?.nodes) ? graph.nodes : []
+	const rawEdges: RawEdge[] = Array.isArray(graph?.edges) ? graph.edges : []
 
+	// Build set of node IDs that participate in any edge (for hide-isolated filter)
 	let connectedIds: Set<string> | null = null
-	if (hideIsolatedInput && hideIsolatedInput.checked) {
-		connectedIds = new Set()
+	if (hideIsolatedInput?.checked) {
+		connectedIds = new Set<string>()
 		for (const edge of rawEdges) {
-			if (!edge || !['cause', 'effect'].includes(edge.type || '')) continue
+			if (!edge) continue
 			if (edge.source) connectedIds.add(String(edge.source))
 			if (edge.target) connectedIds.add(String(edge.target))
 		}
 	}
 
-	const nodes = rawNodes
-		.filter((n) => n && (n.type === 'effect' || n.type === 'external'))
+	// Include all node types (effect, external, state)
+	const nodeIdSet = new Set<string>()
+	const nodes: Node[] = rawNodes
+		.filter((n): n is RawNode => !!n)
 		.filter((n) => !connectedIds || connectedIds.has(String(n.id)))
 		.map((n) => {
 			const depth = typeof n.depth === 'number' ? n.depth : 0
+			const colors = NODE_COLORS[n.type ?? 'effect'] ?? NODE_COLORS.effect
+			nodeIdSet.add(String(n.id))
 			return {
 				id: n.id,
 				label: String(n.label || n.id),
 				group: n.type,
-				level: depth,
 				title: n.debugName || n.label,
-			}
+				color: colors,
+			} as Node
 		})
 
-	// Debug: log edge types to help diagnose issues
-	if (rawEdges.length > 0) {
-		const edgeTypes = new Set(rawEdges.map((e) => e?.type).filter(Boolean))
-		console.log('[DevTools] Edge types found:', Array.from(edgeTypes))
-	}
-
-	const edges = rawEdges
-		.filter((e) => e && ['cause', 'effect'].includes(e.type || ''))
+	// Only keep edges whose both endpoints exist in the filtered node set
+	const edges: Edge[] = rawEdges
+		.filter((e): e is RawEdge => !!e && !!e.source && !!e.target)
+		.filter((e) => nodeIdSet.has(String(e.source)) && nodeIdSet.has(String(e.target)))
 		.map((e) => ({
-			id: e.id || (e.source + '->' + e.target),
+			id: e.id || `${e.source}->${e.target}`,
 			from: e.source,
 			to: e.target,
 			label: String(e.label || ''),
 			width: Math.min(6, 1 + Number(e.count || 0)),
-			color: '#ff7b72',
+			dashes: e.type === 'dependency',
 		}))
-
-	// Debug: log node and edge counts
-	console.log('[DevTools] Graph stats:', {
-		totalRawNodes: rawNodes.length,
-		filteredNodes: nodes.length,
-		totalRawEdges: rawEdges.length,
-		filteredEdges: edges.length,
-		nodeLevels: nodes.map((n) => ({ id: n.id, level: n.level, label: n.label })),
-		edgeCount: edges.length,
-		sampleEdges: edges.slice(0, 3).map((e) => ({ from: e.from, to: e.to, label: e.label })),
-	})
 
 	return { nodes, edges }
 }
 
-function renderGraph(graph) {
+function renderGraph(graph: RawGraph) {
 	ensureNetwork()
 	if (!network) return
 	lastRawGraph = graph
 	const visGraph = toVisGraph(graph)
 	currentGraph = visGraph
+	const mode: LayoutMode = layoutSelect?.value === 'hierarchical' ? 'hierarchical' : 'physics'
+	network.setOptions(getOptions(mode, visGraph.nodes.length))
 	network.setData(visGraph)
-	const mode = layoutSelect && layoutSelect.value === 'physics' ? 'physics' : 'hierarchical'
-	network.setOptions(getOptions(mode))
-	network.fit({ animation: { duration: 200, easing: 'easeInOutCubic' } })
+	network.once('stabilizationIterationsDone', () => {
+		network!.fit({ animation: { duration: 300, easingFunction: 'easeInOutCubic' } })
+	})
+}
+
+function handleGraphResult(result: RawGraph | null | { error?: string }) {
+	if (!result || ('error' in result && result.error)) {
+		if (result && 'error' in result) console.error('Graph error', result.error)
+		setStatus('No graph exposed', 'warn')
+		return
+	}
+	const graph = result as RawGraph
+	renderGraph(graph)
+	const countNodes = graph.nodes?.length ?? 0
+	const countEdges = graph.edges?.length ?? 0
+	setStatus(`Showing ${countNodes} nodes / ${countEdges} edges`, 'ok')
+}
+
+function fetchGraphFromPage(): boolean {
+	const api = (window as any).__MUTTS_DEVTOOLS__ ?? (window as any).__REACTIVITY_DEVTOOLS__
+	if (!api || typeof api.getGraph !== 'function') return false
+	try {
+		handleGraphResult(api.getGraph())
+		return true
+	} catch (e) {
+		handleGraphResult({ error: String(e) })
+		return true
+	}
 }
 
 function fetchGraph() {
-	setStatus('Fetching graph from inspected page…')
-	const expr = `(() => {
-	const api = (window.__MUTTS_DEVTOOLS__ || window.__REACTIVITY_DEVTOOLS__);
-	if (!api || typeof api.getGraph !== 'function') return null;
-	try { return api.getGraph(); } catch (e) { return { error: String(e) }; }
-})()`
+	setStatus('Fetching graph…')
 
-	// call into the inspected page via Chrome DevTools API
-	if (window.chrome && window.chrome.devtools && window.chrome.devtools.inspectedWindow) {
-		window.chrome.devtools.inspectedWindow.eval(
-			expr,
-			function (result, exceptionInfo) {
-			if (exceptionInfo && exceptionInfo.isException) {
+	// Chrome DevTools extension context
+	if (window.chrome?.devtools?.inspectedWindow) {
+		const expr = `(() => {
+			const api = (window.__MUTTS_DEVTOOLS__ || window.__REACTIVITY_DEVTOOLS__);
+			if (!api || typeof api.getGraph !== 'function') return null;
+			try { return api.getGraph(); } catch (e) { return { error: String(e) }; }
+		})()`
+		window.chrome.devtools.inspectedWindow.eval(expr, function (result, exceptionInfo) {
+			if (exceptionInfo?.isException) {
 				console.error('Eval exception', exceptionInfo)
 				setStatus('Eval failed – see panel console', 'error')
 				return
 			}
-			if (!result || result.error) {
-				if (result && result.error) console.error('Graph error', result.error)
-				setStatus('No graph exposed', 'warn')
-				return
-			}
-			renderGraph(result)
-			const countNodes = Array.isArray(result.nodes) ? result.nodes.length : 0
-			const countEdges = Array.isArray(result.edges) ? result.edges.length : 0
-			setStatus('Showing ' + countNodes + ' nodes / ' + countEdges + ' edges', 'ok')
-		}
-	)
-	} else {
-		setStatus('chrome.devtools API not available in this context', 'error')
+			handleGraphResult(result)
+		})
+		return
+	}
+
+	// Standalone fallback: same-page API (for testing without extension)
+	if (!fetchGraphFromPage()) {
+		setStatus('No devtools API found — click "Enable" on the test page first', 'warn')
 	}
 }
 
@@ -219,35 +264,32 @@ function init() {
 		})
 	}
 	if (searchInput) {
-		searchInput.addEventListener('input', function (event) {
-			if (!network || !currentGraph) return
+		searchInput.addEventListener('input', (event: Event) => {
+			if (!network) return
 			const target = event.target as HTMLInputElement
-			const value = target && target.value ? String(target.value) : ''
-			const query = value.toLowerCase()
+			const query = (target?.value ?? '').toLowerCase()
 			if (!query) {
 				network.unselectAll()
 				return
 			}
 			const matches = currentGraph.nodes
-				.filter(function (n: { label: string; id: string }) {
-					return String((n && n.label) || '').toLowerCase().indexOf(query) !== -1
-				})
-				.map(function (n: { id: string }) {
-					return n.id
-				})
+				.filter((n) => String(n.label ?? '').toLowerCase().includes(query))
+				.map((n) => n.id as string)
 			if (!matches.length) {
-				setStatus('No matching effects', 'warn')
+				setStatus('No matching nodes', 'warn')
 				network.unselectAll()
 				return
 			}
 			network.selectNodes(matches)
-			network.focus(matches[0], { animation: { duration: 300 }, scale: 1.1 })
+			network.focus(matches[0], { animation: { duration: 300, easingFunction: 'easeInOutCubic' }, scale: 1.2 })
 		})
 	}
 }
 
 if (graphEl) {
 	init()
+	// Auto-fetch on load (works in both extension and standalone mode)
+	fetchGraph()
 }
 
 

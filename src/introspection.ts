@@ -42,7 +42,7 @@ export type {
 export function enableIntrospection(config: { historySize?: number } = {}) {
 	if (!options.introspection) {
 		options.introspection = {
-			gatherReasons: true,
+			gatherReasons: { lineages: 'touch' },
 			logErrors: false,
 			enableHistory: true,
 			historySize: config.historySize ?? 50,

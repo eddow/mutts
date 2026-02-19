@@ -1,9 +1,9 @@
 import { FoolProof } from '../utils'
 import { touched } from './change'
 import { makeReactiveEntriesIterator, makeReactiveIterator } from './non-reactive'
-import { reactive, unwrap } from './proxy'
+import { reactive } from './proxy'
 import { dependant } from './tracking'
-import { keysOf } from './types'
+import { keysOf, unwrap } from './types'
 
 function* index(i: number, { length = true } = {}): IterableIterator<number | 'length'> {
 	if (length) yield 'length'

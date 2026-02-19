@@ -31,9 +31,9 @@ import { named } from './utils'
 /**
  * Creates a flavored (extensible) version of a function with chainable property modifiers.
  */
-export function flavored<T extends (...args: any[]) => any, F extends Record<string, any>>(
+export function flavored<T extends (...args: any[]) => any, F>(
 	fn: T,
-	flavors: F
+	flavors: F & ThisType<T & F>
 ): T & F {
 	// Store flavors for recursive flavoring
 	;(fn as any).flavors = flavors
@@ -70,7 +70,7 @@ export function createFlavor<T extends (...args: any[]) => any>(
 	}
 	if (name) named(name, fct)
 
-	return flavored(fct as any as T, (fn as any).flavors || {})
+	return flavored(fct as T, (fn as any).flavors || {})
 }
 
 /**
@@ -102,5 +102,5 @@ export function flavorOptions<T extends (...args: any[]) => any>(
 	}
 	if (name) named(name, fct)
 
-	return flavored(fct as any as T, (fn as any).flavors || {})
+	return flavored(fct as T, (fn as any).flavors || {})
 }

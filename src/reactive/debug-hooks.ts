@@ -4,6 +4,9 @@ export interface DebugHooks {
 	isDevtoolsEnabled: () => boolean
 	registerEffect: (effect: EffectTrigger) => void
 	getTriggerChain: (effect: EffectTrigger) => string[]
+	captureStack: () => unknown
+	captureLineage: () => unknown
+	formatStack: (stack: unknown) => unknown[]
 	recordTriggerLink: (
 		source: EffectTrigger | undefined,
 		target: EffectTrigger,
@@ -17,6 +20,9 @@ export const debugHooks: DebugHooks = {
 	isDevtoolsEnabled: () => false,
 	registerEffect: () => {},
 	getTriggerChain: () => [],
+	captureStack: () => [],
+	captureLineage: () => new Error().stack,
+	formatStack: (stack: unknown) => [stack],
 	recordTriggerLink: () => {},
 }
 

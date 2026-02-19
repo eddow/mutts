@@ -1172,7 +1172,8 @@ import { morph } from 'mutts/reactive'
 
 function morph<I, O>(
   source: readonly I[] | (() => readonly I[]),
-  fn: (arg: I) => O
+  fn: (arg: I) => O,
+  options?: { pure?: boolean | ((i: I) => boolean) }
 ): O[]
 ```
 
@@ -1180,6 +1181,7 @@ function morph<I, O>(
 
 - `source`: a reactive array or a function returning one. Array mutations are tracked via `arrayDiff`.
 - `fn`: mapping callback. In the default (non-pure) mode, each element's computation runs inside its own effect, so reactive reads inside `fn` are tracked and will invalidate that element's cache when they change.
+- `options.pure`: controls per-item effect creation. `true` skips effects for all items (same as `morph.pure`). A **predicate function** `(i: I) => boolean` decides per-item: return `true` to skip the effect (pure), `false` to create one (reactive). The predicate receives the input item and is evaluated once per cache slot on first access.
 
 **Behaviour**
 
@@ -1235,6 +1237,36 @@ const doubled = morph.pure(source, x => x * 2)
 | **Callback dependency invalidation** | Automatic | None — stale if `fn` reads reactive values |
 | **Non-reactive source optimization** | Returns reactive proxy | Returns plain `source.map(fn)` |
 | **Best for** | Callbacks that read reactive state | Pure transforms (`x => x * 2`, `e => e.render()`) |
+
+### `pure` predicate — selective per-item mode
+
+When `pure` is a function, each item is individually classified as pure or reactive on first access:
+
+```typescript
+const result = morph(source, x => x * factor.value, {
+  pure: (x: number) => x > 2
+})
+```
+
+Items where the predicate returns `true` are computed once (no effect, no dependency tracking). Items where it returns `false` get a per-item effect that reacts to external dependency changes.
+
+```typescript
+const source = reactive(['static', 'dynamic', 'static'])
+const suffix = reactive({ value: '!' })
+
+const result = morph(source, s => s + suffix.value, {
+  pure: (s: string) => s === 'static'
+})
+
+result[0] // 'static!'  — pure, no effect
+result[1] // 'dynamic!' — reactive, tracks suffix.value
+
+suffix.value = '?'
+result[0] // 'static!'  — stale (pure)
+result[1] // 'dynamic?' — updated (reactive)
+```
+
+New items added to the source are classified by the predicate at first access. This is useful when some items are known to be static while others depend on external reactive state.
 
 **Example: pure vs reactive**
 

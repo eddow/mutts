@@ -1,11 +1,6 @@
 import { getActiveEffect } from '../src/reactive/effect-context'
 import { getEffectNode, getRoot } from '../src/reactive/registry'
-import { type EffectTrigger } from '../src/reactive/types'
-
-export const effectMarker ={
-	enter: 'effect:enter',
-	leave: 'effect:leave'
-}
+import { type EffectTrigger, effectMarker } from '../src/reactive/types'
 
 /**
  * Structured stack frame
@@ -17,6 +12,25 @@ export interface StackFrame {
 	columnNumber: number
 	raw: string
 }
+
+/**
+ * Represents a segment in the effect lineage
+ */
+export interface LineageSegment {
+	effect?: EffectTrigger
+	effectName: string
+	stack: StackFrame[]
+}
+
+const lineageObjects = new WeakSet<any>()
+
+/**
+ * Checks if an object is a lineage object
+ */
+export function isLineage(obj: any): obj is { segments: LineageSegment[] } {
+	return obj && typeof obj === 'object' && lineageObjects.has(obj)
+}
+
 
 /**
  * Parses a single stack line into a structured frame.
@@ -100,13 +114,6 @@ export function getStackFrame(error = new Error()): StackFrame[] {
 	return lines.map(parseStackLine).filter(Boolean)
 }
 
-/**
- * Represents a segment in the effect lineage
- */
-export interface LineageSegment {
-	effectName: string
-	stack: StackFrame[]
-}
 
 /**
  * Traces the lineage of the current execution through nested effects
@@ -119,6 +126,7 @@ export function getLineage(effect?: EffectTrigger): LineageSegment[] {
 
 	if (!currentEffect) {
 		segments.push({
+			effect: undefined,
 			effectName: 'root',
 			stack: filterNodeModules(currentStack),
 		})
@@ -132,23 +140,24 @@ export function getLineage(effect?: EffectTrigger): LineageSegment[] {
 		const rootFn = getRoot(current)
 		// Too aggressive for now
 		//if(!rootFn.name) debugger
-		const effectName = rootFn.name || 'anonymous'
 		const filteredStack = filterNodeModules(lastStack)
 		segments.push({
-			effectName,
+			effect: rootFn,
+			effectName: rootFn.name || 'anonymous',
 			stack: filteredStack,
 		})
 
 		// Move to parent
 		const node = getEffectNode(current)
 		const parent = node.parent
-		const creationStack = getEffectNode(current).creationStack
+		const creationStack = node.creationStack as StackFrame[]
 		
 		if (parent) {
 			current = parent
 			lastStack = creationStack ?? []
 		} else if (creationStack) {
 			segments.push({
+				effect: undefined,
 				effectName: 'root',
 				stack: filterNodeModules(creationStack),
 			})
@@ -169,7 +178,7 @@ function filterNodeModules(frames: StackFrame[]): StackFrame[] {
 	let inNodeModules = false
 	
 	for (const frame of frames) {
-		const isNodeModule = frame.fileName.includes('/node_modules/')
+		const isNodeModule = frame.fileName.includes('/node_modules/') //|| frame.fileName.includes('/dist/')
 		
 		if (isNodeModule && !inNodeModules) {
 			// Start of node_modules block
@@ -204,7 +213,9 @@ export function formatLineage(segments: LineageSegment[]): string {
 	for (let i = 0; i < segments.length; i++) {
 		const segment = segments[i]
 		if (i > 0) {
-			result.push(` --- effect: ${segments[i - 1].effectName} ---`)
+			const triggerEffect = segments[i - 1].effect
+			const triggerName = triggerEffect ? (getRoot(triggerEffect).name || 'anonymous') : 'root'
+			result.push(` --- effect: ${triggerName} ---`)
 		}
 		for (const frame of segment.stack) {
 			result.push(`    ${frame.raw}`)
@@ -217,7 +228,7 @@ export function formatLineage(segments: LineageSegment[]): string {
  * Logs lineage segments to console with grouping
  * @param segments - Lineage segments
  */
-export function nodeLineage(segments: LineageSegment[]): void {
+export function logLineage(segments: LineageSegment[]): void {
 	console.groupCollapsed(`🦴 Effect Lineage Trace (${segments.length} segment${segments.length === 1 ? '' : 's'})`)
 	
 	for (let i = 0; i < segments.length; i++) {
@@ -227,7 +238,7 @@ export function nodeLineage(segments: LineageSegment[]): void {
 		const isLast = i === segments.length - 1
 		const prefix = i === 0 ? '📍' : isLast ? '└─' : '├─'
 		
-		console.groupCollapsed(`${prefix} Effect: ${segment.effectName}`)
+		console.groupCollapsed(`${prefix} Effect:`, segment.effect ? segment.effect.name || 'anonymous' : 'root')
 		
 		// Add stack frames
 		for (let j = 0; j < segment.stack.length; j++) {
@@ -260,7 +271,7 @@ export function nodeLineage(segments: LineageSegment[]): void {
  * Captures and logs lineage to console
  */
 export function captureNodeLineage(): void {
-	nodeLineage(getLineage())
+	logLineage(getLineage())
 }
 
 /**
@@ -268,7 +279,7 @@ export function captureNodeLineage(): void {
  */
 export const lineageFormatter = {
 	header: (obj: any) => {
-		if (obj && obj.__isLineage__) {
+		if (isLineage(obj)) {
 			// Try to detect DevTools theme - default to dark colors if uncertain
 			const isDark = typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches
 			
@@ -282,9 +293,9 @@ export const lineageFormatter = {
 		}
 		return null
 	},
-	hasBody: (obj: any) => obj && obj.__isLineage__,
+	hasBody: (obj: any) => isLineage(obj),
 	body: (obj: any) => {
-		if (!obj || !obj.__isLineage__) return null
+		if (!isLineage(obj)) return null
 		const segments: LineageSegment[] = obj.segments
 		
 		// Try to detect DevTools theme
@@ -310,10 +321,14 @@ export const lineageFormatter = {
 				['span', {}, `${frame.fileName}:${frame.lineNumber}:${frame.columnNumber}`],
 			])
 
+			const effect = segment.effect
+
 			const segmentHeader = [
 				'div',
 				{ style: `margin-top: 5px; padding: 2px 5px; background: ${colors.segmentBg}; border-radius: 3px; font-weight: bold;` },
-				i === 0 ? `📍 Current: ${segment.effectName}` : `↖ Effect: ${segment.effectName}`,
+				i === 0 ? '📍 Current: ' : '↖ Effect: ',
+				segment.effect?.name || 'anonymous',
+				segment.effect ? ['object', { object: segment.effect }] : 'root',
 			]
 
 			return ['div', {}, segmentHeader, ...frames]
@@ -326,10 +341,11 @@ export const lineageFormatter = {
 /**
  * Wraps lineage data in a way that the Chrome Formatter can recognize.
  */
-export function wrapLineageForDebug(segments: LineageSegment[]) {
-	return {
-		__isLineage__: true,
+export function wrapLineageForDebug(segments?: LineageSegment[]) {
+	const lineage = {
 		segments,
-		toString: () => formatLineage(segments),
+		toString: () => formatLineage(segments ?? getLineage()),
 	}
+	lineageObjects.add(lineage)
+	return lineage
 }

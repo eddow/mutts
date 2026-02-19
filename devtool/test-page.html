@@ -56,17 +56,20 @@
         window.__MUTTS_DEVTOOLS__ = {
           getGraph() {
             const nodes = [
-              { id: 'effect_updateUser', label: 'effect:updateUser', type: 'effect' },
-              { id: 'effect_renderName', label: 'effect:renderName', type: 'effect' },
-              { id: 'object_user.name', label: 'user.name', type: 'state' },
-              { id: 'object_user.age', label: 'user.age', type: 'state' }
+              { id: 'effect_0', label: 'updateUser', type: 'effect', depth: 0, debugName: 'updateUser' },
+              { id: 'effect_1', label: 'renderName', type: 'effect', depth: 1, debugName: 'renderName' },
+              { id: 'effect_2', label: 'logAge', type: 'effect', depth: 1, debugName: 'logAge' },
+              { id: 'effect_external', label: 'External', type: 'external', depth: 0 },
+              { id: 'object_4', label: 'user', type: 'state', debugName: 'user' },
             ];
             const edges = [
-              { id: 'e1', source: 'effect_updateUser', target: 'object_user.name', label: 'writes' },
-              { id: 'e2', source: 'object_user.name', target: 'effect_renderName', label: 'triggers' },
-              { id: 'e3', source: 'effect_renderName', target: 'object_user.age', label: 'writes' }
+              { id: 'e1', source: 'effect_0', target: 'object_4', type: 'dependency', label: 'depends' },
+              { id: 'e2', source: 'effect_1', target: 'object_4', type: 'dependency', label: 'depends' },
+              { id: 'e3', source: 'effect_external', target: 'effect_0', type: 'cause', label: 'user.name', count: 3 },
+              { id: 'e4', source: 'effect_0', target: 'effect_1', type: 'cause', label: 'user.name' },
+              { id: 'e5', source: 'effect_0', target: 'effect_2', type: 'cause', label: 'user.age' },
             ];
-            return { nodes, edges };
+            return { nodes, edges, meta: { generatedAt: Date.now(), devtoolsEnabled: true } };
           },
           setEffectName(effect, name) {
             log(`Set effect name: ${name}`);

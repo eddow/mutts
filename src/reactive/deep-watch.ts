@@ -6,20 +6,9 @@ import {
 } from './deep-watch-state'
 import { effect } from './effects'
 import { isNonReactive } from './non-reactive-state'
-import { reactive, unwrap } from './proxy'
+import { reactive } from './proxy'
 import { markWithRoot } from './registry'
-import { type EffectCleanup, type EffectTrigger, options } from './types'
-
-export {
-	addBackReference,
-	bubbleUpChange,
-	deepWatchers,
-	effectToDeepWatchedObjects,
-	needsBackReferences,
-	objectParents,
-	objectsWithDeepWatchers,
-	removeBackReference,
-} from './deep-watch-state'
+import { type EffectCleanup, type EffectTrigger, options, unwrap } from './types'
 
 /**
  * Deep watch an object and all its nested properties

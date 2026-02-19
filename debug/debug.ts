@@ -8,7 +8,7 @@
 import { effect } from '../src/reactive/effects'
 import { effectToReactiveObjects, getEffectNode, getRoot, markWithRoot } from '../src/reactive/registry'
 import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, options } from '../src/reactive/types'
-import { getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter, nodeLineage } from './lineage'
+import { getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter, logLineage, isLineage } from './lineage'
 import { showLineagePanel } from './lineage-panel'
 import { setDebugHooks } from '../src/reactive/debug-hooks'
 
@@ -110,8 +110,10 @@ function ensureEffectName(effect: EffectTrigger | EffectCleanup): string {
 function ensureObjectName(obj: object): string {
 	let name = objectNames.get(obj)
 	if (!name) {
-		const ctorName = (obj as any)?.constructor?.name
-		const base = ctorName && ctorName !== 'Object' ? ctorName : 'object'
+		// Try Symbol.toStringTag first (standard way to customize object string representation)
+		const toStringTag = obj?.[Symbol.toStringTag]
+		const ctorName = obj?.constructor?.name
+		const base = toStringTag || (ctorName && ctorName !== 'Object' ? ctorName : 'object')
 		name = `${base}_${++objectCounter}`
 		objectNames.set(obj, name)
 	}
@@ -424,7 +426,7 @@ export function buildReactivityGraph(): ReactivityGraph {
 		},
 	}
 }
-
+export const captureLineage = () => wrapLineageForDebug(getLineage())
 /**
  * Enables the DevTools bridge and exposes the debug API on window/global.
  * Call as early as possible in development builds.
@@ -445,15 +447,15 @@ export function enableDevTools() {
 	if (options.introspection) {
 		options.introspection.logErrors = true
 	}
-
+	
 	globalScope.__MUTTS_DEVTOOLS__ = {
 		getGraph: buildReactivityGraph,
-		nodeLineage(tag?: string) {
-			nodeLineage(getLineage())
+		logLineage(tag?: string) {
+			logLineage(getLineage())
 			return '🦴 Effect Lineage Trace' + (tag ? ` (${tag})` : '')
 		},
 		get browserLineage() {
-			return wrapLineageForDebug(getLineage())
+			return captureLineage()
 		},
 		getLineage,
 		captureLineage: getStackFrame,
@@ -476,6 +478,23 @@ export function enableDevTools() {
 		isDevtoolsEnabled: () => devtoolsEnabled,
 		registerEffect: registerEffectForDebug,
 		getTriggerChain: getTriggerChain,
+		captureStack: getStackFrame,
+		captureLineage,
+		formatStack: (stack: any) => {
+			if (typeof stack === 'string') {
+				return [
+					`\n    ${stack
+						.split('\n')
+						.slice(1)
+						.map((l) => l.trim())
+						.join('\n    ')}`,
+				]
+			}
+			if (isLineage(stack)) {
+				return ['\n', stack]
+			}
+			return ['\n', stack]
+		},
 		recordTriggerLink: recordTriggerLink,
 	})
 }

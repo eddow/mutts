@@ -3,6 +3,7 @@ import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { getActiveEffect, isRunning } from './effect-context'
 import { batch, hasBatched, recordActivation } from './effects'
 import { getEffectNode, watchers } from './registry'
+import { getDependencyStack } from './tracking'
 import {
 	allProps,
 	type EffectTrigger,
@@ -42,7 +43,7 @@ export function getState(obj: any) {
 export function collectEffects(
 	obj: any,
 	evolution: Evolution,
-	effects: Set<EffectTrigger>,
+	effects: Map<EffectTrigger, unknown>,
 	objectWatchers: Map<any, Set<EffectTrigger>>,
 	...keyChains: Iterable<any>[]
 ) {
@@ -58,7 +59,7 @@ export function collectEffects(
 						continue
 					}
 					if (!effects.has(effect)) {
-						effects.add(effect)
+						effects.set(effect, getDependencyStack(effect, obj, key))
 						if (!hasBatched(effect)) recordActivation(effect, obj, evolution, key)
 					}
 					debugHooks.recordTriggerLink(sourceEffect, effect, obj, key, evolution)
@@ -89,22 +90,30 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 	const objectWatchers = watchers.get(obj)
 	if (objectWatchers) {
 		// Note: we have to collect effects to remove duplicates in the specific case when no batch is running
-		const effects = new Set<EffectTrigger>()
-		const structural = evolution.type !== 'set'
+		const effects = new Map<EffectTrigger, unknown>()
+		const structural = !['set', 'invalidate'].includes(evolution.type)
 		const broad = structural ? [allProps, keysOf] : [allProps]
 		if (props) collectEffects(obj, evolution, effects, objectWatchers, broad, props)
 		else collectEffects(obj, evolution, effects, objectWatchers, objectWatchers.keys())
-		optionCall('touched', obj, evolution, props as any[] | undefined, effects)
+		const triggers = Array.from(effects.keys())
+		optionCall('touched', obj, evolution, props as any[] | undefined, triggers)
 		// Store pending triggers for CleanupReason before batching
 		if (options.introspection?.gatherReasons) {
-			const stack = debugHooks.isDevtoolsEnabled() ? new Error().stack : undefined
-			for (const effect of effects) {
+			const gatherReasons = options.introspection.gatherReasons
+			const lineageConfig = gatherReasons.lineages
+			
+			let touchStack: unknown | undefined
+			if (lineageConfig === 'touch' || lineageConfig === 'both') {
+				touchStack = debugHooks.captureLineage()
+			}
+			
+			for (const [effect, dependencyStack] of effects) {
 				const node = getEffectNode(effect)
 				if (!node.pendingTriggers) node.pendingTriggers = []
-				node.pendingTriggers.push({ obj, evolution, stack })
+				node.pendingTriggers.push({ obj, evolution, dependency: dependencyStack, touch: touchStack })
 			}
 		}
-		batch(Array.from(effects))
+		batch(triggers)
 	}
 
 	// Bubble up changes if this object has deep watchers
@@ -129,27 +138,56 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 	const sourceEffect = getActiveEffect()
 
 	const gather = options.introspection?.gatherReasons
-	const stack = gather && debugHooks.isDevtoolsEnabled() ? new Error().stack : undefined
-	for (const effect of deps) {
-		const node = getEffectNode(effect)
-		if (!node.isOpaque) continue
+	
+	if (gather) {
+		const lineageConfig = gather.lineages
+		
+		for (const effect of deps) {
+			const node = getEffectNode(effect)
+			if (!node.isOpaque) continue
 
-		const runningChain = isRunning(effect)
-		if (runningChain) {
-			optionCall('skipRunningEffect', effect)
-			continue
+			const runningChain = isRunning(effect)
+			if (runningChain) {
+				optionCall('skipRunningEffect', effect)
+				continue
+			}
+			effects.add(effect)
+			if (gather) {
+				let touchStack: unknown | undefined
+				let dependencyStack: unknown | undefined
+				
+				if (lineageConfig === 'touch' || lineageConfig === 'both') {
+					touchStack = debugHooks.captureLineage()
+				}
+				if (lineageConfig === 'dependency' || lineageConfig === 'both') {
+					dependencyStack = getDependencyStack(effect, obj, prop)
+				}
+				
+				if (!node.pendingTriggers) node.pendingTriggers = []
+				node.pendingTriggers.push({ obj, evolution, dependency: dependencyStack, touch: touchStack })
+			}
+			recordActivation(effect, obj, evolution, prop)
+			debugHooks.recordTriggerLink(sourceEffect, effect, obj, prop, evolution)
 		}
-		effects.add(effect)
-		if (gather) {
-			if (!node.pendingTriggers) node.pendingTriggers = []
-			node.pendingTriggers.push({ obj, evolution, stack })
+	} else {
+		// When not gathering reasons, process effects normally
+		for (const effect of deps) {
+			const node = getEffectNode(effect)
+			if (!node.isOpaque) continue
+
+			const runningChain = isRunning(effect)
+			if (runningChain) {
+				optionCall('skipRunningEffect', effect)
+				continue
+			}
+			effects.add(effect)
+			recordActivation(effect, obj, evolution, prop)
+			debugHooks.recordTriggerLink(sourceEffect, effect, obj, prop, evolution)
 		}
-		recordActivation(effect, obj, evolution, prop)
-		debugHooks.recordTriggerLink(sourceEffect, effect, obj, prop, evolution)
 	}
 
 	if (effects.size > 0) {
-		optionCall('touched', obj, evolution, [prop], effects)
+		optionCall('touched', obj, evolution, [prop], Array.from(effects))
 		batch(Array.from(effects))
 	}
 }
