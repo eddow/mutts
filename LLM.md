@@ -28,12 +28,14 @@ Each entry point has a `.dev` variant (`entry-browser.dev.ts`, `entry-node.dev.t
 
 ### 1. Reactivity (`mutts/reactive`)
 *   **Proxy-based**: Uses `Proxy` to track dependencies.
+*   **Robust Batching**: Uses a `batchStack` to support deeply nested `batch()` and `immediate` calls. Each level manages its own sub-queue and cleanups correctly.
 *   **API**:
     *   `reactive(obj)`: Creates a reactive proxy.
     *   `effect(() => { ... })`: Runs side effects when dependencies change.
     *   `memoize(() => ...)`: Computed values.
     *   `project(array, itemEffect)`: Efficient array-to-collection mapping. (reactive .map)
     *   `scan(array, callback, initialValue)`: Reactive scan/accumulation (optimized for moves).
+    *   `reset()`: Restores the system to a clean state. Clears diagnostic lineage tracking data and active dependency stacks.
     *   **Opaque Effects**: `effect(fn, { opaque: true })` bypasses deep-touch optimizations to strict identity tracking.
     *   **`keysOf` tracking**: `Object.keys()`, `for..in`, `Map.keys()` only depend on structure (add/delete), not value changes. `Object.entries()`, `Object.values()`, `Map.entries()` still track values via `get`.
 
@@ -171,6 +173,7 @@ Track the creation history of effects intertwined with JS stack traces. This is 
 
 - `getLineage()`: Returns a structured lineage (`LineageSegment[]`) of the current execution.
 - `showLineagePanel()`: Displays a floating real-time visualization panel in the browser.
+- **Improved Isolation**: Lineage data is now correctly cleared by `reset()`, ensuring no diagnostic leakage between tests.
 - **Rich Console**: In Chrome, `mutate.lineage` (via DevTools) provides an interactive, expandable view with clickable source links.
 - To enable lineage tracking, set `reactiveOptions.introspection.enableHistory = true`.
 

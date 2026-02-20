@@ -365,7 +365,11 @@ export function lift<Output extends any[] | object>(
 	}, cb))
 	return cleanedBy(result, liftCleanup)
 }
-
+function* flat<T>(...subs: Iterable<T>[]) {
+	for(const sub of subs)
+		for(const i of sub)
+			yield i
+}
 export const morph = flavored(
 	function morph<I, O>(
 		source: readonly I[] | (() => readonly I[]),
@@ -406,26 +410,26 @@ export const morph = flavored(
 			effect.named('morph')(({ascend}) => {
 				track = ascend
 				const newInput = [...(typeof source === 'function' ? source() : source)]
-				const evolution = { type: 'bunch', method: 'morph-input' } as const
 				let madeAll = false
+				const invalidates: Iterable<PropertyKey>[] = []
 				for (const diff of arrayDiff(input, newInput).toSorted((a,b)=> a.indexA-b.indexA)) {
 					cache.splice(
 						diff.indexA,
 						diff.sliceA.length,
 						...new Array(diff.sliceB.length).fill(undefined)
 					)
+					for (const i of range(diff.indexA, diff.indexA + diff.sliceB.length)) delete cache[i]
 					if (!madeAll) {
-						// TODO: test that `slice` touches "until the end" when the slice length is different than the given length to slice
 						if (diff.sliceA.length === diff.sliceB.length)
-							touched(cache, evolution, range(diff.indexA, diff.indexA + diff.sliceA.length))
+							invalidates.push(range(diff.indexA, diff.indexA + diff.sliceA.length))
 						else {
-							touched(cache, evolution, range(diff.indexA, newInput.length))
+							invalidates.push(range(diff.indexA, newInput.length))
 							madeAll = true
 						}
 					}
-					for (const i of range(diff.indexA, diff.indexA + diff.sliceB.length)) delete cache[i]
 				}
-				if (input.length !== newInput.length) touched(cache, evolution, ['length', keysOf])
+				if (input.length !== newInput.length) invalidates.push(['length', keysOf])
+				touched(cache, { type: 'bunch', method: 'morph-input' }, flat(...invalidates))
 				input = newInput
 			})
 		)

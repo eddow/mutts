@@ -12,6 +12,7 @@ import {
 	resetRegistry,
 	watchers,
 } from './registry'
+import { resetTracking } from './tracking'
 import {
 	type CatchFunction,
 	type CleanupReason,
@@ -27,6 +28,7 @@ import {
 	ReactiveError,
 	ReactiveErrorCode,
 	// type AsyncExecutionMode,
+	type PropTrigger,
 	type ScopedCallback,
 	stopped,
 	unwrap,
@@ -401,16 +403,18 @@ interface BatchQueue {
 	all: Map<Function, EffectTrigger> // root → effect
 	// Cached in-degrees for each effect in the batch (number of causes in batch)
 	inDegrees: Map<Function, number> // root → in-degree count
+	// Deferred callbacks to run after this batch completes (populated by defer())
+	deferreds: Set<ScopedCallback>
 }
 
 // Track currently executing effects to prevent re-execution
 // These are all the effects triggered under `activeEffect`
-let batchQueue: BatchQueue | undefined
+// Batch stack - handles nested batches by giving each its own queue
+const batchStack: BatchQueue[] = []
 export function hasBatched(effect: EffectTrigger) {
-	return batchQueue?.all.has(getRoot(effect))
+	const root = getRoot(effect)
+	return batchStack.some(bs=> bs.all.has(root))
 }
-const batchCleanups = new Set<EffectCleanup>()
-
 // DEV: stack of currently-executing effects (push on enter, pop on leave)
 const executingStack: EffectTrigger[] = []
 export function getExecutingStack(): readonly EffectTrigger[] {
@@ -563,8 +567,9 @@ function addToBatch(
 	reason?: CleanupReason
 ) {
 	const node = getEffectNode(effect)
+	const currentBatch = batchStack[batchStack.length - 1]
 
-	if (!batchQueue) {
+	if (!currentBatch) {
 		return
 	}
 
@@ -577,35 +582,64 @@ function addToBatch(
 	node.pendingTriggers = undefined
 
 	if (reason) {
-		if (reason.type === 'propChange' && node.nextReason && node.nextReason.type === 'propChange') {
-			node.nextReason.triggers.push(...reason.triggers)
-		} else {
+		const existing = node.nextReason
+		if (!existing) {
 			node.nextReason = reason
+		} else {
+			const mergePropChange = (
+				into: CleanupReason,
+				from: { type: 'propChange'; triggers: PropTrigger[] }
+			): boolean => {
+				if (into.type === 'propChange') {
+					into.triggers.push(...from.triggers)
+					return true
+				}
+				if (into.type === 'multiple') {
+					const target = into.reasons.find((r) => r.type === 'propChange') as
+						| { type: 'propChange'; triggers: PropTrigger[] }
+						| undefined
+					if (target) {
+						target.triggers.push(...from.triggers)
+						return true
+					}
+				}
+				return false
+			}
+
+			if (reason.type === 'propChange') {
+				if (!mergePropChange(existing, reason)) {
+					if (existing.type === 'multiple') {
+						existing.reasons.push(reason)
+					} else {
+						node.nextReason = { type: 'multiple', reasons: [existing, reason] }
+					}
+				}
+			} else if (existing.type === 'multiple') {
+				existing.reasons.push(reason)
+			} else {
+				node.nextReason = { type: 'multiple', reasons: [existing, reason] }
+			}
 		}
 	}
 
 	// 1. Add to batch first (needed for cycle detection)
+	// TODO: Check if it's the correct way to do (these different behavior in function of dev/production)
 	if (options.cycleHandling === 'production') {
 		// Production mode: FIFO (delete and re-add to move to end)
-		if (batchQueue.all.has(root)) {
-			batchQueue.all.delete(root)
+		if (currentBatch.all.has(root)) {
+			currentBatch.all.delete(root)
 		}
 	} else {
 		// Dev mode: skip if already queued — the existing entry will re-run
-		if (batchQueue.all.has(root)) {
+		if (currentBatch.all.has(root)) {
 			return
 		}
 	}
 
-	// Cleanup AFTER confirming the effect will be (re-)added to the batch.
-	// Running cleanup before the check would destroy watcher registrations
-	// even when the effect is dropped (root already queued), permanently
-	// orphaning the effect from its dependencies.
-	node.cleanup?.(reason)
 	// If the effect was stopped during cleanup (e.g. lazy memoization), don't add it to the batch
 	if (node.stopped) return
 
-	batchQueue.all.set(root, effect)
+	currentBatch.all.set(root, effect)
 
 	if (caller && !immediate && options.cycleHandling !== 'production') {
 		const callerRoot = getRoot(caller)
@@ -619,7 +653,7 @@ function addToBatch(
 					? `Cycle detected: ${cyclePath.map((r) => r.name || r.toString()).join(' → ')}`
 					: `Cycle detected: ${callerRoot.name || callerRoot.toString()} → ${root.name || root.toString()} (and back)`
 
-			batchQueue.all.delete(root)
+			currentBatch.all.delete(root)
 			const causalChain = debugHooks.getTriggerChain(effect)
 			const lineage = getEffectNode(effect).creationStack
 
@@ -641,8 +675,9 @@ function addToBatch(
  * @param cleanup - The cleanup function to add
  */
 export function addBatchCleanup(cleanup: EffectCleanup) {
-	if (!batchQueue) cleanup()
-	else batchCleanups.add(cleanup)
+	const currentBatch = batchStack[batchStack.length - 1]
+	if (!currentBatch) cleanup()
+	else currentBatch.deferreds.add(cleanup)
 }
 
 /**
@@ -670,19 +705,19 @@ export const defer = addBatchCleanup
 /**
  * Gets a cycle path for debugging
  * Uses DFS to find cycles in the batch
- * @param batchQueue - The batch queue
+ * @param batch - The batch queue
  * @returns Array of effect roots forming a cycle
  */
-function getCyclePath(batchQueue: BatchQueue): Function[] {
+function getCyclePath(batch: BatchQueue): Function[] {
 	// If all effects have in-degree > 0, there must be a cycle
 	// Use DFS to find it
 	const visited = new Set<Function>()
 	const recursionStack = new Set<Function>()
 	const path: Function[] = []
 
-	for (const [root] of batchQueue.all) {
+	for (const [root] of batch.all) {
 		if (visited.has(root)) continue
-		const cycle = findCycle(root, visited, recursionStack, path, batchQueue)
+		const cycle = findCycle(root, visited, recursionStack, path, batch)
 		if (cycle.length > 0) {
 			return cycle
 		}
@@ -696,7 +731,7 @@ function findCycle(
 	visited: Set<Function>,
 	recursionStack: Set<Function>,
 	path: Function[],
-	batchQueue: BatchQueue
+	batch: BatchQueue
 ): Function[] {
 	if (recursionStack.has(root)) {
 		// Found a cycle! Return the path from the cycle start to root
@@ -717,8 +752,8 @@ function findCycle(
 	const triggers = effectTriggers.get(root)
 	if (triggers) {
 		for (const targetRoot of triggers) {
-			if (batchQueue.all.has(targetRoot)) {
-				const cycle = findCycle(targetRoot, visited, recursionStack, path, batchQueue)
+			if (batch.all.has(targetRoot)) {
+				const cycle = findCycle(targetRoot, visited, recursionStack, path, batch)
 				if (cycle.length > 0) {
 					return cycle
 				}
@@ -737,21 +772,24 @@ function findCycle(
  * @returns The return value of the executed effect, or null if batch is complete
  */
 function executeNext(effectuatedRoots: Function[]): any {
+	const currentBatch = batchStack[batchStack.length - 1]
+	if (!currentBatch) return null
+
 	// Find an effect with in-degree 0 using cached values
 	let nextEffect: EffectTrigger | null = null
 	let nextRoot: Function | null = null
 
 	if (options.cycleHandling === 'production') {
 		// In flat mode, we just take the first effect in the queue (FIFO)
-		const first = batchQueue!.all.entries().next().value
+		const first = currentBatch.all.entries().next().value
 		if (first) {
 			;[nextRoot, nextEffect] = first
 		}
 	} else {
 		// Find an effect with in-degree 0 (no dependencies in batch that still need execution)
 		// Using cached in-degrees for O(n) lookup instead of O(n²)
-		for (const [root, effect] of batchQueue!.all) {
-			const inDegree = batchQueue!.inDegrees.get(root) ?? 0
+		for (const [root, effect] of currentBatch.all) {
+			const inDegree = currentBatch.inDegrees.get(root) ?? 0
 			if (inDegree === 0) {
 				nextEffect = effect
 				nextRoot = root
@@ -763,21 +801,21 @@ function executeNext(effectuatedRoots: Function[]): any {
 	if (!nextEffect) {
 		// No effect with in-degree 0 - there must be a cycle
 		// If all effects have dependencies, it means there's a circular dependency
-		if (batchQueue!.all.size > 0) {
-			let cycle = getCyclePath(batchQueue!)
+		if (currentBatch.all.size > 0) {
+			let cycle = getCyclePath(currentBatch)
 			// If we couldn't find a cycle path using direct edges, try using closures
 			// (transitive relationships) - if all effects have in-degree > 0, there must be a cycle
 			if (cycle.length === 0) {
 				// Try to find a cycle using consequencesClosure (transitive relationships)
 				// Note: Self-loops are ignored - we only look for cycles between different effects
-				for (const [root] of batchQueue!.all) {
+				for (const [root] of currentBatch.all) {
 					const consequences = consequencesClosure.get(root)
 					if (consequences) {
 						// Check if any consequence in the batch also has root as a consequence
 						for (const consequence of consequences) {
 							// Skip self-loops - they are ignored
 							if (consequence === root) continue
-							if (batchQueue!.all.has(consequence)) {
+							if (currentBatch.all.has(consequence)) {
 								const consequenceConsequences = consequencesClosure.get(consequence)
 								if (consequenceConsequences?.has(root)) {
 									// Found cycle: root -> consequence -> root
@@ -809,23 +847,33 @@ function executeNext(effectuatedRoots: Function[]): any {
 	executingStack.push(nextEffect)
 	let result: any
 	try {
+		const node = getEffectNode(nextEffect)
+		const reason = node.nextReason
+		if (node.cleanup) {
+			const cleanup = node.cleanup
+			node.cleanup = undefined
+			cleanup(reason)
+		}
 		result = nextEffect()
 	} finally {
 		executingStack.pop()
 	}
 
-	// Remove from batch and update in-degrees of dependents
-	batchQueue!.all.delete(nextRoot!)
-	batchQueue!.inDegrees.delete(nextRoot!)
-	decrementInDegreesForExecuted(batchQueue!, nextRoot!)
+	// Remove from ALL batches in the stack and update in-degrees of dependents
+	for (let i = batchStack.length - 1; i >= 0; i--) {
+		const batch = batchStack[i]
+		if (batch.all.has(nextRoot!)) {
+			batch.all.delete(nextRoot!)
+			batch.inDegrees.delete(nextRoot!)
+			decrementInDegreesForExecuted(batch, nextRoot!)
+		}
+	}
 
 	return result
 }
 
 // Track which sub-effects have been executed to prevent infinite loops
 // These are all the effects triggered under `activeEffect` and all their sub-effects
-// TODO: We shouldn't finish all the batch queue - each batch should make its sub-queue and finish it, while "cleaning" parent batches queue if it executes one of them
-//  Point is, the point of the batch is to delay as much as possible to make sure it occurs as few as possible
 export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'immediate') {
 	if (broken) {
 		throw new ReactiveError(
@@ -837,139 +885,128 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 	const roots = effect.map(getRoot)
 
 	batchDepth++
-	try {
-		if (batchQueue) {
-			// Nested batch - add to existing
-			options?.chain(roots, getRoot(getActiveEffect()))
-			const caller = getActiveEffect()
-			for (let i = 0; i < effect.length; i++)
-				addToBatch(effect[i], caller, immediate === 'immediate')
-			if (immediate) {
-				const firstReturn: { value?: any } = {}
-				// Execute immediately (before batch returns)
-				for (let i = 0; i < effect.length; i++) {
-					executingStack.push(effect[i])
-					try {
-						const rv = effect[i]()
-						if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
-					} finally {
-						executingStack.pop()
-						const root = getRoot(effect[i])
-						batchQueue.all.delete(root)
-					}
-				}
-				return firstReturn.value
-			}
-			// Otherwise, effects will be picked up in next executeNext() call
-		} else {
-			// New batch - initialize
-			if (!activationRegistry) activationRegistry = new Map()
-			else throw new Error('Batch already in progress')
-			optionCall('beginChain', roots)
-			batchQueue = {
-				all: new Map(),
-				inDegrees: new Map(),
-			}
+	const isNewBatch = batchStack.length === 0
+	if (isNewBatch) {
+		if (!activationRegistry) activationRegistry = new Map()
+		else throw new Error('Activation registry already exists')
+		optionCall('beginChain', roots)
+	}
 
-			const caller = getActiveEffect()
-			const effectuatedRoots: Function[] = []
-			const firstReturn: { value?: any } = {}
-			let success = false
+	const caller = getActiveEffect()
 
-			try {
-				if (immediate) {
-					// Execute initial effects in providing order
-					for (let i = 0; i < effect.length; i++) {
-						executingStack.push(effect[i])
-						try {
-							const rv = effect[i]()
-							if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
-						} finally {
-							executingStack.pop()
-							batchQueue.all.delete(getRoot(effect[i]))
-						}
-					}
-				} else {
-					// Add initial effects to batch and compute dependencies
-					const len = effect.length
-					for (let i = 0; i < len; i++) {
-						addToBatch(effect[i], caller, false)
-					}
-					computeAllInDegrees(batchQueue)
-				}
-
-				// Process the batch
-				while (batchQueue.all.size > 0 || batchCleanups.size > 0) {
-					if (batchQueue.all.size > 0) {
-						if (effectuatedRoots.length > options.maxEffectChain) {
-							const cycle = findCycleInChain(effectuatedRoots as any)
-							const trace = formatRoots(effectuatedRoots as any)
-							const message = cycle
-								? `Max effect chain reached (cycle detected: ${formatRoots(cycle)})`
-								: `Max effect chain reached (trace: ${trace})`
-
-							const queuedRoots = batchQueue ? Array.from(batchQueue.all.keys()) : []
-							const queued = queuedRoots.map((r) => r.name || '<anonymous>')
-							const debugInfo = {
-								code: ReactiveErrorCode.MaxDepthExceeded,
-								effectuatedRoots,
-								cycle,
-								trace,
-								maxEffectChain: options.maxEffectChain,
-								queued: queued.slice(0, 50),
-								queuedCount: queued.length,
-								// Try to get causation for the last effect
-								causalChain:
-									effectuatedRoots.length > 0
-										? debugHooks.getTriggerChain(
-												batchQueue.all.get(effectuatedRoots[effectuatedRoots.length - 1])!
-											)
-										: [],
-							}
-							switch (options.maxEffectReaction) {
-								case 'throw':
-									throw new ReactiveError(`[reactive] ${message}`, debugInfo)
-								case 'debug':
-									// biome-ignore lint/suspicious/noDebugger: This is the whole point here
-									debugger
-									throw new ReactiveError(`[reactive] ${message}`, debugInfo)
-								case 'warn':
-									options.warn(
-										`[reactive] ${message} (queued: ${queued.slice(0, 10).join(', ')}${queued.length > 10 ? ', …' : ''})`
-									)
-									break
-							}
-						}
-						const rv = executeNext(effectuatedRoots)
-						if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
-					} else {
-						// Process cleanups. If they trigger more effects, they will be caught in the next iteration.
-						const cleanups = Array.from(batchCleanups)
-						batchCleanups.clear()
-						for (const cleanup of cleanups) cleanup()
-
-						// In immediate mode, we traditionally don't process recursive effects from cleanups.
-						// If we want to keep that behavior: if (immediate) break
-					}
-				}
-				success = true
-			} finally {
-				if (!success) panicThrow()
-				activationRegistry = undefined
-				batchQueue = undefined
-				batchCleanups.clear()
-				optionCall('endChain')
-			}
-			return firstReturn.value
+	// Optimization: If nested and NOT immediate, just join the existing batch
+	if (!isNewBatch && !immediate) {
+		for (let i = 0; i < effect.length; i++) {
+			addToBatch(effect[i], caller, false)
 		}
-	} finally {
 		batchDepth--
+		return
+	}
+
+	const currentBatch: BatchQueue = {
+		all: new Map(),
+		inDegrees: new Map(),
+		deferreds: new Set(),
+	}
+	batchStack.push(currentBatch)
+
+	let success = false
+	try {
+		const effectuatedRoots: Function[] = []
+		const firstReturn: { value?: any } = {}
+
+		if (immediate) {
+			// Execute initial effects in providing order
+			for (let i = 0; i < effect.length; i++) {
+				executingStack.push(effect[i])
+				try {
+					const node = getEffectNode(effect[i])
+					const reason = node.nextReason
+					if (node.cleanup) {
+						const cleanup = node.cleanup
+						node.cleanup = undefined
+						cleanup(reason)
+					}
+					const rv = effect[i]()
+					if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
+				} finally {
+					executingStack.pop()
+					currentBatch.all.delete(getRoot(effect[i]))
+				}
+			}
+		} else {
+			// Add initial effects to batch and compute dependencies
+			for (let i = 0; i < effect.length; i++) {
+				addToBatch(effect[i], caller, false)
+			}
+			computeAllInDegrees(currentBatch)
+		}
+
+		// Process the current batch queue
+		while (currentBatch.all.size > 0 || currentBatch.deferreds.size > 0) {
+			if (currentBatch.all.size > 0) {
+				if (effectuatedRoots.length > options.maxEffectChain) {
+					const cycle = findCycleInChain(effectuatedRoots as any)
+					const trace = formatRoots(effectuatedRoots as any)
+					const message = cycle
+						? `Max effect chain reached (cycle detected: ${formatRoots(cycle)})`
+						: `Max effect chain reached (trace: ${trace})`
+
+					const queuedRoots = Array.from(currentBatch.all.keys())
+					const queued = queuedRoots.map((r) => r.name || '<anonymous>')
+					const debugInfo = {
+						code: ReactiveErrorCode.MaxDepthExceeded,
+						effectuatedRoots,
+						cycle,
+						trace,
+						maxEffectChain: options.maxEffectChain,
+						queued: queued.slice(0, 50),
+						queuedCount: queued.length,
+						causalChain:
+							effectuatedRoots.length > 0
+								? debugHooks.getTriggerChain(
+										currentBatch.all.get(effectuatedRoots[effectuatedRoots.length - 1])!
+									)
+								: [],
+					}
+					switch (options.maxEffectReaction) {
+						case 'throw':
+							throw new ReactiveError(`[reactive] ${message}`, debugInfo)
+						case 'debug':
+							// biome-ignore lint/suspicious/noDebugger: This is the whole point here
+							debugger
+							throw new ReactiveError(`[reactive] ${message}`, debugInfo)
+						case 'warn':
+							options.warn(
+								`[reactive] ${message} (queued: ${queued.slice(0, 10).join(', ')}${queued.length > 10 ? ', …' : ''})`
+							)
+							break
+					}
+				}
+				const rv = executeNext(effectuatedRoots)
+				if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
+			} else {
+				// Process deferreds for this batch.
+				const deferreds = Array.from(currentBatch.deferreds)
+				currentBatch.deferreds.clear()
+				for (const deferred of deferreds) deferred()
+			}
+		}
+		success = true
+		return firstReturn.value
+	} finally {
+		if (!success && batchStack.length === 1) {
+			broken = true
+		}
+		batchStack.pop()
+		batchDepth--
+		if (batchStack.length === 0) {
+			activationRegistry = undefined
+			optionCall('endChain')
+		}
 	}
 }
 
-function panicThrow() {
-	broken = true
-}
 
 /**
  * Resets the reactive system to a consistent state.
@@ -981,13 +1018,13 @@ export function reset() {
 	broken = false
 	batchDepth = 0
 	activationRegistry = undefined
-	batchQueue = undefined
-	batchCleanups.clear()
+	batchStack.length = 0
 	effectTriggers = new WeakMap()
 	effectTriggeredBy = new WeakMap()
 	causesClosure = new WeakMap()
 	consequencesClosure = new WeakMap()
 	resetRegistry()
+	resetTracking()
 	effectHistory.present.active = undefined
 }
 

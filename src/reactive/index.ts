@@ -5,6 +5,7 @@ export { cleanedBy, effectAggregator, getActiveEffect } from './effect-context'
 export {
 	addBatchCleanup,
 	atomic,
+	//batch, - NEVER export batch, it deals with EffectTriggers who are internal types - mutts consumers use `atomic`
 	biDi,
 	caught,
 	defer,

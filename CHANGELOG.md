@@ -1,30 +1,30 @@
-# 1.0.11
-
-## Functionality
-
-- `morph(source, fn)`: lazy, identity-stable reactive array mapping. Tracks source mutations via `arrayDiff`, computes elements on access with per-item effects for dependency tracking.
-- `morph.pure`: flavored variant that skips per-item effects — for pure callbacks with no external reactive dependencies. Returns a plain array for non-reactive sources.
-- `memoize.lenient`: flavored variant that gracefully handles non-WeakKey arguments (primitives, `null`, `undefined`) by falling back to recomputation instead of throwing.
-
-## Refactoring
-
-- `memoize` is now a `flavored` function (decorator support preserved).
-- `morph` is a `flavored` function exported from `mutts/reactive`.
-- `project` marked as deprecated in favour of `morph`.
-
 # 1.0.10
 
 ## Functionality
 
-- `arrayDiff`: Myers' diff algorithm for array reconciliation.
+- **`morph(source, fn)`**: lazy, identity-stable reactive array mapping. Tracks source mutations via `arrayDiff`, computes elements on access with per-item effects for dependency tracking.
+- **`morph.pure`**: flavored variant that skips per-item effects — for pure callbacks with no external reactive dependencies. Returns a plain array for non-reactive sources.
+- **`memoize.lenient`**: flavored variant that gracefully handles non-WeakKey arguments (primitives, `null`, `undefined`) by falling back to recomputation instead of throwing.
+- **`arrayDiff`**: Myers' diff algorithm for array reconciliation.
+
+## Bugfixes & Stability
+
+- **Refactored Batching System**: Replaced the global batch queue with a robust `batchStack`. Nested `batch()` and `immediate` calls now manage their own sub-queues correctly, preventing cross-contamination and premature cleanup.
+- **Cleanup Timing Fix**: Effect cleanup moved to execution-time. This ensures that `CleanupReason` (including lineage stacks) is accurately captured and remains available during the entire cleanup process.
+- **Enhanced Test Isolation**: Added `resetTracking()` (integrated into `reset()`) to clear diagnostic lineage data, preventing state leakage between tests.
+- **Refined Panic Logic**: The system now only enters a "broken" state (`BROKEN_EFFECTS`) when an unrecoverable error escapes the root batch. Nested effects can safely propagate errors for recovery without compromising system stability.
+- **Deep-Touch Safety**: Added safety checks in property notification loops to prevent panics during complex structural updates.
 
 ## Refactoring
 
-
-- `when`: reactive boolean => promise
-- `resource`: reactive resource
+- **`memoize`** is now a `flavored` function (decorator support preserved).
+- **`morph`** is a `flavored` function exported from `mutts/reactive`.
+- **`project`** marked as deprecated in favour of `morph`.
+- **`when`**: reactive boolean => promise
+- **`resource`**: reactive resource
 - **Refactored Cleanup Mechanism**: replaced legacy `why()` with structured `CleanupReason` passed to effects and cleanup functions.
-- `CleanupReason` types: `propChange`, `stopped`, `gc`, `lineage`, `error`.
+- `CleanupReason` types: `propChange`, `stopped`, `gc`, `lineage`, `error`, `multiple`.
+- `CleanupReason` cumulation: multiple reasons triggering an effect in the same batch are now preserved and merged into a `multiple` reason type.
 - `access.reaction` now provides detailed `PropTrigger[]` info for reactions.
 - **Unified Introspection**: Debug features (`gatherReasons`, `logErrors`, etc.) consolidated under `reactiveOptions.introspection`.
 - **formatCleanupReason**: New debug utility for human-readable reason formatting.

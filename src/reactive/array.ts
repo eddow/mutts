@@ -1,5 +1,6 @@
 import { FoolProof } from '../utils'
 import { touched } from './change'
+import { atomic } from './effects'
 import { makeReactiveEntriesIterator, makeReactiveIterator } from './non-reactive'
 import { reactive } from './proxy'
 import { dependant } from './tracking'
@@ -79,6 +80,7 @@ export abstract class ReactiveArrayWrapper extends Array {
 		return super.every((v, i, a) => predicate.call(thisArg, reactive(v), i, a), thisArg)
 	}
 
+	@atomic
 	fill(value: any, start?: number, end?: number): this {
 		return super.fill(unwrap(value), start, end) as this
 	}
@@ -176,10 +178,12 @@ export abstract class ReactiveArrayWrapper extends Array {
 		)
 	}
 
+	@atomic
 	pop(): any {
 		return reactive(super.pop())
 	}
 
+	@atomic
 	push(...items: any[]): number {
 		return super.push(...items.map(unwrap))
 	}
@@ -209,10 +213,12 @@ export abstract class ReactiveArrayWrapper extends Array {
 		)
 	}
 
+	@atomic
 	reverse(): any[] {
 		return reactive(super.reverse())
 	}
 
+	@atomic
 	shift(): any {
 		return reactive(super.shift())
 	}
@@ -230,6 +236,7 @@ export abstract class ReactiveArrayWrapper extends Array {
 		return super.some((v, i, a) => predicate.call(thisArg, reactive(v), i, a), thisArg)
 	}
 
+	@atomic
 	sort(compareFn?: (a: any, b: any) => number): this {
 		const wrappedCompare = compareFn
 			? (a: any, b: any) => compareFn(reactive(a), reactive(b))
@@ -237,6 +244,7 @@ export abstract class ReactiveArrayWrapper extends Array {
 		return super.sort(wrappedCompare) as this
 	}
 
+	@atomic
 	splice(start: number, deleteCount?: number, ...items: any[]): any {
 		if (arguments.length > 2)
 			return reactive(super.splice(start, deleteCount!, ...items.map(unwrap)))
@@ -245,6 +253,7 @@ export abstract class ReactiveArrayWrapper extends Array {
 		return reactive([])
 	}
 
+	@atomic
 	unshift(...items: any[]): number {
 		return super.unshift(...items.map(unwrap))
 	}

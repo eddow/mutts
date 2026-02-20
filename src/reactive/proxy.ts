@@ -33,7 +33,7 @@ export type SubProxy = {
 }
 const subsRegister = new WeakMap<any, SubProxy>()
 
-// TODO: When an effect sets something (touch), should it remove its dependencies to the exact same thing
+// Sub-proxy registration for custom reactive behaviors
 
 const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 	[Symbol.toStringTag]: 'MutTs Reactive',

@@ -125,10 +125,12 @@ When the reactive system encounters a critical failure (like a cycle or max dept
 ### `ReactiveErrorCode`
 
 Always check `error.debugInfo.code` to identify the failure type:
-- `CYCLE_DETECTED`: A circular dependency was found.
-- `MAX_DEPTH_EXCEEDED`: The synchronous effect chain reached `maxEffectChain`.
-- `MAX_REACTION_EXCEEDED`: An effect was triggered too many times in a single batch.
-- `WRITE_IN_COMPUTED`: An attempt was made to modify reactive state inside a `memoize` function.
+- `Cycle detected`: A circular dependency was found.
+- `Max depth exceeded`: The synchronous effect chain reached `maxEffectChain`.
+- `Max reaction exceeded`: An effect was triggered too many times in a single batch.
+- `Write in computed`: An attempt was made to modify reactive state inside a `memoize` function.
+- `Tracking error`: Internal inconsistency detected in the active dependency stack.
+- `Broken effects`: The system has entered an unrecoverable "broken" state after a root-level panic. Call `reset()` to recover.
 
 ### Rich Debug Info
 
@@ -136,6 +138,7 @@ The `debugInfo` property on `ReactiveError` includes:
 - **`causalChain`**: A string array describing the logical path of modifications leading to the error.
 - **`creationStack`**: The stack trace of where the effect was originally created, helping you locate the source in your code.
 - **`cycle`**: (For `CYCLE_DETECTED`) The names of the effects that form the loop.
+- **`lineage`**: Detailed source-to-sink dependency traces for debugging (requires `lineages` introspection).
 
 ## Best Practices for Debugging
 

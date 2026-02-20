@@ -289,7 +289,9 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 				causes.push(notification)
 			}
 		}
-		optionCall('touched', obj, evolution, propsArray, Array.from(currentEffects.keys()))
+		if (currentEffects) {
+			optionCall('touched', obj, evolution, propsArray, Array.from(currentEffects.keys()))
+		}
 		if (objectsWithDeepWatchers.has(obj)) bubbleUpChange(obj, evolution)
 	}
 	if (combinedEffects.size) {

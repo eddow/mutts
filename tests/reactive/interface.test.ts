@@ -979,14 +979,14 @@ describe('deep watch via watch({ deep: true })', () => {
 			)
 
 			// Push a nested object
-			atomic(()=> state.items.push({
+			state.items.push({
 				id: 1,
 				data: {
 					config: {
 						enabled: true,
 					},
 				},
-			}))()
+			})
 
 			// This should trigger deep watch because we're adding a deeply nested object
 			// If this fails, it means push() is not properly tracking deep changes for nested objects

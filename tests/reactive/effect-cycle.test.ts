@@ -352,7 +352,7 @@ describe('effect cycle detection and ordering', () => {
 				} catch (error) {
 					caughtError = error
 				}
-				expect(caughtError?.debugInfo?.code).toBe('CYCLE_DETECTED')
+				expect(caughtError?.debugInfo?.code).toBe('Cycle detected')
 			} finally {
 				options.cycleHandling = originalCycleHandling
 			}
@@ -375,7 +375,7 @@ describe('effect cycle detection and ordering', () => {
 				} catch (error) {
 					caughtError = error
 				}
-				expect(caughtError?.debugInfo?.code).toBe('CYCLE_DETECTED')
+			expect(caughtError?.debugInfo?.code).toBe('Cycle detected')
 				expect(caughtError?.debugInfo?.cycle).toBeDefined()
 				expect(Array.isArray(caughtError?.debugInfo?.cycle)).toBe(true)
 			} finally {

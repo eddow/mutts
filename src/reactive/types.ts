@@ -92,6 +92,7 @@ export type CleanupReason =
 	| { type: 'gc' } // FinalizationRegistry collected the holder
 	| { type: 'lineage'; parent: CleanupReason } // parent effect cleaned up (recursive)
 	| { type: 'error'; error: unknown } // error handler chain (reactionCleanup called with error)
+	| { type: 'multiple'; reasons: CleanupReason[] }
 
 function formatTrigger({ obj, evolution, dependency, touch }: PropTrigger): unknown[] {
 	const detail = evolution.type === 'bunch' ? evolution.method : String(evolution.prop)
@@ -141,6 +142,14 @@ export function formatCleanupReason(reason: CleanupReason, depth = 0): unknown[]
 			return [`${indent}error:`, reason.error]
 		case 'lineage':
 			return [`${indent}lineage ←\n`, ...formatCleanupReason(reason.parent, depth + 1)]
+		case 'multiple': {
+			const parts: unknown[] = []
+			for (let i = 0; i < reason.reasons.length; i++) {
+				if (i > 0) parts.push('\n')
+				parts.push(...formatCleanupReason(reason.reasons[i], depth))
+			}
+			return parts
+		}
 	}
 }
 
@@ -296,12 +305,12 @@ export interface ProjectionContext {
  * Structured error codes for machine-readable diagnosis
  */
 export enum ReactiveErrorCode {
-	CycleDetected = 'CYCLE_DETECTED',
-	MaxDepthExceeded = 'MAX_DEPTH_EXCEEDED',
-	MaxReactionExceeded = 'MAX_REACTION_EXCEEDED',
-	WriteInComputed = 'WRITE_IN_COMPUTED',
-	TrackingError = 'TRACKING_ERROR',
-	BrokenEffects = 'BROKEN_EFFECTS',
+	CycleDetected = 'Cycle detected',
+	MaxDepthExceeded = 'Max depth exceeded',
+	MaxReactionExceeded = 'Max reaction exceeded',
+	WriteInComputed = 'Write in computed',
+	TrackingError = 'Tracking error',
+	BrokenEffects = 'Broken effects',
 }
 
 export type CycleDebugInfo = {

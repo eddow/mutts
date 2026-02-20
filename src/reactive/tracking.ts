@@ -4,7 +4,11 @@ import { allProps, type EffectTrigger, keysOf, unwrap, options } from './types'
 import { debugHooks } from './debug-hooks'
 
 // Track dependency stacks per (obj, prop, effect)
-const dependencyStacks = new WeakMap<object, Map<any, Map<EffectTrigger, unknown>>>()
+let dependencyStacks = new WeakMap<object, Map<any, Map<EffectTrigger, unknown>>>()
+
+export function resetTracking() {
+	dependencyStacks = new WeakMap()
+}
 
 function getDependencyStack(effect: EffectTrigger, obj: object, prop: any): unknown | undefined {
 	const objStacks = dependencyStacks.get(obj)

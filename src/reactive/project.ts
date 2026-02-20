@@ -2,7 +2,6 @@ import { FoolProof, named } from '../utils'
 import { cleanedBy, getActiveEffect } from './effect-context'
 import { effect } from './effects'
 import { reactive } from './proxy'
-import { Register } from './register'
 import {
 	type CleanupReason,
 	cleanup,
@@ -153,73 +152,6 @@ function projectArray<SourceValue, ResultValue>(
 	} as ProjectionContext)
 }
 
-function projectRegister<Key extends PropertyKey, SourceValue, ResultValue>(
-	source: Register<SourceValue, Key>,
-	apply: ProjectCallback<
-		SourceValue,
-		Key,
-		Map<Key, ResultValue>,
-		Register<SourceValue, Key>,
-		ResultValue
-	>
-): ProjectResult<Map<Key, ResultValue>> {
-	source = reactive(source) as Register<SourceValue, Key>
-	const rawTarget = new Map<Key, ResultValue>()
-	const target = reactive(rawTarget) as Map<Key, ResultValue>
-	const keyEffects = new Map<Key, ScopedCallback>()
-
-	function disposeKey(key: Key) {
-		const stopEffect = keyEffects.get(key)
-		if (stopEffect) {
-			stopEffect()
-			keyEffects.delete(key)
-			target.delete(key)
-		}
-	}
-
-	const parent = getActiveProjection()
-	const depth = parent ? parent.depth + 1 : 0
-
-	const cleanupKeys = effect(function projectRegisterEffect({ ascend }) {
-		const keys = new Set<Key>()
-		for (const key of source.mapKeys()) keys.add(key)
-
-		for (const key of keys) {
-			if (keyEffects.has(key)) continue
-			ascend(() => {
-				const stop = effect(function projectRegisterKeyEffect({ reaction }) {
-					if (!reaction) setActiveProjection({ source, key, target, depth, parent })
-					const previous = rawTarget.get(key)
-					const accessBase = {
-						key,
-						source: source,
-						get: () => source.get(key) as SourceValue,
-						set: (value: SourceValue) => {
-							source.set(key, value)
-							return true
-						},
-						old: previous,
-					} as ProjectAccess<SourceValue, Key, Register<SourceValue, Key>, Map<Key, ResultValue>>
-					defineAccessValue(accessBase)
-					const produced = apply(accessBase, target)
-					if (produced !== previous) target.set(key, produced)
-				})
-
-				keyEffects.set(key, stop)
-			})
-		}
-
-		for (const key of Array.from(keyEffects.keys())) if (!keys.has(key)) disposeKey(key)
-	})
-
-	return makeCleanup(target, keyEffects, () => cleanupKeys(), {
-		source: source,
-		target,
-		apply,
-		depth,
-		parent,
-	} as ProjectionContext)
-}
 
 function projectRecord<Source extends Record<PropertyKey, any>, ResultValue>(
 	source: Source,
@@ -362,16 +294,6 @@ type ProjectOverload = {
 		source: readonly SourceValue[],
 		apply: ProjectCallback<SourceValue, number, ResultValue[], readonly SourceValue[], ResultValue>
 	): ProjectResult<ResultValue[]>
-	<Key extends PropertyKey, SourceValue, ResultValue>(
-		source: Register<SourceValue, Key>,
-		apply: ProjectCallback<
-			SourceValue,
-			Key,
-			Map<Key, ResultValue>,
-			Register<SourceValue, Key>,
-			ResultValue
-		>
-	): ProjectResult<Map<Key, ResultValue>>
 	<Source extends Record<PropertyKey, any>, ResultValue>(
 		source: Source,
 		apply: ProjectCallback<
@@ -387,7 +309,6 @@ type ProjectOverload = {
 		apply: ProjectCallback<Value, Key, Map<Key, ResultValue>, Map<Key, Value>, ResultValue>
 	): ProjectResult<Map<Key, ResultValue>>
 	array: typeof projectArray
-	register: typeof projectRegister
 	record: typeof projectRecord
 	map: typeof projectMap
 }
@@ -396,16 +317,6 @@ function projectCore<SourceValue, ResultValue>(
 	source: readonly SourceValue[],
 	apply: ProjectCallback<SourceValue, number, ResultValue[], readonly SourceValue[], ResultValue>
 ): ProjectResult<ResultValue[]>
-function projectCore<Key extends PropertyKey, SourceValue, ResultValue>(
-	source: Register<SourceValue, Key>,
-	apply: ProjectCallback<
-		SourceValue,
-		Key,
-		Map<Key, ResultValue>,
-		Register<SourceValue, Key>,
-		ResultValue
-	>
-): ProjectResult<Map<Key, ResultValue>>
 function projectCore<Source extends Record<PropertyKey, any>, ResultValue>(
 	source: Source,
 	apply: ProjectCallback<
@@ -423,7 +334,6 @@ function projectCore<Key, Value, ResultValue>(
 function projectCore(source: any, apply: any): ProjectResult<any> {
 	if (Array.isArray(source)) return projectArray(source, apply)
 	if (source instanceof Map) return projectMap(source, apply)
-	if (source instanceof Register) return projectRegister(source, apply)
 	if (source && (source.constructor === Object || source.constructor === undefined))
 		return projectRecord(source, apply)
 	throw new Error('Unsupported source type')
@@ -431,7 +341,6 @@ function projectCore(source: any, apply: any): ProjectResult<any> {
 
 export const project: ProjectOverload = Object.assign(projectCore, {
 	array: projectArray,
-	register: projectRegister,
 	record: projectRecord,
 	map: projectMap,
 })
