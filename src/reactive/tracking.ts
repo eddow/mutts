@@ -1,7 +1,7 @@
+import { debugHooks } from './debug-hooks'
 import { getActiveEffect } from './effect-context'
 import { effectToReactiveObjects, watchers } from './registry'
-import { allProps, type EffectTrigger, keysOf, unwrap, options } from './types'
-import { debugHooks } from './debug-hooks'
+import { allProps, type EffectTrigger, keysOf, options, unwrap } from './types'
 
 // Track dependency stacks per (obj, prop, effect)
 let dependencyStacks = new WeakMap<object, Map<any, Map<EffectTrigger, unknown>>>()

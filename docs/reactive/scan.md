@@ -42,7 +42,7 @@ The implementation consists of:
 2. **Intermediates**: Class instances that link `val` and `prev`. They expose an `acc` getter decorated with `@memoize`.
 3. **Index Sync Effects**: Granular effects (one per result index) that subscribe to `indexToIntermediate[i].acc`.
 
-This "Project-like" architecture ensures that the main loop only does structural work, while the actual logic propagation is handled by the dependency chain of the intermediates.
+This "Morph-like" architecture ensures that the main loop only does structural work, while the actual logic propagation is handled by the dependency chain of the intermediates.
 
 ## API Reference
 
@@ -303,7 +303,7 @@ Both `lift` and `memoize` compute derived values from reactive dependencies, but
 | **Cleanup** | Automatic (WeakMap GC) | Explicit `result[cleanup]()` |
 
 **When to use which:**
-- **`lift`** for derived collections where downstream consumers (e.g., `project()`, effects) benefit from per-element diffing on a stable proxy.
+- **`lift`** for derived collections where downstream consumers (e.g., `morph()`, effects) benefit from per-element diffing on a stable proxy.
 - **`memoize`** for parameterized caching (`memoize((user) => expensiveCompute(user))`) or lazy evaluation where recomputation should only happen on access.
 - For a scalar result read in one place, they are nearly interchangeable — prefer `memoize` for its laziness and automatic cleanup.
 

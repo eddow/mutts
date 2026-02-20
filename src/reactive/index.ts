@@ -18,7 +18,6 @@ export {
 } from './effects'
 export { type Memoizable, type MemoizableArgument, memoize } from './memoize'
 export { immutables, isNonReactive } from './non-reactive-state'
-export { getActiveProjection, project } from './project'
 export { ReactiveBase, reactive } from './proxy'
 export { organize, organized } from './record'
 export { Register, register } from './register'

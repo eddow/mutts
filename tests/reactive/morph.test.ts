@@ -122,4 +122,48 @@ describe('morph undefined value bug', () => {
 		
 		stop()
 	})
+
+	it('morphs Map correctly and lazily', () => {
+		const source = reactive(new Map([['a', 1], ['b', 2]]))
+		let count = 0
+		const mapped = morph(source, (v: number) => {
+			count++
+			return v * 10
+		})
+		
+		expect(mapped.has('a')).toBe(true)
+		expect(count).toBe(0) // Lazy
+		
+		expect(mapped.get('a')).toBe(10)
+		expect(count).toBe(1)
+		
+		source.set('a', 100)
+		expect(mapped.get('a')).toBe(1000)
+		expect(count).toBe(2)
+		
+		source.delete('a')
+		expect(mapped.has('a')).toBe(false)
+	})
+
+	it('morphs Record correctly and lazily', () => {
+		const source = reactive({ a: 1, b: 2 }) as Record<string, number>
+		let count = 0
+		const mapped = morph(source, (v: number) => {
+			count++
+			return v * 10
+		})
+		
+		expect('a' in mapped).toBe(true)
+		expect(count).toBe(0) // Lazy
+		
+		expect(mapped.a).toBe(10)
+		expect(count).toBe(1)
+		
+		source.a = 100
+		expect(mapped.a).toBe(1000)
+		expect(count).toBe(2)
+		
+		delete source.a
+		expect('a' in mapped).toBe(false)
+	})
 })

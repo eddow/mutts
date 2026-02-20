@@ -1077,10 +1077,8 @@ Mutts provides several ways to derive values from reactive state. They differ in
 | `memoize(fn)(args)` | **Lazy** | Raw value | Yes (return) | No | Auto (WeakMap GC) | Parameterized caching |
 | `lift(() => [...])` | Eager | Reactive array proxy | Yes (per-index) | **Yes** | `result[cleanup]()` | Derived collections (filter, map) |
 | `lift(() => ({...}))` | Eager | Reactive object proxy | Yes (per-prop) | **Yes** | `result[cleanup]()` | Derived objects, computed shapes |
-| `morph(source, fn)` | **Lazy** | Reactive array proxy | Yes (per-index) | **Yes** | `cleanedBy` | Lazy per-element map with identity tracking |
-| `morph.pure(source, fn)` | **Lazy** | Reactive array proxy | Yes (per-index) | **Yes** | `cleanedBy` | Same, but skips per-item dependency tracking |
-| `project(source, fn)` | Eager | Reactive container | Yes (per-key) | **Yes** | `result[cleanup]()` | Per-element transforms on arrays/maps/records |
-| `attend(source, fn)` | Eager | Side-effects per key | N/A | N/A | `result[cleanup]()` | Per-element side effects (DOM binding) |
+| `morph(source, fn)` | **Lazy** | Reactive proxy | Yes (per-key) | **Yes** | `cleanedBy` | Lazy per-element map with identity tracking |
+| `morph.pure(source, fn)` | **Lazy** | Reactive proxy | Yes (per-key) | **Yes** | `cleanedBy` | Same, but skips per-item dependency tracking |
 | `scan(source, fn, init)` | Eager | Reactive array | Yes (per-index) | **Yes** | `result[cleanup]()` | Running accumulations (prefix sums) |
 | `when(() => cond)` | Eager | Promise\<T\> | N/A | N/A | Auto (on resolve/timeout) | Awaiting a reactive condition |
 | `watch(source, cb)` | Eager | Callback (old/new) | N/A | N/A | Returned cleanup | Observing specific changes |
@@ -1089,7 +1087,7 @@ Mutts provides several ways to derive values from reactive state. They differ in
 
 - **Lazy vs Eager**: `memoize` only recomputes when the result is read. Everything else recomputes immediately when dependencies change — even if nobody is consuming the output.
 - **Trackable**: Can downstream effects depend on the result? `memoize`'s return value is trackable because calling it runs inside an effect context. `lift`/`project`/`scan` return reactive proxies where each property/index is independently trackable.
-- **Identity stable**: `lift`, `project`, and `scan` return the **same proxy** across recomputations — only changed slots are updated. This is critical for downstream `project()` or DOM reconciliation that relies on reference identity.
+- **Identity stable**: `lift`, `morph`, and `scan` return the **same proxy** across recomputations — only changed slots are updated. This is critical for downstream transformations or DOM reconciliation that relies on reference identity.
 
 ### Common patterns
 
@@ -1120,20 +1118,20 @@ const doubled = project(numbers, ({ value }) => value * 2)
 // Each index has its own effect — changing numbers[3] only recomputes doubled[3]
 ```
 
-### `lift` vs `project` — choosing the right primitive
+### `lift` vs `morph` — choosing the right primitive
 
-Both `lift` and `project` produce a stable reactive object from reactive inputs, but they differ fundamentally in **effect topology**:
+Both `lift` and `morph` produce a stable reactive object from reactive inputs, but they differ fundamentally in **effect topology**:
 
-| | `lift` | `project` |
+| | `lift` | `morph` |
 |---|---|---|
 | **Effects** | 1 (single callback) | N+1 (1 outer + 1 per key) |
 | **Input** | Callback returning a plain object | Reactive source (array/record/Map) |
 | **Granularity** | Re-runs entire callback, diffs result | Per-key effect, only changed keys re-run |
-| **Key lifecycle** | Automatic (diff adds/removes keys) | Automatic (attend creates/destroys effects) |
-| **Accessor support** | Preserves getters — same getter identity skips touch | Callback returns values (no accessor forwarding) |
+| **Key lifecycle** | Automatic (diff adds/removes keys) | Automatic (arrayDiff handles updates) |
+| **Execution** | Eager (recomputes immediately) | **Lazy** (recomputes on access) |
 | **Best for** | Computed shapes, small derived objects | Large collections with independent per-item logic |
 
-**Rule of thumb**: if the source has **stable keys** and the mapping is **cheap**, prefer `lift` — one effect is far cheaper than N+1. Reserve `project` for cases where per-key lifecycle matters (e.g. each key spawns side-effects, or the collection is large and only individual items change).
+**Rule of thumb**: if the source has **stable keys** and the mapping is **cheap**, prefer `lift` — one effect is far cheaper than N+1. Reserve `morph` for cases where per-key lifecycle matters (e.g. each key spawns side-effects, or the collection is large and only individual items change).
 
 ```typescript
 // lift: 1 effect, diffs ~5 properties — ideal for derived shapes
@@ -1143,11 +1141,11 @@ const profile = lift(() => ({
   label: `${user.name} (${user.role})`,
 }))
 
-// project: 1000 items, only item[42] changes — only item[42]'s effect re-runs
-const doubled = project(numbers, ({ value }) => value * 2)
+// morph: 1000 items, only item[42] changes — only item[42]'s effect re-runs
+const results = morph(numbers, (val) => val * 2)
 ```
 
-**Performance note**: each `project` key creates a full reactive effect with its own dependency tracking. For a page with many small projections (e.g. HTML element props), this compounds quickly. Converting small `project` calls to `lift` can dramatically reduce total effect count.
+**Performance note**: each `morph` key creates a full reactive effect with its own dependency tracking. For a page with many small mappings (e.g. HTML element props), this compounds quickly. Converting small `morph` calls to `lift` can dramatically reduce total effect count.
 
 ### When deep touching makes `lift` unnecessary
 

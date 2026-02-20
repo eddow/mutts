@@ -2,8 +2,8 @@
 
 ## Functionality
 
-- **`morph(source, fn)`**: lazy, identity-stable reactive array mapping. Tracks source mutations via `arrayDiff`, computes elements on access with per-item effects for dependency tracking.
-- **`morph.pure`**: flavored variant that skips per-item effects — for pure callbacks with no external reactive dependencies. Returns a plain array for non-reactive sources.
+- **`morph(source, fn)`**: lazy, identity-stable reactive mapping for Arrays, Maps, and Records. Tracks source mutations via specialized diffing/traversal, computes elements on access with per-item effects for dependency tracking.
+- **`morph.pure`**: flavored variant that skips per-item effects — for pure callbacks with no external reactive dependencies. Returns a plain object/array for non-reactive sources.
 - **`memoize.lenient`**: flavored variant that gracefully handles non-WeakKey arguments (primitives, `null`, `undefined`) by falling back to recomputation instead of throwing.
 - **`arrayDiff`**: Myers' diff algorithm for array reconciliation.
 
@@ -14,12 +14,13 @@
 - **Enhanced Test Isolation**: Added `resetTracking()` (integrated into `reset()`) to clear diagnostic lineage data, preventing state leakage between tests.
 - **Refined Panic Logic**: The system now only enters a "broken" state (`BROKEN_EFFECTS`) when an unrecoverable error escapes the root batch. Nested effects can safely propagate errors for recovery without compromising system stability.
 - **Deep-Touch Safety**: Added safety checks in property notification loops to prevent panics during complex structural updates.
+- **Morph Stability**: Fixed infinite recursion (`RangeError`) in cleanup and improved stability of item effects during collection shifts.
 
 ## Refactoring
 
 - **`memoize`** is now a `flavored` function (decorator support preserved).
-- **`morph`** is a `flavored` function exported from `mutts/reactive`.
-- **`project`** marked as deprecated in favour of `morph`.
+- **`morph`** is a `flavored` function exported from `mutts/reactive`. Split into specialized internal implementations for efficiency.
+- **`project`**: Removed deprecated API (replaced by `morph`).
 - **`when`**: reactive boolean => promise
 - **`resource`**: reactive resource
 - **Refactored Cleanup Mechanism**: replaced legacy `why()` with structured `CleanupReason` passed to effects and cleanup functions.

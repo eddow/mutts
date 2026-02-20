@@ -408,20 +408,20 @@ Notes:
 
 ## Class Reactivity
 
-## Projection
+## Morphing
 
-### `project()`
+### `morph()`
 
-`project()` provides a unified API for transforming reactive collections (arrays, records, and maps) into new reactive collections. Each source entry gets its own reactive effect that recomputes only when that specific entry changes, enabling granular updates perfect for rendering pipelines.
+`morph()` provides a unified API for transforming reactive collections (arrays, records, and maps) into new reactive collections. Each source entry gets its own reactive effect that recomputes only when that specific entry changes, enabling granular updates perfect for rendering pipelines.
 
 #### Basic Usage
 
 ```typescript
-import { cleanup, project, reactive } from 'mutts/reactive'
+import { cleanup, morph, reactive } from 'mutts/reactive'
 
 // Arrays
 const users = reactive([{ name: 'John', age: 30 }, { name: 'Jane', age: 25 }])
-const names = project.array(users, ({ get }) => get()?.name.toUpperCase() ?? '')
+const names = morph(users, (user) => user.name.toUpperCase())
 
 console.log(names) // ['JOHN', 'JANE']
 
@@ -430,8 +430,7 @@ console.log(names[0]) // 'JOHNNY' - only index 0 recomputed
 
 // Records
 const scores = reactive({ math: 90, science: 85 })
-const grades = project.record(scores, ({ get }) => {
-  const score = get()
+const grades = morph(scores, (score) => {
   return score >= 90 ? 'A' : score >= 80 ? 'B' : 'C'
 })
 
@@ -444,7 +443,7 @@ const inventory = reactive(new Map([
   ['apples', { count: 10 }],
   ['oranges', { count: 5 }]
 ]))
-const totals = project.map(inventory, ({ get }) => get()?.count ?? 0)
+const totals = morph(inventory, (item) => item.count)
 
 console.log(totals.get('apples')) // 10
 inventory.get('apples')!.count = 15
@@ -453,41 +452,25 @@ console.log(totals.get('apples')) // 15 - only 'apples' key recomputed
 
 #### Automatic Type Selection
 
-You can use `project()` directly and it will automatically select the appropriate helper based on the source type:
+The `morph()` function automatically selects the appropriate helper based on the source type:
 
 ```typescript
-// Automatically uses project.array
-const doubled = project([1, 2, 3], ({ get }) => get() * 2)
+// Arrays
+const doubled = morph([1, 2, 3], (x) => x * 2)
 
-// Automatically uses project.record
-const upper = project({ a: 'hello', b: 'world' }, ({ get }) => get()?.toUpperCase() ?? '')
+// Records
+const upper = morph({ a: 'hello', b: 'world' }, (s) => s.toUpperCase())
 
-// Automatically uses project.map
-const counts = project(new Map([['x', 1], ['y', 2]]), ({ get }) => get() * 2)
+// Maps
+const counts = morph(new Map([['x', 1], ['y', 2]]), (v) => v * 2)
 ```
 
-#### Access Object
+#### Callback Signature
 
-The callback receives a `ProjectAccess` object with:
-
-- **`get()`**: Function that returns the current source value for this key/index
-- **`set(value)`**: Function to update the source value (if the source is mutable)
-- **`key`**: The current key or index
-- **`source`**: Reference to the original source collection
-- **`old`**: Previously computed result for this entry (undefined on first run)
-- **`value`**: Computed property that mirrors `get()` (for convenience)
+The callback function receives the current value of the entry being processed:
 
 ```typescript
-const transformed = project.array(items, (access) => {
-  // Access the source value
-  const item = access.get()
-  
-  // Access the key/index
-  console.log(`Processing index ${access.key}`)
-
-  // Leverage previous result
-  console.log(`Previous result: ${access.old}`)
-  
+const transformed = morph(items, (item) => {
   // Transform and return
   return item.value * 2
 })
@@ -505,9 +488,8 @@ const users = reactive([
 ])
 
 let computeCount = 0
-const summaries = project.array(users, ({ get }) => {
+const summaries = morph(users, (user) => {
   computeCount++
-  const user = get()
   return `${user.name}: ${user.score}`
 })
 
@@ -529,7 +511,7 @@ console.log(computeCount) // 5 (only new index 3 computed)
 
 ```typescript
 const source = reactive({ a: 1, b: 2 })
-const doubled = project.record(source, ({ get }) => get() * 2)
+const doubled = morph(source, (val) => val * 2)
 
 console.log(doubled.a) // 2
 console.log(doubled.b) // 4
@@ -548,7 +530,7 @@ console.log('a' in doubled) // false (automatically removed)
 The returned object includes a `cleanup` symbol that stops all reactive effects:
 
 ```typescript
-const result = project.array(items, ({ get }) => get() * 2)
+const result = morph(items, (item) => item * 2)
 
 // Later, when done
 result[cleanup]() // Stops all effects and cleans up

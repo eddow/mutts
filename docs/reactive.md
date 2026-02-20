@@ -11,7 +11,7 @@ The Mutts Reactive System documentation has been split into focused sections for
 *   **[Reactive Collections](./reactive/collections.md#collections)**: Map, Set, WeakMap, WeakSet
 *   **[Reactive Arrays](./reactive/collections.md#reactivearray)**: Full array method support
 *   **[Register](./reactive/collections.md#register)**: ID-keyed ordered collections
-*   **[Projections](./reactive/collections.md#projection)**: `project`, `organized`
+*   **[Morphing](./reactive/collections.md#morph)**: `morph`, `organized`
 *   **[Attend](./reactive/attend.md)**: Reactive enumeration (`attend`)
 *   **[Scan](./reactive/scan.md)**: Reactive scan and accumulation
 *   **[Resource](./reactive/resource.md)**: Async state tracking (`resource`)

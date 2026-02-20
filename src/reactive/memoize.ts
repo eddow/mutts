@@ -80,14 +80,14 @@ function memoizeFunction<Result, Args extends MemoizableArgument[]>(
 					// Execute the function and track its dependencies
 					// The function execution will automatically track dependencies on reactive objects
 					node.result = fn.apply(this, args)
-					return () => {
+					return (reason) => {
 						// When dependencies change, clear the cache and notify consumers
 						delete node.result
 						touched1(node, { type: 'invalidate', prop: args }, 'memoize')
 						// Lazy memoization: stop the effect so it doesn't re-run immediately.
 						// It will be re-created on next access.
 						if (node.cleanup) {
-							node.cleanup({ type: 'stopped' })
+							node.cleanup({ type: 'invalidate', cause: reason })
 							node.cleanup = undefined
 						}
 					}

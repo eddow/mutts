@@ -25,10 +25,10 @@ import {
 	effectMarker,
 	optionCall,
 	options,
-	ReactiveError,
-	ReactiveErrorCode,
 	// type AsyncExecutionMode,
 	type PropTrigger,
+	ReactiveError,
+	ReactiveErrorCode,
 	type ScopedCallback,
 	stopped,
 	unwrap,
@@ -413,7 +413,7 @@ interface BatchQueue {
 const batchStack: BatchQueue[] = []
 export function hasBatched(effect: EffectTrigger) {
 	const root = getRoot(effect)
-	return batchStack.some(bs=> bs.all.has(root))
+	return batchStack.some((bs) => bs.all.has(root))
 }
 // DEV: stack of currently-executing effects (push on enter, pop on leave)
 const executingStack: EffectTrigger[] = []
@@ -1006,7 +1006,6 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 		}
 	}
 }
-
 
 /**
  * Resets the reactive system to a consistent state.

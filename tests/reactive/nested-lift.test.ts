@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { reactive, effect, lift, scan, project, cleanup, atomic } from 'mutts'
+import { reactive, effect, lift, scan, morph, cleanup, atomic } from 'mutts'
 
 describe('nested lift propagation', () => {
 	it('baseline: effect tracks .length', () => {
@@ -108,8 +108,8 @@ describe('nested lift propagation', () => {
 		// This mimics the reconciler: project stores a lift result, outer lift reads it
 		const children = reactive([reactive([1, 2])])
 
-		// project over children — each child array gets wrapped in a lift (like processChildren)
-		const rendered = project.array(children, ({ value: childArray }) => {
+		// morph over children — each child array gets wrapped in a lift (like processChildren)
+		const rendered = morph(children, (childArray) => {
 			return lift(() => {
 				const result: number[] = []
 				for (const item of childArray as number[]) result.push(item)
@@ -152,7 +152,7 @@ describe('nested lift propagation', () => {
 		const inner2 = reactive([30])
 		const source = reactive([inner1, inner2] as number[][])
 
-		const rendered = project.array(source, ({ value }) => value)
+		const rendered = morph(source, (value) => value)
 
 		const flatRuns: number[] = []
 		const flattened = lift(() => {
@@ -195,10 +195,10 @@ describe('nested lift propagation', () => {
 			})
 		})
 
-		// Outer project stores the inner lift result
-		const rendered = project.array(
+		// Outer morph stores the inner lift result
+		const rendered = morph(
 			reactive([innerFlattened] as any[]),
-			({ value }) => value
+			(value) => value
 		)
 
 		// Outer lift flattens
@@ -297,8 +297,8 @@ describe('nested lift propagation', () => {
 		const trigger = reactive({ value: false })
 		const items = reactive([1, 2])
 
-		// project: for each item in source, create a lift (like processChildren)
-		const rendered = project.array(items, ({ value: item }) => {
+		// morph: for each item in source, create a lift (like processChildren)
+		const rendered = morph(items, (item) => {
 			// This simulates renderChild creating processChildren
 			// The lift reads `trigger` to conditionally include extra items
 			return lift(() => {
@@ -342,7 +342,7 @@ describe('nested lift propagation', () => {
 		const innerSource = reactive([] as number[])
 
 		// Simulate: renderers produces PounceElement-like objects
-		const renderers = project.array([innerSource] as any[], ({ value }) => {
+		const renderers = morph([innerSource] as any[], (value) => {
 			return { render: () => value }
 		})
 
@@ -354,8 +354,7 @@ describe('nested lift propagation', () => {
 		)
 
 		// Simulate: rendered (project) — calls render, wraps array in processChildren-like lift
-		const rendered = project(conditioned, (access) => {
-			const accResult = access.value
+		const rendered = morph(conditioned, (accResult: any) => {
 			if (!accResult?.value) return undefined
 			const nodes = accResult.value.render()
 			if (Array.isArray(nodes)) {

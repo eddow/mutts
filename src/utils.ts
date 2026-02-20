@@ -316,7 +316,7 @@ export function named<T extends Function>(name: string, fn: T): T {
 }
 
 export function* stringKeys(o: object) {
-	for(const key in o) yield key
+	for (const key in o) yield key
 }
 
 export function* range(start: number, end: number) {

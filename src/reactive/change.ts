@@ -101,16 +101,21 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 		if (options.introspection?.gatherReasons) {
 			const gatherReasons = options.introspection.gatherReasons
 			const lineageConfig = gatherReasons.lineages
-			
+
 			let touchStack: unknown | undefined
 			if (lineageConfig === 'touch' || lineageConfig === 'both') {
 				touchStack = debugHooks.captureLineage()
 			}
-			
+
 			for (const [effect, dependencyStack] of effects) {
 				const node = getEffectNode(effect)
 				if (!node.pendingTriggers) node.pendingTriggers = []
-				node.pendingTriggers.push({ obj, evolution, dependency: dependencyStack, touch: touchStack })
+				node.pendingTriggers.push({
+					obj,
+					evolution,
+					dependency: dependencyStack,
+					touch: touchStack,
+				})
 			}
 		}
 		batch(triggers)
@@ -138,10 +143,10 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 	const sourceEffect = getActiveEffect()
 
 	const gather = options.introspection?.gatherReasons
-	
+
 	if (gather) {
 		const lineageConfig = gather.lineages
-		
+
 		for (const effect of deps) {
 			const node = getEffectNode(effect)
 			if (!node.isOpaque) continue
@@ -155,16 +160,21 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 			if (gather) {
 				let touchStack: unknown | undefined
 				let dependencyStack: unknown | undefined
-				
+
 				if (lineageConfig === 'touch' || lineageConfig === 'both') {
 					touchStack = debugHooks.captureLineage()
 				}
 				if (lineageConfig === 'dependency' || lineageConfig === 'both') {
 					dependencyStack = getDependencyStack(effect, obj, prop)
 				}
-				
+
 				if (!node.pendingTriggers) node.pendingTriggers = []
-				node.pendingTriggers.push({ obj, evolution, dependency: dependencyStack, touch: touchStack })
+				node.pendingTriggers.push({
+					obj,
+					evolution,
+					dependency: dependencyStack,
+					touch: touchStack,
+				})
 			}
 			recordActivation(effect, obj, evolution, prop)
 			debugHooks.recordTriggerLink(sourceEffect, effect, obj, prop, evolution)

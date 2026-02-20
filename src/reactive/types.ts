@@ -79,8 +79,8 @@ export const effectMarker = {
 export type PropTrigger = {
 	obj: object
 	evolution: Evolution
-	dependency?: unknown  // Stack from when dependency was created
-	touch?: unknown       // Stack from when touch occurred
+	dependency?: unknown // Stack from when dependency was created
+	touch?: unknown // Stack from when touch occurred
 }
 
 /**
@@ -88,6 +88,7 @@ export type PropTrigger = {
  */
 export type CleanupReason =
 	| { type: 'propChange'; triggers: PropTrigger[] }
+	| { type: 'invalidate'; cause: CleanupReason }
 	| { type: 'stopped' } // explicit stop() call
 	| { type: 'gc' } // FinalizationRegistry collected the holder
 	| { type: 'lineage'; parent: CleanupReason } // parent effect cleaned up (recursive)
@@ -97,17 +98,17 @@ export type CleanupReason =
 function formatTrigger({ obj, evolution, dependency, touch }: PropTrigger): unknown[] {
 	const detail = evolution.type === 'bunch' ? evolution.method : String(evolution.prop)
 	const parts: unknown[] = [`${evolution.type} ${detail} on`, obj]
-	
+
 	if (dependency) {
 		parts.push('\n  Dependency created at:')
 		parts.push(...debugHooks.formatStack(dependency))
 	}
-	
+
 	if (touch) {
 		parts.push('\n  Touched from:')
 		parts.push(...debugHooks.formatStack(touch))
 	}
-	
+
 	return parts
 }
 
@@ -142,6 +143,8 @@ export function formatCleanupReason(reason: CleanupReason, depth = 0): unknown[]
 			return [`${indent}error:`, reason.error]
 		case 'lineage':
 			return [`${indent}lineage ←\n`, ...formatCleanupReason(reason.parent, depth + 1)]
+		case 'invalidate':
+			return [`${indent}invalidate ←\n`, ...formatCleanupReason(reason.cause, depth + 1)]
 		case 'multiple': {
 			const parts: unknown[] = []
 			for (let i = 0; i < reason.reasons.length; i++) {

@@ -298,20 +298,26 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 		if (options.introspection?.gatherReasons) {
 			const gatherReasons = options.introspection.gatherReasons
 			const lineageConfig = gatherReasons.lineages
-			
+
 			let touchStack: unknown | undefined
 			if (lineageConfig === 'touch' || lineageConfig === 'both') {
 				touchStack = debugHooks.captureLineage()
 			}
-			
+
 			for (const effect of combinedEffects) {
 				const node = getEffectNode(effect)
 				if (!node.pendingTriggers) node.pendingTriggers = []
 				for (const { target, evolution, prop } of effectCauses.get(effect)!) {
-					const dependencyStack = (lineageConfig === 'dependency' || lineageConfig === 'both')
-						? getDependencyStack(effect, unwrap(target), prop ?? allProps)
-						: undefined
-					node.pendingTriggers.push({ obj: unwrap(target), evolution, dependency: dependencyStack, touch: touchStack })
+					const dependencyStack =
+						lineageConfig === 'dependency' || lineageConfig === 'both'
+							? getDependencyStack(effect, unwrap(target), prop ?? allProps)
+							: undefined
+					node.pendingTriggers.push({
+						obj: unwrap(target),
+						evolution,
+						dependency: dependencyStack,
+						touch: touchStack,
+					})
 				}
 			}
 		}

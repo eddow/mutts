@@ -33,7 +33,7 @@ Each entry point has a `.dev` variant (`entry-browser.dev.ts`, `entry-node.dev.t
     *   `reactive(obj)`: Creates a reactive proxy.
     *   `effect(() => { ... })`: Runs side effects when dependencies change.
     *   `memoize(() => ...)`: Computed values.
-    *   `project(array, itemEffect)`: Efficient array-to-collection mapping. (reactive .map)
+    *   `morph(source, fn)`: Efficient, lazy collection mapping with identity tracking.
     *   `scan(array, callback, initialValue)`: Reactive scan/accumulation (optimized for moves).
     *   `reset()`: Restores the system to a clean state. Clears diagnostic lineage tracking data and active dependency stacks.
     *   **Opaque Effects**: `effect(fn, { opaque: true })` bypasses deep-touch optimizations to strict identity tracking.
@@ -66,9 +66,9 @@ Each entry point has a `.dev` variant (`entry-browser.dev.ts`, `entry-node.dev.t
 *   **Mixin**: Efficient class composition with caching.
 *   **Indexable**: Classes with array-like `[0]` access.
 
-## Reactivity: `project` vs `map`
+## Reactivity: `morph` vs `map`
 
-When transforming collections (Arrays, Maps, Sets) for reactive contexts, **prefer `project` over `.map()`**.
+When transforming collections (Arrays, Maps, Records) for reactive contexts, **prefer `morph` over `.map()`**.
 
 ### The Concept
 
@@ -78,19 +78,19 @@ Think of standard `Array.map` as a **batch factory assembly line**:
 3.  It produces a completely new batch of finished products (array `Y`).
 4.  If **one** raw material changes, you have to run the *entire* assembly line again to get a fresh batch.
 
-`project(A, cb)` is like assigning a **dedicated worker** for *each item* in your collection.
-1.  **Live Connection**: It creates a permanent, live connection between Source `A` and Result `Y`. `Y` is a mirror that reflects `A`.
-2.  **Surgical Precision**: `project` sets up an individual "effect" (watcher) for every single key/index.
-    *   If you change item #5 in `A`, **only** item #5 in `Y` is re-calculated.
-    *   Items #1-4 and #6-100 are left completely alone.
-3.  **Result**: You get the transformational power of `.map()` with the efficiency of fine-grained reactivity.
+`morph(A, cb)` is like assigning a **dedicated worker** for *each item* in your collection.
+1.  **Lazy & Live**: It creates a permanent, identity-stable connection between Source `A` and Result `Y`. Elements are computed only when accessed.
+2.  **Surgical Precision**: `morph` tracks the source via `arrayDiff` (for arrays) or key tracking (for records/maps).
+    *   If you change item #5 in `A`, **only** item #5 in `Y` is re-evaluated.
+    *   Items #1-4 and #6-100 are left completely alone or shifted efficiently.
+3.  **Result**: You get the transformational power of `.map()` with the efficiency of fine-grained reactivity and lazy evaluation.
 
 ### Summary
 
 *   `A.map(cb)` = **Snapshot**. "Here is what A looks like *right now*, transformed." Re-running it rebuilds everything.
-*   `project(A, cb)` = **Subscription**. "Keep Y transformed to match A, forever, and only do the bare minimum work needed to stay in sync."
+*   `morph(A, cb)` = **Subscription**. "Keep Y transformed to match A, efficiently and lazily, and only do the bare minimum work needed to stay in sync."
 
-Use `project` whenever you want the result to update reactively and efficiently without rebuilding the entire collection.
+Use `morph` whenever you want the result to update reactively and efficiently without rebuilding the entire collection.
 
 ## Reactivity Philosophy: Affirmative vs. Legacy Events
 
@@ -114,13 +114,13 @@ In `mutts`, you define **what things are**, not **when things happen**.
 
 All user-extensible option hooks in `options` (e.g. `touched`, `enter`, `leave`, `beginChain`, `skipRunningEffect`, `onMemoizationDiscrepancy`, `garbageCollected`) are called via `optionCall('name', ...args)` instead of `options.name(...)`. This wraps each call in try/catch so a throwing user callback cannot crash the reactive engine. `options.warn(...)` is the exception — it's called directly since it's the error reporter for `optionCall` itself.
 
-## Cleanup Semantics: `cleanedBy`, `attend`, `project`
+## Cleanup Semantics: `cleanedBy`, `attend`, `morph`
 
-When a reactive bunch (`attend`, `project`, `scan`, …) is **cleaned up**, all its inner effects are disposed. There is no need to manually undo work done by those effects — cleanup means the owner is being removed from concern entirely.
+When a reactive bunch (`attend`, `morph`, `scan`, …) is **cleaned up**, all its inner effects are disposed. There is no need to manually undo work done by those effects — cleanup means the owner is being removed from concern entirely.
 
 - `cleanedBy(owner, cleanup)`: ties the cleanup to the owner's lifecycle. When the owner is disposed, the cleanup runs.
 - `attend(enumerate, callback)` returns a cleanup. Each per-key callback can return a cleanup too. All are called when the attend is disposed.
-- `project(source, callback)` similarly disposes per-item effects when items are removed or the projection itself is cleaned up.
+- `morph(source, callback)` disposes per-item effects when items are removed or the result itself is cleaned up.
 
 **CleanupReason**: Cleanup functions and inner effects receive a `CleanupReason` object:
 - `{ type: 'propChange', triggers: PropTrigger[] }`: triggered by reactive property change.
