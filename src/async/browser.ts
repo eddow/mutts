@@ -67,6 +67,7 @@ if ((globalThis as any)[GLOBAL_ORIGINALS]) {
 } else {
 	OriginalPromise = globalThis.Promise
 	originals = {
+		// biome-ignore lint/suspicious/noThenProperty: Intentional Promise.prototype patching
 		then: OriginalPromise.prototype.then,
 		catch: OriginalPromise.prototype.catch,
 		finally: OriginalPromise.prototype.finally,
@@ -188,6 +189,7 @@ PatchedPromise.any = (<T>(values: Iterable<T | PromiseLike<T>>): Promise<Awaited
 // Note: OriginalPromise.prototype might be shared if we used the global one.
 // We must ensure we don't patch it twice if it's the SAME object.
 if (OriginalPromise.prototype.then !== patchedThen) {
+	// biome-ignore lint/suspicious/noThenProperty: Intentional Promise.prototype patching
 	OriginalPromise.prototype.then = patchedThen as any
 	OriginalPromise.prototype.catch = patchedCatch as any
 	OriginalPromise.prototype.finally = patchedFinally as any
@@ -198,7 +200,7 @@ try {
 		get: () => PatchedPromise,
 		configurable: true,
 	})
-} catch (e) {}
+} catch (_e) {}
 
 ;(globalThis as any).Promise = PatchedPromise
 

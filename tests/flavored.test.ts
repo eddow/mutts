@@ -26,24 +26,24 @@ describe('flavored', () => {
 
 	describe('flavorOptions', () => {
 		it('should merge options when last arg is an object', () => {
-			function greet(name: string, options?: { loud?: boolean; prefix?: string }) {
+			function greet(name: string, options: { loud?: boolean; prefix?: string } = {}) {
 				const prefix = options?.prefix ?? 'Hello'
 				const greeting = `${prefix}, ${name}!`
 				return options?.loud ? greeting.toUpperCase() : greeting
 			}
 
-			const loudGreet = flavorOptions(greet, { loud: true })
+			const loudGreet = flavorOptions(greet, { loud: true }, {})
 			expect(loudGreet('World')).toBe('HELLO, WORLD!')
 			expect(loudGreet('World', { prefix: 'Hi' })).toBe('HI, WORLD!')
 		})
 
 		it('should add options when no options provided', () => {
-			function greet(name: string, options?: { loud?: boolean }) {
+			function greet(name: string, options: { loud?: boolean } = {}) {
 				const greeting = `Hello, ${name}!`
 				return options?.loud ? greeting.toUpperCase() : greeting
 			}
 
-			const loudGreet = flavorOptions(greet, { loud: true })
+			const loudGreet = flavorOptions(greet, { loud: true }, {})
 			expect(loudGreet('World')).toBe('HELLO, WORLD!')
 		})
 	})
@@ -60,13 +60,13 @@ describe('flavored', () => {
 
 		it('should work with flavored to create chainable modifiers', () => {
 			const calculator = flavored(
-				(a: number, b: number, opts?: { multiply?: boolean }) => {
+				(a: number, b: number, opts: { multiply?: boolean } = {}) => {
 					if (opts?.multiply) return a * b
 					return a + b
 				},
 				{
 					get multiply() {
-						return flavorOptions(this, { multiply: true })
+						return flavorOptions(this, { multiply: true }, {})
 					},
 					double(): (a: number, b: number, opts?: { multiply?: boolean }) => number {
 						return createFlavor(this, (a: number, b: number, opts?): [number, number, typeof opts] => [a * 2, b * 2, opts])
@@ -122,7 +122,7 @@ describe('flavored', () => {
 		})
 
 		it('should allow hand-made functions to be re-flavored', () => {
-			function process(value: number, options?: { multiplier?: number; offset?: number }) {
+			function process(value: number, options: { multiplier?: number; offset?: number } = {}) {
 				const mult = options?.multiplier ?? 1
 				const off = options?.offset ?? 0
 				return value * mult + off
@@ -131,13 +131,13 @@ describe('flavored', () => {
 			const flavoredProcess = flavored(process, {
 				// Returns a hand-made flavored function
 				presetMultiplier(multiplier: number) {
-					const presetFn = (value: number, options?: { offset?: number }) => {
+					const presetFn = (value: number, options: { offset?: number } = {}) => {
 						return process(value, { ...options, multiplier })
 					}
 					// Re-flavor it so we can chain more modifiers
 					return flavored(presetFn, {
 						get withOffset() {
-							return flavorOptions(this, { offset: 10 })
+							return flavorOptions(this, { offset: 10 }, {})
 						},
 					})
 				},
@@ -151,16 +151,16 @@ describe('flavored', () => {
 
 	describe('chaining', () => {
 		it('should chain multiple flavorOptions modifiers', () => {
-			function createUser(name: string, options?: { admin?: boolean; verified?: boolean }) {
+			function createUser(name: string, options: { admin?: boolean; verified?: boolean } = {}) {
 				return { name, ...options }
 			}
 
 			const flavoredCreate = flavored(createUser, {
 				get admin() {
-					return flavorOptions(this, { admin: true })
+					return flavorOptions(this, { admin: true }, {})
 				},
 				get verified() {
-					return flavorOptions(this, { verified: true })
+					return flavorOptions(this, { verified: true }, {})
 				},
 			})
 

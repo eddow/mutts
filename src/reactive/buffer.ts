@@ -1,22 +1,25 @@
 import { arrayDiff } from '../diff'
 import { flavored } from '../flavored'
-import { FoolProof } from '../utils'
+import { FoolProof, stringKeys } from '../utils'
 import type { FunctionWrapper } from '../zone'
-import { touched, touched1 } from './change'
+import { getState, touched, touched1 } from './change'
 import { cleanedBy } from './effect-context'
 import { effect, untracked } from './effects'
 import { memoize } from './memoize'
 import { reactive } from './proxy'
 import { markWithRoot } from './registry'
+import { dependant } from './tracking'
 import {
 	type CleanupReason,
 	cleanup,
 	type EffectAccess,
 	type EffectCleanup,
 	type EffectCloser,
+	allProps,
 	isReactive,
 	keysOf,
 	type ScopedCallback,
+	type State,
 } from './types'
 
 /**
@@ -41,25 +44,28 @@ import {
  */
 export function attend<T>(
 	source: readonly T[],
-	callback: (index: number) => EffectCloser | void
+	callback: (index: number) => EffectCloser | undefined
 ): ScopedCallback
 export function attend<K, V>(
 	source: Map<K, V>,
-	callback: (key: K) => EffectCloser | void
+	callback: (key: K) => EffectCloser | undefined
 ): ScopedCallback
 export function attend<T>(
 	source: Set<T>,
-	callback: (value: T) => EffectCloser | void
+	callback: (value: T) => EffectCloser | undefined
 ): ScopedCallback
 export function attend<S extends Record<PropertyKey, any>>(
 	source: S,
-	callback: (key: keyof S & string) => EffectCloser | void
+	callback: (key: keyof S & string) => EffectCloser | undefined
 ): ScopedCallback
 export function attend<Key>(
 	enumerate: () => Iterable<Key>,
-	callback: (key: Key) => EffectCloser | void
+	callback: (key: Key) => EffectCloser | undefined
 ): ScopedCallback
-export function attend(source: any, callback: (key: any) => EffectCloser | void): ScopedCallback {
+export function attend(
+	source: any,
+	callback: (key: any) => EffectCloser | undefined
+): ScopedCallback {
 	const enumerate: () => Iterable<any> =
 		typeof source === 'function'
 			? source
@@ -319,9 +325,7 @@ export function lift<Output extends any[] | object>(
 	let rawResult!: Output
 	const liftCleanup = effect.named('lift')(
 		markWithRoot((access) => {
-			const source = cb(access) /*
-		if (isReactive(source))
-			throw new Error('lift callback must return a non-reactive value to be lifted')*/
+			const source = cb(access)
 			if (!source || typeof source !== 'object')
 				throw new Error('lift callback must return an array or object')
 			const sourceProto = Object.getPrototypeOf(source)
@@ -368,9 +372,7 @@ export function lift<Output extends any[] | object>(
 	)
 	return cleanedBy(result, liftCleanup)
 }
-function* flat<T>(...subs: Iterable<T>[]) {
-	for (const sub of subs) for (const i of sub) yield i
-}
+
 /**
  * Options for `morph` and its variants.
  *
@@ -430,7 +432,7 @@ export function morphArray<I, O>(
 			const indexRef = { value: key }
 			let stop!: ScopedCallback
 			track(() => {
-				stop = effect(() => {
+				stop = effect.opaque(() => {
 					cache[indexRef.value] = fn(input)
 					return (reason) => {
 						delete cache[indexRef.value]
@@ -446,7 +448,7 @@ export function morphArray<I, O>(
 	const proxy = reactive(cache, {
 		get(cache, prop) {
 			const n = typeof prop === 'string' ? Number(prop) : NaN
-			if (isNaN(n)) return cache[prop]
+			if (Number.isNaN(n)) return cache[prop]
 			if (!(n in cache)) computeItem(n, input[n])
 			return cache[n]
 		},
@@ -542,7 +544,6 @@ export function morphMap<K, V, O>(
 	const itemEffects = new Map<any, ScopedCallback>()
 	const cache = new Map<K, O>()
 	Object.defineProperty(cache, 'constructor', { value: Object, enumerable: false })
-	let input = new Map<K, V>()
 
 	function stopItem(key: any) {
 		const stop = itemEffects.get(key)
@@ -552,18 +553,18 @@ export function morphMap<K, V, O>(
 		}
 	}
 
-	function computeItem(key: any, input: any) {
+	function computeItem(key: any, val: any) {
 		const isPure =
-			options?.pure === true || (typeof options?.pure === 'function' && options.pure(input))
+			options?.pure === true || (typeof options?.pure === 'function' && options.pure(val))
 		if (isPure) {
 			cache.set(
 				key,
-				track(() => fn(input))
+				track(() => fn(val))
 			)
 		} else {
 			const stop = track(() =>
-				effect(() => {
-					cache.set(key, fn(input))
+				effect.opaque(() => {
+					cache.set(key, fn(source.get(key)))
 					return (reason) => {
 						cache.delete(key)
 						touched1(cache, { type: 'invalidate', prop: 'morph' }, String(key))
@@ -612,18 +613,21 @@ export function morphMap<K, V, O>(
 		},
 	}) as any
 
+	let stateSnapshot: State = getState(source)
 	const stopMain = effect.named('morph:map')(({ ascend }) => {
 		track = ascend
-		const newInput = new Map(source)
-		const keys = new Set(newInput.keys())
-		for (const key of itemEffects.keys()) {
-			if (!keys.has(key)) stopItem(key)
-			else if (cache.has(key) && newInput.get(key) !== input.get(key)) {
-				stopItem(key)
+		dependant(source, keysOf)
+		while ('evolution' in stateSnapshot) {
+			const { evolution } = stateSnapshot
+			stateSnapshot = stateSnapshot.next
+			if (evolution.type === 'add') {
+				touched1(cache, evolution, evolution.prop)
+			} else if (evolution.type === 'del') {
+				stopItem(evolution.prop)
+				cache.delete(evolution.prop)
+				touched1(cache, evolution, evolution.prop)
 			}
 		}
-		touched(cache, { type: 'bunch', method: 'morph-input' }, [keysOf])
-		input = newInput
 	})
 
 	return cleanedBy(proxy, (reason) => {
@@ -658,7 +662,6 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 	let track!: FunctionWrapper
 	const itemEffects = new Map<any, ScopedCallback>()
 	const cache = {} as any
-	let input = {} as any
 
 	function stopItem(key: any) {
 		const stop = itemEffects.get(key)
@@ -668,15 +671,15 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 		}
 	}
 
-	function computeItem(key: any, input: any) {
+	function computeItem(key: any, val: any) {
 		const isPure =
-			options?.pure === true || (typeof options?.pure === 'function' && options.pure(input))
+			options?.pure === true || (typeof options?.pure === 'function' && options.pure(val))
 		if (isPure) {
-			cache[key] = track(() => fn(input))
+			cache[key] = track(() => fn(val))
 		} else {
 			const stop = track(() =>
-				effect(() => {
-					cache[key] = fn(input)
+				effect.opaque(() => {
+					cache[key] = fn(source[key])
 					return (reason) => {
 						delete cache[key]
 						touched1(cache, { type: 'invalidate', prop: 'morph' }, String(key))
@@ -687,29 +690,41 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 			itemEffects.set(key, stop)
 		}
 	}
-
+	function get(prop: PropertyKey) {
+		if (!(prop in cache) && prop in source) computeItem(prop, source[prop])
+		return cache[prop]
+	}
 	const proxy = reactive(cache, {
-		get(cache, prop) {
-			if (!(prop in cache) && prop in source) computeItem(prop, source[prop])
-			return cache[prop]
+		get(_, prop) {
+			return get(prop)
 		},
-		has(_cache, prop) {
+		has(_, prop) {
 			return prop in source
+		},
+		ownKeys() {
+			return Reflect.ownKeys(source)
+		},
+		getOwnPropertyDescriptor(_cache, prop) {
+			if (prop in source) return { configurable: true, enumerable: true, get: () => get(prop) }
 		},
 	})
 
+	let stateSnapshot: State = getState(source)
 	const stopMain = effect.named('morph:record')(({ ascend }) => {
 		track = ascend
-		const newInput = { ...source }
-		const keys = new Set<any>(Object.keys(newInput))
-		for (const key of itemEffects.keys()) {
-			if (!keys.has(key)) stopItem(key)
-			else if (key in cache && newInput[key] !== input[key]) {
-				stopItem(key)
+		// Track only structural changes on source
+		dependant(source, keysOf)
+		while ('evolution' in stateSnapshot) {
+			const { evolution } = stateSnapshot
+			stateSnapshot = stateSnapshot.next
+			if (evolution.type === 'add') {
+				touched1(cache, evolution, evolution.prop)
+			} else if (evolution.type === 'del') {
+				stopItem(evolution.prop)
+				delete cache[evolution.prop]
+				touched1(cache, evolution, evolution.prop)
 			}
 		}
-		touched(cache, { type: 'bunch', method: 'morph-input' }, [keysOf])
-		input = newInput
 	})
 
 	return cleanedBy(proxy, (reason) => {

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
   <head>
     <meta charset="utf-8" />
     <title>Mutts DevTools Test Page</title>
@@ -10,12 +11,14 @@
         margin: 2rem auto;
         padding: 1rem;
       }
+
       button {
         padding: 0.5rem 1rem;
         margin: 0.5rem;
         font-size: 1rem;
         cursor: pointer;
       }
+
       pre {
         background: #f4f4f4;
         padding: 1rem;
@@ -24,10 +27,11 @@
       }
     </style>
   </head>
+
   <body>
     <h1>Mutts Reactivity DevTools Test</h1>
     <p>Open DevTools and look for the "Mutts Reactivity" tab.</p>
-    
+
     <div>
       <button id="enable">Enable DevTools API</button>
       <button id="test">Create Test Effects</button>
@@ -39,21 +43,21 @@
     <script type="module">
       // Import Mutts (adjust path as needed)
       // For this demo, we'll simulate the API
-      
+
       const output = document.getElementById('output');
-      
+
       // Simulate reactive system
       const state = { name: 'Alice', age: 30 };
       const effects = [];
-      
+
       function log(msg) {
         output.textContent += msg + '\n';
       }
-      
+
       document.getElementById('enable').addEventListener('click', () => {
         // In a real app, you'd do: import { enableDevTools } from 'mutts'
         // For this demo, we'll create a mock API
-        window.__MUTTS_DEVTOOLS__ = {
+        window.__MUTTS_DEBUG__ = {
           getGraph() {
             const nodes = [
               { id: 'effect_0', label: 'updateUser', type: 'effect', depth: 0, debugName: 'updateUser' },
@@ -78,15 +82,15 @@
             log(`Set object name: ${name}`);
           }
         };
-        log('✓ DevTools API enabled at window.__MUTTS_DEVTOOLS__');
+        log('✓ DevTools API enabled at window.__MUTTS_DEBUG__');
       });
-      
+
       document.getElementById('test').addEventListener('click', () => {
         log('Creating test effects...');
         // In real app, effects would be created here
         log('✓ Test effects created');
       });
-      
+
       document.getElementById('update').addEventListener('click', () => {
         state.name = 'Bob';
         state.age = 31;
@@ -94,6 +98,5 @@
       });
     </script>
   </body>
+
 </html>
-
-

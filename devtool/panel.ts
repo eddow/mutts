@@ -209,7 +209,7 @@ function handleGraphResult(result: RawGraph | null | { error?: string }) {
 }
 
 function fetchGraphFromPage(): boolean {
-	const api = (window as any).__MUTTS_DEVTOOLS__ ?? (window as any).__REACTIVITY_DEVTOOLS__
+	const api = (window as any).__MUTTS_DEBUG__ ?? (window as any).__REACTIVITY_DEVTOOLS__
 	if (!api || typeof api.getGraph !== 'function') return false
 	try {
 		handleGraphResult(api.getGraph())
@@ -226,7 +226,7 @@ function fetchGraph() {
 	// Chrome DevTools extension context
 	if (window.chrome?.devtools?.inspectedWindow) {
 		const expr = `(() => {
-			const api = (window.__MUTTS_DEVTOOLS__ || window.__REACTIVITY_DEVTOOLS__);
+			const api = (window.__MUTTS_DEBUG__ || window.__REACTIVITY_DEVTOOLS__);
 			if (!api || typeof api.getGraph !== 'function') return null;
 			try { return api.getGraph(); } catch (e) { return { error: String(e) }; }
 		})()`

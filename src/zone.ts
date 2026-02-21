@@ -137,6 +137,8 @@ asyncHooks.addHook(() => {
 	return () => {
 		const prev = asyncZone.active
 		asyncZone.active = zone
-		return () => (asyncZone.active = prev)
+		return () => {
+			asyncZone.active = prev
+		}
 	}
 })

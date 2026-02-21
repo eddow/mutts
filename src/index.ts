@@ -10,7 +10,15 @@ export * from './mixins'
 export * from './promiseChain'
 export * from './reactive'
 export * from './std-decorators'
-export * from './utils'
+export {
+	zip,
+	arrayEquals,
+	isConstructor,
+	isObject,
+	deepCompare,
+	tag,
+	named,
+} from './utils'
 export * from './zone'
 
 import pkg from '../package.json'
@@ -31,6 +39,7 @@ const globalScope = (
 if (globalScope) {
 	// Detect the source of this instance safely across different environments
 	let source = 'mutts/index'
+	// biome-ignore lint/security/noGlobalEval: Intentional eval for cross-env import.meta detection
 	const viteEval = eval
 	try {
 		if (typeof __filename !== 'undefined') source = __filename

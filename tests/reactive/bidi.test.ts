@@ -3,7 +3,7 @@ import { biDi, reactive, reactiveOptions } from 'mutts'
 describe('biDi', () => {
 	it('should create bidirectional binding without infinite loops', () => {
 		const model = reactive({ value: 'initial' })
-		const external = { value: 'initial' }
+		const external = { value: 'none' }
 		
 		let externalUpdates = 0
 		let modelUpdates = 0

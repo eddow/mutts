@@ -92,7 +92,7 @@ Tip: Use `getActiveEffect()` inside your effect body (once) if you want to set a
 
 **"No graph exposed" message / only sample graph:**
 - Make sure `enableDevTools()` ran **before** any effects were created.
-- Confirm that `window.__MUTTS_DEVTOOLS__` exists and returns data in the page console.
+- Confirm that `window.__MUTTS_DEBUG__` exists and returns data in the page console.
 - The panel will fall back to a built-in sample graph when nothing is exposed.
 
 **Graph is empty or missing edges:**
@@ -101,7 +101,7 @@ Tip: Use `getActiveEffect()` inside your effect body (once) if you want to set a
 
 ## API Reference
 
-The `window.__MUTTS_DEVTOOLS__` object provides:
+The `window.__MUTTS_DEBUG__` object provides:
 
 - `getGraph()`: Returns `{ nodes, edges, meta }` describing the effect tree and recorded cause edges.
 - `setEffectName(effect, name)`: Assign a debug name to an effect.

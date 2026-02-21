@@ -4,7 +4,7 @@ import {
 	objectsWithDeepWatchers,
 	registerDeepWatcher,
 } from './deep-watch-state'
-import { effect } from './effects'
+import { effect, untracked } from './effects'
 import { isNonReactive } from './non-reactive-state'
 import { reactive } from './proxy'
 import { markWithRoot } from './registry'
@@ -125,7 +125,9 @@ export function deepWatch<T extends object>(
 		traverseAndTrack(target)
 
 		// Only call the callback if immediate is true or if it's not the first run
-		if (immediate) callback(target)
+		if (immediate) {
+			untracked(() => callback(target))
+		}
 		immediate = true
 
 		// Return a cleanup function that properly removes deep watcher tracking

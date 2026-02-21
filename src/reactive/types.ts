@@ -1,6 +1,3 @@
-// biome-ignore-all lint/suspicious/noConfusingVoidType: Type 'void' is not assignable to type 'ScopedCallback | undefined'.
-// Argument of type '() => void' is not assignable to parameter of type '(dep: DependencyFunction) => ScopedCallback | undefined'.
-
 import type { FunctionWrapper } from '../zone'
 import { debugHooks } from './debug-hooks'
 
@@ -247,7 +244,7 @@ export type BunchEvolution = {
 }
 export type Evolution = PropEvolution | BunchEvolution
 
-type State =
+export type State =
 	| {
 			evolution: Evolution
 			next: State
@@ -290,7 +287,7 @@ export const cleanup = Symbol('cleanup')
 export const forwardThrow = Symbol('throw')
 
 export type EffectCloser = (reason?: CleanupReason) => void
-//biome-ignore lint/suspicious/noConfusingVoidType: We have to
+// biome-ignore lint/suspicious/noConfusingVoidType: Catch handlers commonly return void
 export type CatchFunction = (error: any) => EffectCloser | undefined | void
 
 /**
@@ -613,8 +610,6 @@ export function optionCall<K extends CallableOption>(
 		options.warn(`options.${name} threw`, error)
 	}
 }
-
-export type { State }
 
 // --- Proxy State (Merged from proxy-state.ts) ---
 

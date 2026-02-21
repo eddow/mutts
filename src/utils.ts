@@ -3,21 +3,18 @@ type ElementTypes<T extends readonly unknown[]> = {
 }
 
 /**
- * Combines multiple arrays into an array of tuples, stopping at the shortest array length
+ * Yields tuples containing elements from each input array, stopping at the longest array length
  * @param args - Arrays to zip together
- * @returns Array of tuples containing elements from each input array
+ * @returns Generator yielding tuples containing elements from each input array
  */
-export function zip<T extends (readonly unknown[])[]>(...args: T): ElementTypes<T>[] {
+export function* zip<T extends (readonly unknown[])[]>(...args: T): Generator<ElementTypes<T>> {
 	if (!args.length) return []
-	const minLength = Math.min(...args.map((arr) => arr.length))
-	const result: ElementTypes<T>[] = []
+	const maxLength = Math.max(...args.map((arr) => arr.length))
 
-	for (let i = 0; i < minLength; i++) {
+	for (let i = 0; i < maxLength; i++) {
 		const tuple = args.map((arr) => arr[i]) as ElementTypes<T>
-		result.push(tuple)
+		yield tuple
 	}
-
-	return result
 }
 
 /**
@@ -27,8 +24,8 @@ export function zip<T extends (readonly unknown[])[]>(...args: T): ElementTypes<
  * @returns True if arrays are equal or values are strictly equal
  */
 export function arrayEquals(a: any, b: any): boolean {
-	if (a === b) return true
 	if (!Array.isArray(a) || !Array.isArray(b)) return false
+	if (a === b) return true
 	if (a.length !== b.length) return false
 	for (let i = 0; i < a.length; i++) {
 		if (a[i] !== b[i]) return false
@@ -72,6 +69,12 @@ export function isConstructor(fn: Function): boolean {
 		(nativeConstructors.has(fn) || fn.toString?.().startsWith('class '))
 	)
 }
+
+/**
+ * Checks if a value is an object
+ * @param value - The value to check
+ * @returns True if the value is an object
+ */
 export function isObject(value: any): value is object {
 	return (
 		typeof value === 'object' &&
@@ -90,19 +93,7 @@ export function isObject(value: any): value is object {
 		)
 	)
 }
-/**
- * Renames a function with a new name
- * @param fct - The function to rename
- * @param name - The new name for the function
- * @returns The function with the new name
- */
-export function renamed<F extends Function>(fct: F, name: string): F {
-	return Object.defineProperties(fct, {
-		name: {
-			value: name,
-		},
-	})
-}
+
 const hasNode = typeof Node !== 'undefined'
 export const FoolProof = {
 	get(obj: any, prop: any, receiver: any) {
@@ -276,6 +267,7 @@ export function deepCompare(a: any, b: any, cache = new Map<object, Set<object>>
 	return true
 }
 
+// Internal use: Used for reactive sets/maps to differentiate between different reactive containers: `x.get('aKey')` vs. `x['aKey']`
 const contentRefs = new WeakMap<object, any>()
 export function contentRef(container: object) {
 	if (!contentRefs.has(container))
@@ -290,6 +282,12 @@ export function contentRef(container: object) {
 	return contentRefs.get(container)
 }
 
+/**
+ * Tags an object with a name
+ * @param name - The name to tag the object with
+ * @param obj - The object to tag
+ * @returns The object with the tag
+ */
 export function tag<T extends object>(name: string, obj: T): T {
 	Object.defineProperties(obj, {
 		[Symbol.toStringTag]: {
@@ -306,6 +304,12 @@ export function tag<T extends object>(name: string, obj: T): T {
 	return obj
 }
 
+/**
+ * Renames a function with a new name
+ * @param name - The new name for the function
+ * @param fn - The function to rename
+ * @returns The function with the new name
+ */
 export function named<T extends Function>(name: string, fn: T): T {
 	Object.defineProperty(fn, 'name', {
 		value: fn.name ? `${fn.name}::${name}` : name,
@@ -317,8 +321,4 @@ export function named<T extends Function>(name: string, fn: T): T {
 
 export function* stringKeys(o: object) {
 	for (const key in o) yield key
-}
-
-export function* range(start: number, end: number) {
-	for (let i = start; i < end; i++) yield `${i}`
 }

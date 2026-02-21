@@ -15,14 +15,14 @@ Proxy-based **fine-grained reactivity** — changes propagate synchronously thro
 | Computed | `memoize(fn)` — cached, invalidates on tracked deps |
 | Collections | `project(arr, fn)` — per-entry effects, not `.map()` |
 | Async context | `Zone` + `asyncZone` — propagates across await |
-| Batching | `atomic(() => {})` — fire effects once after all mutations |
+| Batching | `atomic(() => {})` wraps, `atom(() => {})` runs immediately — fire effects once after all mutations |
 | Cleanup | Return fn from effect — runs before re-run/disposal |
 
 **All exports come from `'mutts'`** — no subpath imports like `mutts/reactive` or `mutts/zone`.
 
 ```ts
-import { reactive, effect, memoize, project, attend, lift, scan, cleanup,
-  atomic, defer, untracked, unreactive, watch, when, biDi, caught, why,
+import { reactive, effect, memoize, morph, attend, lift, scan, cleanup,
+  atom, atomic, defer, untracked, unreactive, watch, when, biDi, caught, why,
   cleanedBy, organized, Register,
   Zone, asyncZone, ZoneHistory, ZoneAggregator,
   decorator, mixin, Eventful, Destroyable, flavored, Indexable, chainPromise,
@@ -198,7 +198,14 @@ const updateBoth = atomic((a, b) => { state.a = a; state.b = b }) // effects fir
 // Decorator: @atomic on methods
 ```
 
-### 3.7 defer() — Avoid cycles
+### 3.7 atom() — Immediate atomic execution
+
+```ts
+atom(() => { state.a = 1; state.b = 2 }) // runs now, effects fire once
+// Unlike atomic() which wraps for later, atom() executes immediately
+```
+
+### 3.8 defer() — Avoid cycles
 
 ```ts
 effect(() => {
@@ -208,7 +215,7 @@ effect(() => {
 // Outside batch: immediate. NO microtask delay.
 ```
 
-### 3.8 biDi() — Bidirectional binding
+### 3.9 biDi() — Bidirectional binding
 
 ```ts
 const provide = biDi(
@@ -219,7 +226,7 @@ input.addEventListener('input', () => provide(input.value))
 // Prevents infinite loops automatically
 ```
 
-### 3.9 watch() — Observe changes
+### 3.10 watch() — Observe changes
 
 ```ts
 watch(() => state.count, (newVal, oldVal) => {}) // specific derivation
@@ -390,8 +397,12 @@ reactiveOptions.skipRunningEffect = (fn) => {} // effect skipped (already runnin
 reactiveOptions.onMemoizationDiscrepancy = (cached, fresh, fn, args, cause) => {}
 
 // Introspection (memory-intensive, dev only)
-import { enableIntrospection, getDependencyGraph, getMutationHistory } from 'mutts'
-enableIntrospection({ historySize: 100 })
+import { reactiveOptions } from 'mutts'
+import { buildReactivityGraph, getMutationHistory } from 'mutts/debug'
+
+reactiveOptions.introspection = { enableHistory: true, historySize: 100 }
+const history = getMutationHistory()
+const graph = buildReactivityGraph()
 ```
 
 **ReactiveError.debugInfo**: `causalChain`, `creationStack`, `cycle` (for CYCLE_DETECTED).
@@ -502,18 +513,16 @@ const theme = await chainPromise(api.getUser('123')).getProfile().getSettings().
 
 | DO | DON'T |
 |----|-------|
-| `project(arr, fn)` | `arr.map(fn)` for reactive transforms |
+| `morph(arr, fn)` | `arr.map(fn)` for reactive transforms |
 | `effect(() => { state.x })` | bare `state.x` outside effect |
 | `defer(() => state.y = val)` | `queueMicrotask(() => state.y = val)` |
 | `memoize((obj) => obj.n * 2)` | `memoize((n: number) => n * 2)` |
-| `atomic(() => { a=1; b=2 })` | sequential mutations (2 effect runs) |
+| `atom(() => { a=1; b=2 })` | sequential mutations (2 effect runs) |
 | `untracked(() => state.x)` | reading state you don't want tracked |
 | `watch(() => state.x, cb)` | manual dirty-checking |
 | `arr.splice(0)` or `arr.length = 0` | manual loop to clear arrays |
-| `tracked(() => ...)` after await | bare reads after await |
 | `isReactive(obj)` to check | `obj._mutts_isReactive` |
 | Store `stop = effect(...)` | letting effect GC unintentionally |
 | `import { x } from 'mutts'` | `import { x } from 'mutts/reactive'` (no subpaths) |
 | `cleanedBy(obj, fn)` for cleanup | manual `obj[cleanup] = fn` |
 | `memoize(() => a + b)` for computed | `effect` + manual state sync |
-| `unreactive(domNode)` | wrapping DOM nodes in `reactive()` |

@@ -43,6 +43,43 @@ service.updateMultiple(5)  // Effect runs only once with final values
 
 The wrapped function preserves its signature (parameters and return value), and all effects triggered by reactive changes inside it are automatically batched.
 
+### `atom()` - Immediate Atomic Execution
+
+While `atomic()` **wraps** a function for later calls, `atom()` **runs** a function immediately and atomically. It always executes right away, even inside a nested batch.
+
+```typescript
+import { atom, reactive, effect } from 'mutts/reactive'
+
+const state = reactive({ a: 0, b: 0 })
+
+effect(() => {
+  console.log('Values:', state.a, state.b)
+})
+
+// Execute multiple mutations atomically — effect fires only once
+atom(() => {
+  state.a = 10
+  state.b = 20
+})
+```
+
+**`atom` vs `atomic`:**
+
+| | `atom(fn)` | `atomic(fn)` |
+|---|---|---|
+| **When it runs** | Immediately | Returns a wrapped function for later calls |
+| **Arguments** | `() => T` | `(...args) => T` (preserves signature) |
+| **Use case** | One-shot batch of mutations | Reusable batched function / decorator |
+
+```typescript
+// atom — runs now
+atom(() => { state.a = 1; state.b = 2 })
+
+// atomic — creates wrapper for later
+const update = atomic((a, b) => { state.a = a; state.b = b })
+update(1, 2)  // runs when called
+```
+
 ### `addBatchCleanup()` / `defer()` - Deferring Work to Avoid Cycles
 
 When an effect needs to perform an action that would modify state the effect depends on, this can create a reactive cycle. The `addBatchCleanup` function (also exported as `defer` for semantic clarity) allows you to defer such work until after the current batch of effects completes.
@@ -468,6 +505,31 @@ user.name = 'Jane' // Triggers the callback
 user.age = 31      // Triggers the callback
 user.email = 'jane@example.com' // Triggers the callback
 ```
+
+#### Flavored Watch
+
+The `watch` function is **flavored**, meaning it provides chainable properties for common options like `immediate` and `deep`:
+
+```typescript
+const state = reactive({ count: 0, nested: { a: 1 } })
+
+// Watch with immediate execution
+watch.immediate(() => state.count, (v) => console.log(v))
+// Prints: 0 immediately, then 1, 2...
+
+// Deep watch
+watch.deep(() => state.nested, (v) => console.log('Nested changed'))
+
+// Combined flavors
+watch.immediate.deep(() => state.nested, (v) => {
+    console.log('Immediate nested:', v)
+})
+```
+
+These flavors are a shorthand for passing options:
+- `watch.immediate(...)` is equivalent to `watch(..., { immediate: true })`
+- `watch.deep(...)` is equivalent to `watch(..., { deep: true })`
+- `watch.immediate.deep(...)` is equivalent to `watch(..., { immediate: true, deep: true })`
 
 #### Use Cases
 
@@ -995,7 +1057,8 @@ state.user = fetchUser()  // Only notifies if actual values changed
 
 // Or explicitly track what you need
 effect(() => {
-  console.log(state.user.profile.name)  // Only tracks this specific path
+  // Only tracks this specific path: Even if the `user` object changes, this effect will run only if the `profile.name` property has a different value
+  console.log(state.user.profile.name)
 })
 ```
 
@@ -1072,7 +1135,7 @@ Mutts provides several ways to derive values from reactive state. They differ in
 
 | Primitive | Evaluation | Output | Trackable | Identity stable | Cleanup | Best for |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `effect(() => ...)` | Eager | Side-effect (void) | N/A | N/A | Auto (parent/GC) | Side effects, DOM updates |
+| `effect(() => ...)` | Eager | Side-effect (void) | N/A | N/A | Auto (parent/GC) + Returned cleanup | Side effects, DOM updates |
 | `memoize(() => expr)` | **Lazy** | Raw value | Yes (return) | No (new value each call) | Auto (WeakMap GC) | Cached scalars, computed getters |
 | `memoize(fn)(args)` | **Lazy** | Raw value | Yes (return) | No | Auto (WeakMap GC) | Parameterized caching |
 | `lift(() => [...])` | Eager | Reactive array proxy | Yes (per-index) | **Yes** | `result[cleanup]()` | Derived collections (filter, map) |
@@ -1081,12 +1144,12 @@ Mutts provides several ways to derive values from reactive state. They differ in
 | `morph.pure(source, fn)` | **Lazy** | Reactive proxy | Yes (per-key) | **Yes** | `cleanedBy` | Same, but skips per-item dependency tracking |
 | `scan(source, fn, init)` | Eager | Reactive array | Yes (per-index) | **Yes** | `result[cleanup]()` | Running accumulations (prefix sums) |
 | `when(() => cond)` | Eager | Promise\<T\> | N/A | N/A | Auto (on resolve/timeout) | Awaiting a reactive condition |
-| `watch(source, cb)` | Eager | Callback (old/new) | N/A | N/A | Returned cleanup | Observing specific changes |
+| `watch(source, cb)` | Eager | Callback (old/new) | N/A | N/A | Auto (parent/GC) + Returned cleanup | Observing specific changes |
 
 ### Key distinctions
 
 - **Lazy vs Eager**: `memoize` only recomputes when the result is read. Everything else recomputes immediately when dependencies change — even if nobody is consuming the output.
-- **Trackable**: Can downstream effects depend on the result? `memoize`'s return value is trackable because calling it runs inside an effect context. `lift`/`project`/`scan` return reactive proxies where each property/index is independently trackable.
+- **Trackable**: Can downstream effects depend on the result? `memoize`'s return value is trackable because calling it runs inside an effect context. `lift`/`morph`/`scan` return reactive proxies where each property/index is independently trackable.
 - **Identity stable**: `lift`, `morph`, and `scan` return the **same proxy** across recomputations — only changed slots are updated. This is critical for downstream transformations or DOM reconciliation that relies on reference identity.
 
 ### Common patterns
@@ -1114,7 +1177,7 @@ const active = lift(() => items.filter(x => x.active))
 
 **Per-element transform**:
 ```typescript
-const doubled = project(numbers, ({ value }) => value * 2)
+const doubled = morph(numbers, ({ value }) => value * 2)
 // Each index has its own effect — changing numbers[3] only recomputes doubled[3]
 ```
 
@@ -1124,8 +1187,8 @@ Both `lift` and `morph` produce a stable reactive object from reactive inputs, b
 
 | | `lift` | `morph` |
 |---|---|---|
-| **Effects** | 1 (single callback) | N+1 (1 outer + 1 per key) |
-| **Input** | Callback returning a plain object | Reactive source (array/record/Map) |
+| **Effects** | 1 (single callback) | N+1 (1 outer + 1 per non-pure key) |
+| **Input** | Callback returning a plain object/array | Reactive source (array/record/Map) |
 | **Granularity** | Re-runs entire callback, diffs result | Per-key effect, only changed keys re-run |
 | **Key lifecycle** | Automatic (diff adds/removes keys) | Automatic (arrayDiff handles updates) |
 | **Execution** | Eager (recomputes immediately) | **Lazy** (recomputes on access) |
@@ -1161,7 +1224,7 @@ state.items = fetchedItems // deep touch diffs old vs new per-index — no lift 
 
 ### `morph(source, fn)`
 
-`morph` creates a **lazy, identity-stable** reactive array by mapping each element of a source array through a callback. Unlike `lift` (which re-runs the entire callback and diffs the result) or `project` (which eagerly creates per-key effects), `morph` only computes an element when it is accessed, and tracks the source array via `arrayDiff` to efficiently handle insertions, removals, and moves.
+`morph` creates a **lazy, identity-stable** reactive array by mapping each element of a source array through a callback. Unlike `lift` (which re-runs the entire callback and diffs the result), `morph` only computes an element when it is accessed, and tracks the source array via `arrayDiff` to efficiently handle insertions, removals, and moves.
 
 **Signature**
 

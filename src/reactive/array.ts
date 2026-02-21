@@ -142,7 +142,9 @@ export abstract class ReactiveArrayWrapper extends Array {
 	}
 
 	forEach(callbackfn: (value: any, index: number, array: any[]) => void, thisArg?: any): void {
-		super.forEach((v, i, a) => callbackfn.call(thisArg, reactive(v), i, a), thisArg)
+		super.forEach((v, i, a) => {
+			callbackfn.call(thisArg, reactive(v), i, a)
+		}, thisArg)
 	}
 
 	includes(searchElement: any, fromIndex?: number): boolean {
@@ -279,6 +281,7 @@ export abstract class ReactiveArrayWrapper extends Array {
 		return reactive(super.toSorted(wrappedCompare))
 	}
 
+	// biome-ignore lint/complexity/noArguments: Needed to distinguish fn() from fn(undefined)
 	toSpliced(start: number, deleteCount?: number, ...items: any[]): any {
 		if (arguments.length > 2)
 			return reactive(super.toSpliced(start, deleteCount!, ...items.map(unwrap)))

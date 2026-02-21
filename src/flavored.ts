@@ -74,33 +74,52 @@ export function createFlavor<T extends (...args: any[]) => any>(
 }
 
 /**
- * Creates a new flavored function that merges options objects.
- * Useful when the last argument is an options object that should be merged.
+ * Creates a new flavored function that merges options objects at a specific index.
+ * By default, uses the function's arity (length) as the index for options.
  *
  * @param fn - The base flavored function
- * @param defaultOptions - Options to merge with the provided options
- * @returns A new flavored function with merged options
- *
- * @example
- * ```typescript
- * const opaqueEffect = flavorOptions(effect, { opaque: true })
- * const namedEffect = flavorOptions(effect, { name: 'myEffect' })
- * ```
+ * @param defaultOptions - Options to merge
+ * @param optionsIndex - Optional explicit index for options (defaults to fn.length)
+ * @param name - Optional name for the wrapper
+ * @returns A new flavored function
  */
 export function flavorOptions<T extends (...args: any[]) => any>(
 	fn: T,
 	defaultOptions: Record<string, any>,
-	name?: string
+	opts: {
+		optionsIndex?: number,
+		name?: string
+	} = {}
 ): T {
+	// If the function is already flavorOptions-wrapped, it might have an index stored
+	const targetIndex = opts.optionsIndex ?? (fn as any).optionsIndex ?? fn.length
+
 	const fct = function flavorOptionsWrapper(this: any, ...args: any[]) {
-		const lastArg = args[args.length - 1]
-		const mergedArgs =
-			lastArg !== undefined && typeof lastArg === 'object'
-				? [...args.slice(0, -1), { ...defaultOptions, ...lastArg }]
-				: [...args, defaultOptions]
-		return fn.apply(this, mergedArgs)
+		const newArgs = [...args]
+
+		// Ensure we have enough arguments to reach the options index
+		while (newArgs.length <= targetIndex) {
+			newArgs.push(undefined)
+		}
+
+		const currentOptions = newArgs[targetIndex]
+		const isObject =
+			currentOptions !== null &&
+			typeof currentOptions === 'object' &&
+			!Array.isArray(currentOptions)
+
+		newArgs[targetIndex] = isObject
+			? { ...defaultOptions, ...currentOptions }
+			: defaultOptions
+
+		return fn.apply(this, newArgs)
 	}
-	if (name) named(name, fct)
+
+	if (opts.name) named(`${fn.name}.${opts.name}`, fct)
+
+	// Preserve arity and options track
+	Object.defineProperty(fct, 'length', { value: fn.length })
+	;(fct as any).optionsIndex = targetIndex
 
 	return flavored(fct as T, (fn as any).flavors || {})
 }

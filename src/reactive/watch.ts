@@ -1,6 +1,7 @@
 import { decorator, type GenericClassDecorator } from '../decorator'
+import { flavored, flavorOptions } from '../flavored'
 import { deepWatch } from './deep-watch'
-import { effect } from './effects'
+import { effect, untracked } from './effects'
 import {
 	addUnreactiveProps,
 	isNonReactive,
@@ -28,54 +29,59 @@ export interface WatchOptions {
 
 /**
  * Watches a reactive value and calls a callback when it changes
- * @param value - Function that returns the value to watch
- * @param changed - Callback to call when the value changes
- * @param options - Watch options
- * @returns Cleanup function to stop watching
  */
-export function watch<T>(
-	value: (dep: EffectAccess) => T,
-	changed: (value: T, oldValue?: T) => void,
-	options?: Omit<WatchOptions, 'deep'> & { deep?: false }
-): EffectCleanup
-/**
- * Watches a reactive value with deep watching enabled
- * @param value - Function that returns the value to watch
- * @param changed - Callback to call when the value changes
- * @param options - Watch options with deep watching enabled
- * @returns Cleanup function to stop watching
- */
-export function watch<T extends object | any[]>(
-	value: (dep: EffectAccess) => T,
-	changed: (value: T, oldValue?: T) => void,
-	options?: Omit<WatchOptions, 'deep'> & { deep: true }
-): EffectCleanup
-/**
- * Watches a reactive object directly
- * @param value - The reactive object to watch
- * @param changed - Callback to call when the object changes
- * @param options - Watch options
- * @returns Cleanup function to stop watching
- */
-export function watch<T extends object | any[]>(
-	value: T,
-	changed: (value: T) => void,
-	options?: WatchOptions
-): EffectCleanup
+export interface Watch {
+	<T>(
+		value: (dep: EffectAccess) => T,
+		changed: (value: T, oldValue?: T) => void,
+		options?: Omit<WatchOptions, 'deep'> & { deep?: false }
+	): EffectCleanup
+	/**
+	 * Watches a reactive value with deep watching enabled
+	 */
+	<T extends object | any[]>(
+		value: (dep: EffectAccess) => T,
+		changed: (value: T, oldValue?: T) => void,
+		options?: Omit<WatchOptions, 'deep'> & { deep: true }
+	): EffectCleanup
+	/**
+	 * Watches a reactive object directly
+	 */
+	<T extends object | any[]>(
+		value: T,
+		changed: (value: T) => void,
+		options?: WatchOptions
+	): EffectCleanup
 
-export function watch(
-	value: any, //object | ((dep: DependencyAccess) => object),
-	changed: (value?: object, oldValue?: object) => void,
-	options: any = {}
-) {
-	return typeof value === 'function'
-		? watchCallBack(value, changed, options)
-		: typeof value === 'object' && value !== null
-			? watchObject(value, changed, options)
-			: (() => {
-					throw new Error('watch: value must be a function or an object')
-				})()
+	/** Deep watch flavor */
+	get deep(): Watch
+	/** Immediate watch flavor */
+	get immediate(): Watch
 }
+
+export const watch = flavored(
+	function watch(
+		value: any, //object | ((dep: DependencyAccess) => object),
+		changed: (value?: object, oldValue?: object) => void,
+		options: any = {}
+	) {
+		return typeof value === 'function'
+			? watchCallBack(value, changed, options)
+			: typeof value === 'object' && value !== null
+				? watchObject(value, changed, options)
+				: (() => {
+						throw new Error('watch: value must be a function or an object')
+					})()
+	},
+	{
+		get deep() {
+			return flavorOptions(this, { deep: true })
+		},
+		get immediate() {
+			return flavorOptions(this, { immediate: true })
+		},
+	}
+) as Watch
 
 function watchObject(
 	value: object,
@@ -100,10 +106,12 @@ function watchCallBack<T>(
 	const cbCleanup = effect(
 		markWithRoot(function watchCallBackEffect(access) {
 			const newValue = value(access)
-			if (oldValue !== newValue)
-				if (oldValue === unsetYet) {
-					if (immediate) changed(newValue)
-				} else changed(newValue, oldValue)
+			if (oldValue !== newValue) {
+				const old = oldValue
+				if (old === unsetYet) {
+					if (immediate) untracked(() => changed(newValue))
+				} else untracked(() => changed(newValue, old as T))
+			}
 			oldValue = newValue
 			if (deep) {
 				if (deepCleanup) deepCleanup()

@@ -1060,6 +1060,28 @@ export const atomic = decorator({
 	},
 })
 
+/**
+ * Runs `fn` atomically and **always immediately**, batching all reactive effects
+ * triggered inside it so they fire only once after `fn` completes.
+ *
+ * Unlike `atomic(fn)` which **wraps** a function for later invocation,
+ * `atom(fn)` **executes** the function right away.
+ *
+ * @example
+ * ```ts
+ * const state = reactive({ a: 0, b: 0 })
+ * effect(() => console.log(state.a, state.b)) // logs once after atom completes
+ *
+ * atom(() => {
+ *   state.a = 1
+ *   state.b = 2
+ * })
+ * ```
+ */
+export function atom<T>(fn: () => T) {
+	return batch(fn, 'immediate')
+}
+
 const fr = new FinalizationRegistry<() => void>((f) => f())
 
 /**
@@ -1076,8 +1098,9 @@ export const effect = named(
 	effectMarker.leave,
 	flavored(
 		function effect(
+			// biome-ignore lint/suspicious/noConfusingVoidType: Effect callbacks commonly return void
 			fn: (access: EffectAccess) => EffectCloser | undefined | void | Promise<any>,
-			effectOptions?: EffectOptions
+			effectOptions: EffectOptions = {}
 		): EffectCleanup {
 			if (effectOptions?.name) Object.defineProperty(fn, 'name', { value: effectOptions.name })
 			// Use per-effect asyncMode or fall back to global option
@@ -1238,7 +1261,7 @@ export const effect = named(
 						while (caught < catches.length) {
 							cleanupReaction(reason)
 							try {
-								reactionCleanup = catches[caught](error) as EffectCloser | undefined
+								reactionCleanup = catches[caught](error) as EffectCloser
 								return
 							} catch (e) {
 								caught++
@@ -1266,6 +1289,7 @@ export const effect = named(
 				}
 			}
 
+			// cleanup is initialized here but may be used by the tracked closure below
 			const cleanup: (() => void) | null = null
 			const tracked = effectHistory.present.with(runEffect, () =>
 				named(effectMarker.leave, effectAggregator.zoned)
@@ -1369,10 +1393,10 @@ export const effect = named(
 		},
 		{
 			get opaque() {
-				return flavorOptions(this, { opaque: true }, 'opaque')
+				return flavorOptions(this, { opaque: true }, { name: 'opaque' })
 			},
 			named(name: string) {
-				return flavorOptions(this, { name }, 'named')
+				return flavorOptions(this, { name }, { name: 'named' })
 			},
 		}
 	)

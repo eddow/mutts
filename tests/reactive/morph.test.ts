@@ -145,6 +145,25 @@ describe('morph undefined value bug', () => {
 		expect(mapped.has('a')).toBe(false)
 	})
 
+	it('morphs Map: add and del are reactive via effect', () => {
+		const source = reactive(new Map([['a', 1]]))
+		const mapped = morph(source, (v: number) => v * 10)
+		const keys: string[][] = []
+		const stop = effect(() => { keys.push([...mapped.keys()]) })
+
+		expect(keys).toEqual([['a']])
+
+		source.set('b', 2)
+		expect(keys).toEqual([['a'], ['a', 'b']])
+		expect(mapped.get('b')).toBe(20)
+
+		source.delete('a')
+		expect(keys).toEqual([['a'], ['a', 'b'], ['b']])
+		expect(mapped.has('a')).toBe(false)
+
+		stop()
+	})
+
 	it('morphs Record correctly and lazily', () => {
 		const source = reactive({ a: 1, b: 2 }) as Record<string, number>
 		let count = 0
@@ -165,5 +184,69 @@ describe('morph undefined value bug', () => {
 		
 		delete source.a
 		expect('a' in mapped).toBe(false)
+	})
+
+	it('morphArray: replaces nested object when source item is replaced', () => {
+		type User = { name: { first: string; last: string } }
+		const source = reactive([
+			{ name: { first: 'Alice', last: 'A' } },
+			{ name: { first: 'Bob', last: 'B' } },
+		] as User[])
+		const mapped = morph(source, (u: User) => u.name)
+
+		expect(mapped[0]).toEqual({ first: 'Alice', last: 'A' })
+		expect(mapped[1]).toEqual({ first: 'Bob', last: 'B' })
+
+		source[0] = { name: { first: 'Carol', last: 'C' } }
+		expect(mapped[0]).toEqual({ first: 'Carol', last: 'C' })
+	})
+
+	it('morphRecord: replaces nested object when source value is replaced', () => {
+		type User = { name: { first: string; last: string } }
+		const source = reactive({
+			alice: { name: { first: 'Alice', last: 'A' } },
+			bob: { name: { first: 'Bob', last: 'B' } },
+		} as Record<string, User>)
+		const mapped = morph(source, (u: User) => u.name)
+
+		expect(mapped.alice).toEqual({ first: 'Alice', last: 'A' })
+		expect(mapped.bob).toEqual({ first: 'Bob', last: 'B' })
+
+		source.alice = { name: { first: 'Carol', last: 'C' } }
+		expect(mapped.alice).toEqual({ first: 'Carol', last: 'C' })
+	})
+
+	it('morphMap: replaces nested object when source value is replaced', () => {
+		type User = { name: { first: string; last: string } }
+		const source = reactive(new Map<string, User>([
+			['alice', { name: { first: 'Alice', last: 'A' } }],
+			['bob', { name: { first: 'Bob', last: 'B' } }],
+		]))
+		const mapped = morph(source, (u: User) => u.name)
+
+		expect(mapped.get('alice')).toEqual({ first: 'Alice', last: 'A' })
+		expect(mapped.get('bob')).toEqual({ first: 'Bob', last: 'B' })
+
+		source.set('alice', { name: { first: 'Carol', last: 'C' } })
+		expect(mapped.get('alice')).toEqual({ first: 'Carol', last: 'C' })
+	})
+
+	it('morphs Record: add and del are reactive via effect', () => {
+		const source = reactive({ a: 1 }) as Record<string, number>
+		const mapped = morph(source, (v: number) => v * 10)
+		const keys: string[][] = []
+		const stop = effect(() => { keys.push(Object.keys(mapped)) })
+
+		expect(keys).toEqual([['a']])
+
+		source.b = 2
+		expect(keys).toEqual([['a'], ['a', 'b']])
+		expect(mapped.b).toBe(20)
+
+		delete source.a
+		expect(keys).toEqual([['a'], ['a', 'b'], ['b']])
+		expect('a' in mapped).toBe(false)
+
+		stop()
 	})
 })

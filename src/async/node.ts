@@ -72,6 +72,7 @@ hook.enable()
 
 const OriginalPromise = globalThis.Promise
 const originalMethods = {
+	// biome-ignore lint/suspicious/noThenProperty: Intentional Promise.prototype patching
 	then: OriginalPromise.prototype.then,
 	catch: OriginalPromise.prototype.catch,
 	finally: OriginalPromise.prototype.finally,
@@ -81,6 +82,7 @@ const originalMethods = {
 }
 
 // Patch prototype
+// biome-ignore lint/suspicious/noThenProperty: Intentional Promise.prototype patching
 OriginalPromise.prototype.then = function (onFulfilled, onRejected) {
 	return originalMethods.then.call(this, wrap(onFulfilled), wrap(onRejected))
 } as any

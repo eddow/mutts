@@ -30,6 +30,8 @@ const hasReentry = new Set<PropertyKey>()
 export type SubProxy = {
 	get?(obj: any, prop: PropertyKey, receiver: any): any
 	has?(obj: any, prop: PropertyKey): boolean
+	ownKeys?(obj: any): ArrayLike<string | symbol>
+	getOwnPropertyDescriptor?(obj: any, prop: PropertyKey): PropertyDescriptor | undefined
 }
 const subsRegister = new WeakMap<any, SubProxy>()
 
@@ -202,7 +204,10 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 	},
 	ownKeys(obj) {
 		dependant(obj, keysOf)
-		return Reflect.ownKeys(obj)
+		return subsRegister.get(obj)?.ownKeys?.(obj) || Reflect.ownKeys(obj)
+	},
+	getOwnPropertyDescriptor(obj, prop) {
+		return subsRegister.get(obj)?.getOwnPropertyDescriptor?.(obj, prop) || Reflect.getOwnPropertyDescriptor(obj, prop)
 	},
 }
 

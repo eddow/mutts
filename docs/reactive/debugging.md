@@ -40,15 +40,40 @@ You can control how cycles are handled via `reactiveOptions.cycleHandling`:
 - **`'debug'`**: Full diagnostic mode with transitive closures and topological sorting. Provides detailed cycle path reporting.
 
 ### Topological vs. Flat Mode Detection
+- **Detection**: Cycles are detected when the execution depth exceeds `maxEffectChain` (default 100).
+- **Diagnostics**: The resulting `ReactiveError` includes a `trace` property (the recent execution sequence) and attempts to identify a repeating `cycle`.
+- **Recommendation**: Use this mode only for production to minimize performance overhead.
 
-| Mode | `cycleHandling` | Detection Method | Error Code |
-| :--- | :--- | :--- | :--- |
-| **Debug** | `'debug'` or `'development'` | **Mathematical**: Analyzes the dependency graph. | `CYCLE_DETECTED` |
-| **Production** | `'production'` (Default) | **Heuristic**: Counts executions per batch. | `MAX_REACTION_EXCEEDED` |
+### Cycle Handling Modes
 
-In **Topological mode**, the system maintains a transitive closure of all effects, allowing it to know instantly if an effect is its own cause. In **Flat mode**, the system is "blind" to the graph and relies on the execution threshold (`maxTriggerPerBatch`) to interrupt infinite loops.
+You can configure how the system handles cycles via `reactiveOptions.cycleHandling`:
 
-## Memoization Discrepancy Detection
+| Mode | Detection Timing | Cycle Information | Performance |
+|------|-----------------|-------------------|-------------|
+| `'production'` | Late (Heuristic) | Trace of last N effects | Fastest |
+| `'development'` | Eager (On edge) | Exact path (DFS) | Moderate |
+| `'debug'` | Structural | Transitive closures | Slowest |
+
+#### Finding Cycle Information
+
+When a cycle is detected, a `ReactiveError` is thrown. You can find detailed path information in the error object:
+
+```typescript
+try {
+    atom(() => { /* cycle logic */ });
+} catch (error) {
+    if (error.code === 'Cycle detected') {
+        console.log('Cycle Path:', error.cycle.join(' → '));
+        console.log('Trigger Chain:', error.causalChain);
+    }
+}
+```
+
+- **`error.cycle`**: An array of effect names forming the cycle.
+- **`error.causalChain`**: The sequence of triggers that led to the current effect.
+- **`error.lineage`**: The creation stack of the effect (available in `development` or `debug` modes).
+
+### Memoization Discrepancy Detection
 
 The most powerful debugging tool in `mutts` is the **Discrepancy Detector**. It helps identify "missing dependencies"—reactive values used inside a computation that the system isn't tracking.
 
@@ -150,7 +175,14 @@ Always provide a name for your effects to make debug logs and error messages rea
 effect(() => {
     // ...
 }, { name: 'UpdateSidebarCounter' });
+
+// Or
+
+effect.named('UpdateSidebarCounter')(() => {
+    // ...
+});
 ```
+
 
 ### Activation & Deactivation
 
@@ -167,3 +199,75 @@ if (process.env.NODE_ENV === 'development') {
     reactiveOptions.cycleHandling = 'production';
 }
 ```
+
+## Advanced Debugging (`mutts/debug`)
+
+For a deeper look into the reactivity graph and execution flow, you can import the `mutts/debug` module. Simply importing it enables several background tracking features.
+
+```typescript
+import 'mutts/debug';
+```
+
+### Reaction Reasons (`CleanupReason`)
+
+When an effect or watcher re-runs, it receives a `reaction` property (in `EffectAccess`) that describes *why* it was triggered. This is also passed to the `cleanup` function.
+
+```typescript
+effect(({ reaction }) => {
+    if (reaction && typeof reaction === 'object') {
+        if (reaction.type === 'propChange') {
+            console.log('Triggered by:', reaction.triggers.map(t => t.evolution.prop));
+        }
+    }
+    
+    return (reason) => {
+        // reason is also a CleanupReason
+        if (reason?.type === 'stopped') console.log('Effect manually stopped');
+    };
+});
+```
+
+#### `formatCleanupReason`
+
+A built-in utility to turn a `CleanupReason` into an inspectable console log array.
+
+```typescript
+import { formatCleanupReason } from 'mutts';
+
+effect(()=> {
+    ...
+    return (reason)=> {
+        if (reason) console.log(...formatCleanupReason(reason));
+    }
+});
+```
+
+### Lineage Tracking
+
+Lineage tracking allows you to see the "causal path" of an effect—not just the current stack trace, but the stack traces of all parent effects that created the current execution.
+
+When an effect is created, it is assigned a `lineage` property that contains the stack traces of all parent effects that lead to its creation.
+
+- **`logLineage()`**: Prints a formatted, interactive tree of the current effect's lineage to the console.
+- **`captureLineage()`**: Captures the current lineage as a structured object.
+
+#### Lineage Options
+
+You can control how lineages are captured via `reactiveOptions.introspection.gatherReasons.lineages`:
+- `'none'`: Disable lineage capture.
+- `'touch'`: Capture lineage when a property is accessed (default).
+- `'dependency'`: Capture lineage when a dependency is recorded.
+- `'both'`: Capture both.
+
+### The `__MUTTS_DEBUG__` Global
+
+When `mutts/debug` is active (or after calling `enableDevTools()`), a global `__MUTTS_DEBUG__` object is exposed in the environment (Node.js `global` or Browser `window`).
+
+This object provides low-level access to the graph, lineage capture, and renaming utilities:
+- `__MUTTS_DEBUG__.getGraph()`: Returns the full reactivity graph.
+- `__MUTTS_DEBUG__.logLineage()`: logs the current lineage.
+- `__MUTTS_DEBUG__.browserLineage`: captures lineage for the DevTools panel.
+
+### Custom DevTools Formatters
+
+`mutts/debug` automatically registers [Custom Formatters](https://bit.ly/chrome-extension-custom-formatters) in Chrome. This makes lineage objects and reactive proxies appear as clean, structured trees in the console instead of opaque Proxy objects.

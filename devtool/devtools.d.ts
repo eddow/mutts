@@ -42,7 +42,7 @@ interface Window {
 	chrome?: {
 		devtools?: ChromeDevTools
 	}
-	__MUTTS_DEVTOOLS__?: {
+	__MUTTS_DEBUG__?: {
 		getGraph: () => any
 		setEffectName?: (effect: any, name: string) => void
 		setObjectName?: (obj: any, name: string) => void

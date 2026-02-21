@@ -448,7 +448,7 @@ export function enableDevTools() {
 		options.introspection.logErrors = true
 	}
 	
-	globalScope.__MUTTS_DEVTOOLS__ = {
+	globalScope.__MUTTS_DEBUG__ = {
 		getGraph: buildReactivityGraph,
 		logLineage(tag?: string) {
 			logLineage(getLineage())
@@ -507,8 +507,6 @@ export function isDevtoolsEnabled() {
 	return devtoolsEnabled
 }
 
-// --- Introspection API ---
-
 /**
  * Returns the raw dependency graph data structure.
  * This is useful for programmatic analysis of the reactive system.
@@ -517,6 +515,17 @@ export function getDependencyGraph() {
 	return {
 		nodes: buildReactivityGraph().nodes,
 		edges: buildReactivityGraph().edges,
+	}
+}
+
+/**
+ * Capture a complete snapshot of the current reactive state
+ */
+export function snapshot() {
+	return {
+		graph: getDependencyGraph(),
+		history: getMutationHistory(),
+		timestamp: Date.now(),
 	}
 }
 

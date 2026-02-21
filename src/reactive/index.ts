@@ -1,11 +1,12 @@
-export { attend, lift, morph, type ScanResult, scan } from './buffer'
+export { attend, lift, morph, morph as project, type ScanResult, scan } from './buffer'
 export { getState, touched, touched1 } from './change'
 export { deepWatch } from './deep-watch'
 export { cleanedBy, effectAggregator, getActiveEffect } from './effect-context'
 export {
 	addBatchCleanup,
+	atom,
 	atomic,
-	//batch, - NEVER export batch, it deals with EffectTriggers who are internal types - mutts consumers use `atomic`
+	//batch, - NEVER export batch, it deals with EffectTriggers who are internal types - mutts consumers use `atomic` or `atom`
 	biDi,
 	caught,
 	defer,

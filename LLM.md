@@ -19,7 +19,7 @@
 Each entry point has a `.dev` variant (`entry-browser.dev.ts`, `entry-node.dev.ts`) that auto-imports `debug/debug.ts`, enabling devtools without any consumer-side configuration.
 
 *   **Conditional exports**: `package.json` uses the `"development"` condition so bundlers that support it (Vite enables it by default in dev mode) automatically resolve to the dev variant.
-*   **Tests**: `vitest.config.ts` aliases `mutts` to the `.dev` entries, so tests always get devtools.
+*   **Tests**: `vitest.config.ts` aliases `mutts` to the `.dev` entries, so tests always get debug tools.
 *   **Production**: The standard (non-dev) entries contain zero debug code. No `import 'mutts/debug'` needed in consumer apps.
 *   **Force dev/prod**: All 4 combinations available as explicit imports:
     *   `mutts/dev`, `mutts/prod` (browser implied)
@@ -107,7 +107,7 @@ In `mutts`, you define **what things are**, not **when things happen**.
 
 *   **When to use Events**: Only use events when interacting with legacy APIs, external systems, or widely accepted standards (e.g., DOM events like `click`, `keydown`).
 *   **When to avoid Events**: Do not use events for internal state synchronization. If you find yourself emitting an event to trigger a state update elsewhere in your application, you are likely fighting the framework.
-*   **Migration**: All internal application logic should be expressible via reactive derivations (`memoize`, `project`, `effect`) rather than transient event pulses.
+*   **Migration**: All internal application logic should be expressible via reactive derivations (`memoize`, `morph`, `effect`) rather than transient event pulses.
 
 
 ## `optionCall` — Defensive Option Hook Invocation
@@ -174,7 +174,7 @@ Track the creation history of effects intertwined with JS stack traces. This is 
 - `getLineage()`: Returns a structured lineage (`LineageSegment[]`) of the current execution.
 - `showLineagePanel()`: Displays a floating real-time visualization panel in the browser.
 - **Improved Isolation**: Lineage data is now correctly cleared by `reset()`, ensuring no diagnostic leakage between tests.
-- **Rich Console**: In Chrome, `mutate.lineage` (via DevTools) provides an interactive, expandable view with clickable source links.
+- **Rich Console**: In Chrome, `__MUTTS_DEBUG__` (via DevTools) provides an interactive, expandable view with clickable source links.
 - To enable lineage tracking, set `reactiveOptions.introspection.enableHistory = true`.
 
 **Full Documentation**: [docs/reactive/debugging.md](file:///home/fmdm/dev/reactive/debugging.md)

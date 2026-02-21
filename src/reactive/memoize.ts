@@ -1,6 +1,6 @@
 import { decorator } from '../decorator'
 import { flavored } from '../flavored'
-import { deepCompare, renamed } from '../utils'
+import { deepCompare, named } from '../utils'
 import { touched1 } from './change'
 import { effect, root, untracked } from './effects'
 import { getRoot, markWithRoot, rootFunctionSymbol } from './registry'
@@ -138,11 +138,11 @@ function memoizeObject<T extends Record<string, any>>(target: T, opts?: { lenien
 				let wrapper = wrapperRegistry.get(originalGetter)
 				if (!wrapper) {
 					wrapper = markWithRoot(
-						renamed(
+						named(
+							`${String(source?.constructor?.name ?? 'Object')}.${String(prop)}`,
 							(that: any) => {
 								return originalGetter.call(that)
-							},
-							`${String(source?.constructor?.name ?? 'Object')}.${String(prop)}`
+							}
 						),
 						{
 							propertyKey: prop,
@@ -202,11 +202,11 @@ function makeMemoizeDecorator(memoizeOpts?: { lenient?: boolean }) {
 				let wrapper = wrapperRegistry.get(original)
 				if (!wrapper) {
 					wrapper = markWithRoot(
-						renamed(
+						named(
+							`${String(target?.constructor?.name ?? target?.name ?? 'Object')}.${String(propertyKey)}`,
 							(that: object) => {
 								return original.call(that)
-							},
-							`${String(target?.constructor?.name ?? target?.name ?? 'Object')}.${String(propertyKey)}`
+							}
 						),
 						{
 							method: original,
@@ -226,11 +226,11 @@ function makeMemoizeDecorator(memoizeOpts?: { lenient?: boolean }) {
 				let wrapper = wrapperRegistry.get(original)
 				if (!wrapper) {
 					wrapper = markWithRoot(
-						renamed(
+						named(
+							`${String(target?.constructor?.name ?? target?.name ?? 'Object')}.${String(name)}`,
 							(that: object, ...args: object[]) => {
 								return original.call(that, ...args)
-							},
-							`${String(target?.constructor?.name ?? target?.name ?? 'Object')}.${String(name)}`
+							}
 						),
 						{
 							method: original,

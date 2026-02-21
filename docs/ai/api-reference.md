@@ -46,6 +46,7 @@ export declare function untracked<T>(fn: () => T): T;
 // --------------------------------------------------------------------------------
 
 export declare function atomic<T extends (...args: any[]) => any>(fn: T): T;
+export declare function atom<T>(fn: () => T): T;
 export declare function memoize<Result, Args extends any[]>(fn: (...args: Args) => Result, maxArgs?: number): (...args: Args) => Result;
 export declare function deepWatch(source: any, callback: (path: string[], value: any) => void): () => void;
 export declare function biDi<T>(target: (val: T) => void, source: { get: () => T, set: (v: T) => void }): (val: T) => void;
@@ -104,28 +105,20 @@ export declare function deprecated(message?: string): Function;
 // INTROSPECTION (AI Debugging)
 // --------------------------------------------------------------------------------
 
-export interface ReactivityGraph {
-    nodes: { id: string, label: string, type: 'effect'|'object' }[];
-    edges: { source: string, target: string, type: string }[];
-}
+// See: 'mutts/debug' for programmatic access
+// buildReactivityGraph, getMutationHistory, getDependents, getDependencies, etc.
 
-export interface MutationRecord {
-    type: 'set' | 'add' | 'delete';
-    prop: PropertyKey;
-    oldValue: any;
-    newValue: any;
-    objectName?: string;
-}
-
-export declare function getDependencyGraph(): ReactivityGraph;
-export declare function getMutationHistory(): MutationRecord[];
-export declare const options: {
+export declare const reactiveOptions: {
     cycleHandling: 'production' | 'development' | 'debug';
-    introspection: { enableHistory: boolean; historySize: number };
+    introspection: { enableHistory: boolean; historySize: number; logErrors: boolean };
 };
 
 export enum ReactiveErrorCode {
-    CYCLE_DETECTED = 'CYCLE_DETECTED',
-    MAX_DEPTH_EXCEEDED = 'MAX_DEPTH_EXCEEDED',
+    CycleDetected = 'Cycle detected',
+    MaxDepthExceeded = 'Max depth exceeded',
+    MaxReactionExceeded = 'Max reaction exceeded',
+    WriteInComputed = 'Write in computed',
+    TrackingError = 'Tracking error',
+    BrokenEffects = 'Broken effects',
 }
 ```

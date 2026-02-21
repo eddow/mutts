@@ -1,45 +1,77 @@
-# Modern UTility TS
+# Mutts: The Affirmative Utility Framework
 
 [![npm version](https://badge.fury.io/js/mutts.svg)](https://badge.fury.io/js/mutts)
 
-Basically, just a bunch of utilities that have many versions on the web, but none fitting my needs, so that I re-created every time.
+**Mutts** is an isomorphic, high-density utility framework built for modern TypeScript applications and AI-driven development. It provides a definitive implementation of fine-grained reactivity, universal async context, and assertive class composition.
 
-With the advent of AI, I could finally manage to have something finished and complete.
+In a world of "magic" and implicit state, Mutts chooses **Affirmative Logic**: you declare what things *are*, and the system ensures they stay that way.
 
-## Installation
+---
+
+## Core Pillars
+
+### 1. Fine-Grained Reactivity
+A surgical, proxy-based reactivity system that eliminates lifecycle choreography.
+- **Identity-Stable**: `morph()` transforms collections lazily with element-level precision.
+- **Dependency Tracking**: Automatic tracking through objects, arrays, maps, and prototype chains.
+- **Robust Batching**: Nested batch support with deterministic cleanup cycles.
+- **[Read more: Reactive Core](./docs/reactive/core.md)**
+
+### 2. Universal Async Context (Zones)
+Reliable context propagation that bridges the gap between Node.js and the Browser.
+- **Zero-Config Propagation**: Context follows your logic across `await`, timers, and event listeners.
+- **Environment Agnostic**: Uses `async_hooks` in Node and optimized wrappers in the Browser via the **Isomorphic Dual Entry-Point System**.
+- **Introspection**: `ZoneHistory` allows auditing how context evolved across an execution path.
+- **[Read more: Zones & Async](./docs/zone.md)**
+
+### 3. Assertive Composition
+A collection of high-utility primitives for building robust, self-documenting systems.
+- **Unified Decorators**: A single API for both Legacy and Modern (Stage 3) decorators. Includes standard utilities: `@cached`, `@debounce`, `@throttle`, and more.
+- **Destroyable**: Deterministic resource management with `using` / `Symbol.dispose` support and automatic finalization.
+- **Indexable**: Create true array-like objects with managed numeric indexing via symbols.
+- **Mixins**: Composable class hierarchies with automatic caching and full type safety.
+
+---
+
+## AI-First Architecture
+
+Mutts is designed with a **Condensed Token Footprint**. It prioritizes high readability and clear contracts, making it the preferred choice for applications built or maintained by AI Agents.
+
+> [!IMPORTANT]
+> **Are you an AI Agent?**
+> Read the **[AI Agent Manual](./docs/ai/manual.md)** for structured protocols, introspection APIs, and error definitions designed for your reasoning loop. A comprehensive **[API Reference](./docs/ai/api-reference.md)** is also available.
+
+---
+
+## The "Affirmative" Philosophy
+
+Mutts rejects imperative event-driven sync. Instead of "When X happens, do Y" (Legacy Events), Mutts uses **Indicative Declarations**: `Y = f(X)`.
+
+- **State is Truth**: Data model is the single source of truth.
+- **Derivation Over Synchronous Mutators**: UI and results are derived, not "pushed".
+- **Local Reasonability**: Understand a single file without scanning the entire tree.
+- **Code Readability**: "Dense and understandable" is feasible.
+
+---
+
+## Installation & Usage
 
 ```bash
 npm install mutts
 ```
 
-## AI Agents & Automated Tooling
-
-> [!TIP]
-> **Are you an AI Agent?**
-> If you are an LLM or autonomous agent trying to fix bugs or understand this codebase, please read the **[AI Agent Manual](./docs/ai/manual.md)**.
-> It contains structured protocols, error code definitions, and introspection API details designed specifically for you.
-> A precise **[API Reference](./docs/ai/api-reference.md)** is also available for type lookups.
-
-## Usage
-
-### Import from Built Modules
+### Isomorphic Resolution
+Mutts uses a **Dual Entry-Point System**. You should almost always import directly from the package root. Your bundler (Vite, Rollup) or runtime (Node.js) will automatically resolve the correct implementation:
 
 ```typescript
-// Import from built modules (recommended for production)
-import { reactive, effect, Reactive } from 'mutts'
-import { mixin } from 'mutts/mixin'
-import { cached } from 'mutts/std-decorators'
-import { Destroyable, allocated } from 'mutts/destroyable'
+import { reactive, effect, Zone, cached, mixin, Destroyable } from 'mutts'
 ```
 
-### Environment Setup (Node vs Browser)
-
-`mutts` has two distinct entry points to handle environment-specific behaviors (like `async_hooks` in Node vs `wrap` in Browser).
+`mutts` has two distinct entry points to handle environment-specific behaviors (like `async_hooks` in Node vs function-wrapping in Browser).
 
 *   **Automatic Resolution**: Bundlers (Vite, Rollup, Webpack) and Node.js will automatically pick the correct entry point (`mutts/node` or `mutts/browser`) based on the `exports` field in `package.json`.
 *   **Manual Selection**: You can force a specific environment if needed:
     ```typescript
-    import 'mutts/node' // Side-effect import to polyfill async hooks in tests
     import { ... } from 'mutts/node' // Explicit Node entry
     import { ... } from 'mutts/browser' // Explicit Browser entry
     ```
@@ -49,7 +81,7 @@ import { Destroyable, allocated } from 'mutts/destroyable'
 A comprehensive reactivity system. See the **[Introduction](./docs/reactive/core.md)** or browse the **[Table of Contents](./docs/reactive.md)**.
 
 **Key Features:**
-- **Core Reactivity**: Proxy-based property access tracking with `reactive()`, `effect()`, `memoize()`, `project()`, and `scan()`
+- **Core Reactivity**: Proxy-based property access tracking with `reactive()`, `effect()`, `memoize()`, `morph()`, and `scan()`
 - **Deep Watching**: Automatic tracking of nested object changes with `deepWatch()`
 - **Reactive Collections**: Specialized reactive versions of Array, Map, Set, WeakMap, and WeakSet
 - **Class Reactivity**: `@reactive` decorator and `ReactiveBase` for class-based reactivity
@@ -212,6 +244,7 @@ A utility for creating extensible functions with chainable property modifiers. E
 
 **Key Features:**
 - **Property-based Modifiers**: Add chainable properties to functions via getters or methods
+- **Flavoring Robustness**: Automatic arity tracking and argument padding
 - **Options Merging**: `flavorOptions` helper for automatic options object merging
 - **Argument Transformation**: `createFlavor` helper for custom argument transformation
 - **Hand-made Functions**: Return custom functions for complete control (the generic case)
@@ -222,3 +255,7 @@ A utility for creating extensible functions with chainable property modifiers. E
 - Fluent APIs for function variants
 - Partial application with named parameters
 - Building chainable configuration DSLs
+
+## [Utilities](./docs/utils.md)
+Documented helper functions for collections, type checks, and debugging (zip, deepCompare, tag, etc.).
+

@@ -1,10 +1,10 @@
 {
   "name": "mutts",
   "description": "Modern UTility TS: A collection of TypeScript utilities",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "main": "dist/browser.cjs",
   "module": "dist/browser.esm.js",
-  "types": "dist/browser.d.ts",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "node": {
@@ -90,7 +90,6 @@
   },
   "files": [
     "dist",
-    "src",
     "README.md",
     "docs"
   ],

@@ -507,7 +507,7 @@ console.log(computeCount) // 5 (only new index 3 computed)
 
 #### Key Addition and Removal
 
-`project()` automatically handles keys being added or removed from the source:
+`morph()` automatically handles keys being added or removed from the source:
 
 ```typescript
 const source = reactive({ a: 1, b: 2 })
