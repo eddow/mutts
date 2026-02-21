@@ -8,6 +8,7 @@ import { effect, untracked } from './effects'
 import { isNonReactive } from './non-reactive-state'
 import { reactive } from './proxy'
 import { markWithRoot } from './registry'
+import { dependant } from './tracking'
 import { type EffectCleanup, type EffectTrigger, options, unwrap } from './types'
 
 /**
@@ -81,39 +82,28 @@ export function deepWatch<T extends object>(
 			}
 
 			// Also handle array indices and length
-			// biome-ignore lint/suspicious/useIsArray: Check for both native arrays and reactive arrays
-			if (Array.isArray(obj) || obj instanceof Array) {
-				// Access array length to register dependency on length changes
-				const length = obj.length
-
-				// Access all current array elements to register dependencies
-				for (let i = 0; i < length; i++) {
-					// Access the array element to register dependency
-					const value = obj[i]
-					// Make the value reactive if it's an object
-					const reactiveValue =
-						typeof value === 'object' && value !== null ? reactive(value) : value
-					traverseAndTrack(reactiveValue, depth + 1)
-				}
-			}
-			// Handle Set values (deep watch values only, not keys since Sets don't have separate keys)
-			else if (obj instanceof Set) {
-				// Access all Set values to register dependencies
+			// Handle arrays and collections using iterators to ensure proxy tracking is triggered
+			if (typeof obj[Symbol.iterator] === 'function') {
+				// Access the iterator to track additions/removals/collection changes
 				for (const value of obj) {
 					// Make the value reactive if it's an object
 					const reactiveValue =
 						typeof value === 'object' && value !== null ? reactive(value) : value
 					traverseAndTrack(reactiveValue, depth + 1)
 				}
-			}
-			// Handle Map values (deep watch values only, not keys)
-			else if (obj instanceof Map) {
-				// Access all Map values to register dependencies
-				for (const [_key, value] of obj) {
-					// Make the value reactive if it's an object
-					const reactiveValue =
-						typeof value === 'object' && value !== null ? reactive(value) : value
-					traverseAndTrack(reactiveValue, depth + 1)
+
+				// Explicitly depend on length so array mutations changing count trigger re-evaluation
+				if ('length' in obj) {
+					dependant(obj, 'length')
+				}
+
+				// For Maps, also ensure we track values explicitly if the iterator yields entries
+				if (obj instanceof Map) {
+					for (const value of obj.values()) {
+						const reactiveValue =
+							typeof value === 'object' && value !== null ? reactive(value) : value
+						traverseAndTrack(reactiveValue, depth + 1)
+					}
 				}
 			}
 			// Note: WeakSet and WeakMap cannot be iterated, so we can't deep watch their contents

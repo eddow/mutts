@@ -1,9 +1,9 @@
 import { arrayDiff } from '../diff'
 import { flavored } from '../flavored'
-import { FoolProof, stringKeys } from '../utils'
+import { FoolProof } from '../utils'
 import type { FunctionWrapper } from '../zone'
 import { getState, touched, touched1 } from './change'
-import { cleanedBy } from './effect-context'
+import { link } from './effect-context'
 import { effect, untracked } from './effects'
 import { memoize } from './memoize'
 import { reactive } from './proxy'
@@ -11,11 +11,9 @@ import { markWithRoot } from './registry'
 import { dependant } from './tracking'
 import {
 	type CleanupReason,
-	cleanup,
 	type EffectAccess,
 	type EffectCleanup,
 	type EffectCloser,
-	allProps,
 	isReactive,
 	keysOf,
 	type ScopedCallback,
@@ -110,7 +108,7 @@ export function attend(
  * Result of a reactive scan, which is a reactive array of accumulated values
  * with an attached cleanup function.
  */
-export type ScanResult<Output> = readonly Output[] & { [cleanup]: ScopedCallback }
+export type ScanResult<Output> = readonly Output[]
 
 /**
  * Perform a reactive scan over an array of items.
@@ -255,7 +253,7 @@ export function scan<Input extends object, Output>(
 		}
 	})
 
-	return cleanedBy(result, ((reason?: CleanupReason) => {
+	return link(result, ((reason?: CleanupReason) => {
 		mainEffect(reason)
 		for (const stop of indexEffects.values()) stop(reason)
 		indexEffects.clear()
@@ -283,9 +281,7 @@ export function scan<Input extends object, Output>(
  * @param cb Callback function that returns an array
  * @returns A reactive array synchronized with the callback's result, with a [cleanup] property to stop tracking
  */
-export function lift<Output extends any[]>(
-	cb: (access: EffectAccess) => Output
-): Output & { [cleanup]: ScopedCallback }
+export function lift<Output extends any[]>(cb: (access: EffectAccess) => Output): Output
 
 /**
  * Lifts a callback that returns an object into a reactive object that automatically
@@ -315,12 +311,8 @@ export function lift<Output extends any[]>(
  * @param cb Callback function that returns an object
  * @returns A reactive object synchronized with the callback's result, with a [cleanup] property to stop tracking
  */
-export function lift<Output extends object>(
-	cb: (access: EffectAccess) => Output
-): Output & { [cleanup]: ScopedCallback }
-export function lift<Output extends any[] | object>(
-	cb: (access: EffectAccess) => Output
-): Output & { [cleanup]: ScopedCallback } {
+export function lift<Output extends object>(cb: (access: EffectAccess) => Output): Output
+export function lift<Output extends any[] | object>(cb: (access: EffectAccess) => Output): Output {
 	let result!: Output
 	let rawResult!: Output
 	const liftCleanup = effect.named('lift')(
@@ -370,7 +362,7 @@ export function lift<Output extends any[] | object>(
 			}
 		}, cb)
 	)
-	return cleanedBy(result, liftCleanup)
+	return link(result, liftCleanup)
 }
 
 /**
@@ -403,7 +395,7 @@ export function morphArray<I, O>(
 	source: readonly I[] | (() => readonly I[]),
 	fn: (arg: I) => O,
 	options?: MorphOptions<I>
-): readonly O[] & { [cleanup]: ScopedCallback } {
+): readonly O[] {
 	if (typeof source !== 'function' && !isReactive(source) && options?.pure === true) {
 		return source.map(fn) as any
 	}
@@ -473,7 +465,7 @@ export function morphArray<I, O>(
 					// We need to move entries in the Map.
 					const entries = Array.from(itemEffects.entries()).sort((a, b) => a[0] - b[0])
 					// Remove entries that will be shifted
-					for (const [idx, entry] of entries) {
+					for (const [idx, _entry] of entries) {
 						if (idx >= diff.indexA + diff.sliceA.length) {
 							itemEffects.delete(idx)
 						}
@@ -511,7 +503,7 @@ export function morphArray<I, O>(
 		input = newInput
 	})
 
-	return cleanedBy(proxy, (reason) => {
+	return link(proxy, (reason) => {
 		stopMain(reason)
 		for (const entry of itemEffects.values()) entry.stop(reason)
 		itemEffects.clear()
@@ -533,7 +525,7 @@ export function morphMap<K, V, O>(
 	source: Map<K, V>,
 	fn: (arg: V) => O,
 	options?: MorphOptions<V>
-): Map<K, O> & { [cleanup]: ScopedCallback } {
+): Map<K, O> {
 	if (!isReactive(source) && options?.pure === true) {
 		const res = new Map<K, O>()
 		for (const [k, v] of source) res.set(k, fn(v))
@@ -630,7 +622,7 @@ export function morphMap<K, V, O>(
 		}
 	})
 
-	return cleanedBy(proxy, (reason) => {
+	return link(proxy, (reason) => {
 		stopMain(reason)
 		for (const stop of itemEffects.values()) stop(reason)
 		itemEffects.clear()
@@ -652,7 +644,7 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 	source: S,
 	fn: (arg: S[keyof S]) => O,
 	options?: MorphOptions<S[keyof S]>
-): { [K in keyof S]: O } & { [cleanup]: ScopedCallback } {
+): { [K in keyof S]: O } {
 	if (!isReactive(source) && options?.pure === true) {
 		const res = {} as any
 		for (const k of Object.keys(source)) res[k] = fn(source[k])
@@ -727,7 +719,7 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 		}
 	})
 
-	return cleanedBy(proxy, (reason) => {
+	return link(proxy, (reason) => {
 		stopMain(reason)
 		for (const stop of itemEffects.values()) stop(reason)
 		itemEffects.clear()
@@ -747,19 +739,15 @@ export type Morph = {
 		source: readonly I[] | (() => readonly I[]),
 		fn: (arg: I) => O,
 		options?: MorphOptions<I>
-	): readonly O[] & { [cleanup]: ScopedCallback }
+	): readonly O[]
 
-	<K, V, O>(
-		source: Map<K, V>,
-		fn: (arg: V) => O,
-		options?: MorphOptions<V>
-	): Map<K, O> & { [cleanup]: ScopedCallback }
+	<K, V, O>(source: Map<K, V>, fn: (arg: V) => O, options?: MorphOptions<V>): Map<K, O>
 
 	<S extends Record<PropertyKey, any>, O>(
 		source: S,
 		fn: (arg: S[keyof S]) => O,
 		options?: MorphOptions<S[keyof S]>
-	): { [K in keyof S]: O } & { [cleanup]: ScopedCallback }
+	): { [K in keyof S]: O }
 
 	pure: Morph
 }

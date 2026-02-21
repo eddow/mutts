@@ -87,7 +87,7 @@ export function flavorOptions<T extends (...args: any[]) => any>(
 	fn: T,
 	defaultOptions: Record<string, any>,
 	opts: {
-		optionsIndex?: number,
+		optionsIndex?: number
 		name?: string
 	} = {}
 ): T {
@@ -108,9 +108,7 @@ export function flavorOptions<T extends (...args: any[]) => any>(
 			typeof currentOptions === 'object' &&
 			!Array.isArray(currentOptions)
 
-		newArgs[targetIndex] = isObject
-			? { ...defaultOptions, ...currentOptions }
-			: defaultOptions
+		newArgs[targetIndex] = isObject ? { ...defaultOptions, ...currentOptions } : defaultOptions
 
 		return fn.apply(this, newArgs)
 	}

@@ -1,13 +1,7 @@
 import { tag } from '../utils'
 import { asyncZone, ZoneAggregator, ZoneHistory } from '../zone'
 import { getRoot } from './registry'
-import {
-	type CleanupReason,
-	cleanup,
-	type EffectTrigger,
-	type ScopedCallback,
-	stopped,
-} from './types'
+import type { CleanupReason, EffectTrigger, ScopedCallback } from './types'
 
 export const effectHistory = tag('effectHistory', new ZoneHistory<EffectTrigger>())
 tag('effectHistory.present', effectHistory.present)
@@ -28,33 +22,52 @@ export function getActiveEffect() {
 	return effectHistory.present.active
 }
 
+const cleanups = new WeakMap<object, Set<ScopedCallback | object>>()
+
 /**
- * ADD a cleanup function to an object using the cleanup symbol.
- * The cleanup function will be called when the object needs to be disposed.
+ * Attach cleanup dependencies to an object. When `unlink(obj)` is called,
+ * each dependency is disposed: functions are invoked with the cleanup reason,
+ * objects are recursively `unlink`ed. This forms a cleanup tree.
  *
- * Note: most of the time, you don't need to use this function directly.
- * The main use if for the cleanup function to be stored with the object, as GC calls the cleanup function when the *function* is garbage collected.
+ * @param obj - The owner object
+ * @param cleanupFns - Cleanup callbacks and/or child objects to unlink recursively
+ * @returns The owner object (for chaining)
  *
- * @param obj - The object to attach the cleanup function to
- * @param cleanupFn - The cleanup function to attach
- * @returns The object with the cleanup function attached
+ * @example
+ * ```ts
+ * // Functions are called with CleanupReason
+ * link(parent, () => console.log('disposed'))
+ *
+ * // Objects are recursively unlinked
+ * link(parent, childA, childB)
+ *
+ * // Mixed
+ * link(parent, childObj, () => timer.clear())
+ *
+ * unlink(parent) // disposes childA, childB, calls the function
+ * ```
  */
-export function cleanedBy<T extends object>(obj: T, cleanupFn: ScopedCallback) {
-	const oldCleanup = obj[cleanup]
-	return Object.defineProperty(obj, cleanup, {
-		value: oldCleanup
-			? Object.defineProperties(
-					(reason?: CleanupReason) => {
-						oldCleanup(reason)
-						cleanupFn(reason)
-					},
-					{
-						[stopped]: { get: () => oldCleanup[stopped] || cleanupFn[stopped] },
-					}
-				)
-			: cleanupFn,
-		writable: false,
-		enumerable: false,
-		configurable: true,
-	}) as T & { [cleanup]: ScopedCallback }
+export function link<T extends object>(obj: T, ...cleanupFns: (ScopedCallback | object)[]): T {
+	const set = cleanups.get(obj)
+	if (!set) cleanups.set(obj, new Set(cleanupFns))
+	else for (const fn of cleanupFns) set.add(fn)
+	return obj
+}
+
+/**
+ * Dispose an object's cleanup dependencies. Functions are called with the
+ * reason; linked objects are recursively unlinked. The cleanup set is removed
+ * so calling `unlink` twice is safe (second call is a no-op).
+ *
+ * @param obj - The object to dispose
+ * @param reason - Optional cleanup reason propagated to callbacks
+ */
+export function unlink(obj: object, reason?: CleanupReason): void {
+	const set = cleanups.get(obj)
+	if (set) {
+		cleanups.delete(obj)
+		for (const fn of set)
+			if (typeof fn === 'function') fn(reason)
+			else unlink(fn, reason)
+	}
 }

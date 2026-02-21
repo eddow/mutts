@@ -1,4 +1,4 @@
-import { atomic, cleanup, effect, reactive, watch } from 'mutts'
+import { atomic, effect, reactive, watch } from 'mutts'
 
 describe('watch', () => {
 	describe('watch with value function', () => {
@@ -1290,75 +1290,5 @@ describe('deep watch via watch({ deep: true })', () => {
 
 		// Note: WeakSet and WeakMap cannot be deeply reactive because they don't support iteration
 		// They can only have shallow reactivity (tracking when the collection itself changes)
-	})
-})
-
-describe('cleanup symbol', () => {
-	it('should add cleanup function to objects via cleanedBy', () => {
-		const testObj = { foo: 'bar' }
-		let cleanupCalled = false
-		const cleanupFn = () => {
-			cleanupCalled = true
-		}
-
-		const cleanedObj = Object.defineProperty(testObj, cleanup, {
-			value: cleanupFn,
-			writable: false,
-			enumerable: false,
-			configurable: true,
-		})
-
-		expect(typeof cleanedObj[cleanup]).toBe('function')
-		expect(cleanupCalled).toBe(false)
-
-		// Call cleanup
-		cleanedObj[cleanup]()
-		expect(cleanupCalled).toBe(true)
-	})
-
-
-
-	it('cleanup should not conflict with object properties', () => {
-		const testObj = { cleanup: 'user property' }
-		const cleanupFn = () => {}
-
-		// Add cleanup via symbol
-		const cleanedObj = Object.defineProperty(testObj, cleanup, {
-			value: cleanupFn,
-			writable: false,
-			enumerable: false,
-			configurable: true,
-		})
-
-		// User property should still be accessible
-		expect(cleanedObj.cleanup).toBe('user property')
-		// Cleanup function should be accessible via symbol
-		expect(cleanedObj[cleanup]).toBe(cleanupFn)
-
-		// Verify they are different
-		expect(cleanedObj.cleanup).not.toBe(cleanedObj[cleanup])
-	})
-
-	it('cleanup should not be enumerable', () => {
-		const testObj = {}
-		const cleanupFn = () => {}
-
-		const cleanedObj = Object.defineProperty(testObj, cleanup, {
-			value: cleanupFn,
-			writable: false,
-			enumerable: false,
-			configurable: true,
-		})
-
-		// cleanup should not appear in for...in
-		const keys: string[] = []
-		for (const key in cleanedObj) {
-			keys.push(key)
-		}
-		expect(keys).not.toContain('cleanup')
-
-		// But should be accessible via Object.getOwnPropertySymbols
-		const symbols = Object.getOwnPropertySymbols(cleanedObj)
-		expect(symbols).toContain(cleanup)
 	})
 })

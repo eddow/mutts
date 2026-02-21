@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { reactive, effect, lift, scan, morph, cleanup, atomic } from 'mutts'
+import { reactive, effect, lift, scan, morph, atomic, unlink } from 'mutts'
 
 describe('nested lift propagation', () => {
 	it('baseline: effect tracks .length', () => {
@@ -66,7 +66,7 @@ describe('nested lift propagation', () => {
 		expect(inner.length).toBe(4)
 		expect([...inner]).toEqual([10, 20, 30, 40])
 
-		inner[cleanup]()
+		unlink(inner)
 	})
 
 	it('outer lift re-evaluates when inner lift array grows', () => {
@@ -100,8 +100,8 @@ describe('nested lift propagation', () => {
 		expect([...outer]).toEqual([10, 20, 30, 40])
 		expect(runs.length).toBeGreaterThan(1)
 
-		inner[cleanup]()
-		outer[cleanup]()
+		unlink(inner)
+		unlink(outer)
 	})
 
 	it('outer lift re-evaluates when project stores inner lift that grows', () => {
@@ -139,8 +139,8 @@ describe('nested lift propagation', () => {
 		expect([...flattened]).toEqual([1, 2, 3])
 		expect(flatRuns.length).toBeGreaterThan(1)
 
-		rendered[cleanup]()
-		flattened[cleanup]()
+		unlink(rendered)
+		unlink(flattened)
 	})
 
 	it('outer lift reads project items that are reactive arrays mutated in-place', () => {
@@ -174,8 +174,8 @@ describe('nested lift propagation', () => {
 		expect(flatRuns.length).toBe(2)
 		expect([...flattened]).toEqual([10, 20, 25, 30])
 
-		rendered[cleanup]()
-		flattened[cleanup]()
+		unlink(rendered)
+		unlink(flattened)
 	})
 
 	it('full reconciler chain: render-effect > project > scan > project > lift', () => {
@@ -231,8 +231,8 @@ describe('nested lift propagation', () => {
 
 		stopRender()
 		stopReconcile()
-		rendered[cleanup]()
-		flattened[cleanup]()
+		unlink(rendered)
+		unlink(flattened)
 	})
 
 	it('lift created inside parent effect, read by separate root effect', () => {
@@ -284,7 +284,7 @@ describe('nested lift propagation', () => {
 		expect(seen.length).toBe(2)
 		expect(seen[1]).toEqual([10, 20, 30, 40])
 
-		lifted[cleanup]()
+		unlink(lifted)
 	})
 
 	it('reconcile pattern: project recreates lift, outer effect must see new content', () => {
@@ -333,8 +333,8 @@ describe('nested lift propagation', () => {
 		expect(seen.length).toBeGreaterThan(1)
 		expect(seen[seen.length - 1]).toEqual([10, 100, 20, 200])
 
-		rendered[cleanup]()
-		flattened[cleanup]()
+		unlink(rendered)
+		unlink(flattened)
 	})
 
 	it('scan + project + lift chain propagates inner growth', () => {
@@ -393,7 +393,7 @@ describe('nested lift propagation', () => {
 		innerSource.push(99)
 		expect([...flattened]).toEqual([42, 99])
 
-		rendered[cleanup]()
-		flattened[cleanup]()
+		unlink(rendered)
+		unlink(flattened)
 	})
 })

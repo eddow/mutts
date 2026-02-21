@@ -1,3 +1,13 @@
+# 1.0.11
+
+## Bugfixes
+
+- **Deep Watch deduplication for Map/Set**: Map/Set mutators (`.set()`, `.add()`, `.delete()`, `.clear()`) no longer double-trigger deep watchers. Previously, both the content change and the `size` notification would independently bubble up, causing watchers to fire twice per mutation. The `size` notification now skips `bubbleUpChange` via a new `bubble` parameter on `touched1`/`touched`.
+
+## Refactoring
+
+- Removed unused `atomic` imports from `map.ts` and `set.ts`.
+
 # 1.0.10
 
 ## Functionality
@@ -60,7 +70,7 @@
 
 # 1.0.8
 
-## TODOs
+## Component: Todos.tsx
 
 - arrays indexing on change
 

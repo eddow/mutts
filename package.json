@@ -102,21 +102,15 @@
     "test": "npm run test:node && npm run test:browser",
     "test:node": "TEST_ENV=node NODE_OPTIONS='--expose-gc' vitest run",
     "test:browser": "TEST_ENV=browser vitest run --browser",
-    "test:zone:node": "TEST_ENV=node vitest run tests/zone.test.ts",
-    "test:zone:browser": "TEST_ENV=browser vitest run tests/zone.test.ts",
-    "test:async:node": "TEST_ENV=node vitest run tests/async-hook.test.ts",
-    "test:async:browser": "TEST_ENV=browser vitest run tests/async-hook.test.ts",
     "test:coverage": "TEST_ENV=node vitest run --coverage",
-    "test:coverage:watch": "TEST_ENV=node vitest run --coverage --watch",
-    "test:legacy": "TEST_ENV=node TSCONFIG=tsconfig.legacy.json vitest run --detectOpenHandles",
-    "test:modern": "TEST_ENV=node TSCONFIG=tsconfig.modern.json vitest run --detectOpenHandles",
     "test:profile": "RUN_PROFILING=1 NODE_OPTIONS=--expose-gc vitest run",
     "test:profile:benchmark": "RUN_PROFILING=1 NODE_OPTIONS=--expose-gc vitest run -t benchmark",
     "test:profile:detailed": "RUN_PROFILING=1 node --prof node_modules/vitest/vitest.mjs --no-coverage",
     "benchmark:save": "tsx tests/profiling/benchmark.ts save",
     "benchmark:compare": "tsx tests/profiling/benchmark.ts compare",
     "benchmark:list": "tsx tests/profiling/benchmark.ts list",
-    "biome": "biome check --write src"
+    "biome": "biome check --write src",
+    "biome:unsafe": "biome check --write --unsafe src"
   },
   "keywords": [
     "typescript",

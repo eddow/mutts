@@ -1,5 +1,6 @@
 import { decorator, type GenericClassDecorator } from './decorator'
 import { flavored } from './flavored'
+import { options } from './reactive/types'
 
 // In order to avoid async re-entrance, we could use zone.js or something like that.
 const syncCalculating: { object: object; prop: PropertyKey }[] = []
@@ -181,8 +182,7 @@ export const deprecated = Object.assign(
 	}),
 	{
 		warn: (target: any, propertyKey: PropertyKey, message?: string) => {
-			// biome-ignore lint/suspicious/noConsole: To be overridden
-			console.warn(
+			options.warn(
 				`${target.constructor.name}.${String(propertyKey)} is deprecated${message ? `: ${message}` : ''}`
 			)
 		},

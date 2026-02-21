@@ -69,7 +69,7 @@ export function bubbleUpChange(changedObject: object, evolution: Evolution) {
 	const parents = objectParents.get(changedObject)
 	if (!parents) return
 
-	for (const { parent, prop } of parents) {
+	for (const { parent } of parents) {
 		// Trigger deep watchers on parent
 		const parentDeepWatchers = deepWatchers.get(parent)
 		if (parentDeepWatchers) {

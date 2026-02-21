@@ -30,7 +30,6 @@ import {
 	ReactiveError,
 	ReactiveErrorCode,
 	type ScopedCallback,
-	stopped,
 	unwrap,
 } from './types'
 
@@ -146,7 +145,6 @@ let causesClosure = new WeakMap<Function, IterableWeakSet<Function>>()
 let consequencesClosure = new WeakMap<Function, IterableWeakSet<Function>>()
 
 // Batch re-entrance depth and broken state
-let batchDepth = 0
 let broken = false
 
 // Debug: Capture where an effect was created
@@ -884,7 +882,6 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 	if (!Array.isArray(effect)) effect = [effect]
 	const roots = effect.map(getRoot)
 
-	batchDepth++
 	const isNewBatch = batchStack.length === 0
 	if (isNewBatch) {
 		if (!activationRegistry) activationRegistry = new Map()
@@ -899,7 +896,6 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 		for (let i = 0; i < effect.length; i++) {
 			addToBatch(effect[i], caller, false)
 		}
-		batchDepth--
 		return
 	}
 
@@ -999,7 +995,6 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 			broken = true
 		}
 		batchStack.pop()
-		batchDepth--
 		if (batchStack.length === 0) {
 			activationRegistry = undefined
 			optionCall('endChain')
@@ -1015,7 +1010,6 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
  */
 export function reset() {
 	broken = false
-	batchDepth = 0
 	activationRegistry = undefined
 	batchStack.length = 0
 	effectTriggers = new WeakMap()
@@ -1152,9 +1146,25 @@ export const effect = named(
 				let result: any
 				let caught = 0
 
-				// Default thrower (self)
-				let thrower: CatchFunction = (error: any) => {
-					throw error
+				// Define bubbling thrower
+				const thrower: CatchFunction = (error: any) => {
+					const catches = node.catchers
+					const reason: CleanupReason = { type: 'error', error }
+					if (catches)
+						while (caught < catches.length) {
+							cleanupReaction(reason)
+							try {
+								reactionCleanup = catches[caught](error) as EffectCloser
+								return
+							} catch (_e) {
+								caught++
+							}
+						}
+					if (parent) {
+						const parentNode = getEffectNode(parent)
+						if (parentNode.forwardThrow) parentNode.forwardThrow(error)
+						else throw error
+					} else throw error
 				}
 				node.forwardThrow = thrower
 
@@ -1253,29 +1263,6 @@ export const effect = named(
 					}
 				}
 
-				// Define bubbling thrower
-				thrower = (error: any) => {
-					const catches = node.catchers
-					const reason: CleanupReason = { type: 'error', error }
-					if (catches)
-						while (caught < catches.length) {
-							cleanupReaction(reason)
-							try {
-								reactionCleanup = catches[caught](error) as EffectCloser
-								return
-							} catch (e) {
-								caught++
-							}
-						}
-					if (parent) {
-						const parentNode = getEffectNode(parent)
-						if (parentNode.forwardThrow) parentNode.forwardThrow(error)
-						else throw error
-					} else throw error
-				}
-				// Update the node's forwardThrow to the bubbling one
-				node.forwardThrow = thrower
-
 				if (errorToThrow) thrower(errorToThrow)
 			}
 
@@ -1289,8 +1276,6 @@ export const effect = named(
 				}
 			}
 
-			// cleanup is initialized here but may be used by the tracked closure below
-			const cleanup: (() => void) | null = null
 			const tracked = effectHistory.present.with(runEffect, () =>
 				named(effectMarker.leave, effectAggregator.zoned)
 			)
@@ -1316,13 +1301,6 @@ export const effect = named(
 			}
 			// Mark the runEffect callback with the original function as its root
 			markWithRoot(runEffect, fn)
-			function augmentedRv(rv: ScopedCallback): EffectCleanup {
-				return Object.defineProperties(rv, {
-					[stopped]: {
-						get: () => effectStopped,
-					},
-				}) as EffectCleanup
-			}
 
 			// Register strict mode if enabled
 			if (effectOptions?.opaque) {
@@ -1361,7 +1339,7 @@ export const effect = named(
 				fr.unregister(stopEffect)
 			}
 			if (isRootEffect) {
-				const callIfCollected = augmentedRv((reason) => stopEffect(reason))
+				const callIfCollected = (reason) => stopEffect(reason)
 				fr.register(
 					callIfCollected,
 					() => {
@@ -1380,16 +1358,16 @@ export const effect = named(
 				}
 				const children = parentNode.children
 
-				const subEffectCleanup = augmentedRv((reason) => {
+				const subEffectCleanup = (reason) => {
 					children.delete(subEffectCleanup)
 					// Execute this child effect cleanup (which triggers its own mainCleanup)
 					stopEffect(reason)
-				})
+				}
 				children.add(subEffectCleanup)
 				return subEffectCleanup
 			}
 			// Should not be reachable given isRootEffect check, but for type safety
-			return augmentedRv((reason) => stopEffect(reason))
+			return (reason) => stopEffect(reason)
 		},
 		{
 			get opaque() {

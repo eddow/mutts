@@ -140,15 +140,8 @@ export function deepCompare(a: any, b: any, cache = new Map<object, Set<object>>
 	}
 
 	// Prototype check
-	const protoA = Object.getPrototypeOf(a)
-	const protoB = Object.getPrototypeOf(b)
-	if (protoA !== protoB) {
-		console.warn(`[deepCompare] prototype mismatch:`, {
-			nameA: a?.constructor?.name,
-			nameB: b?.constructor?.name,
-		})
-		return false
-	}
+	if (Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) return false
+
 	// Circular reference protection
 	let compared = cache.get(a)
 	if (compared?.has(b)) return true
@@ -160,38 +153,18 @@ export function deepCompare(a: any, b: any, cache = new Map<object, Set<object>>
 
 	// Handle specific object types
 	if (Array.isArray(a)) {
-		if (!Array.isArray(b)) {
-			console.warn(`[deepCompare] B is not an array`)
-			return false
-		}
-		if (a.length !== b.length) {
-			console.warn(`[deepCompare] array length mismatch:`, { lenA: a.length, lenB: b.length })
-			return false
-		}
+		if (!Array.isArray(b) || a.length !== b.length) return false
 		for (let i = 0; i < a.length; i++) {
-			if (!deepCompare(a[i], b[i], cache)) {
-				console.warn(`[deepCompare] array element mismatch at index ${i}`)
-				return false
-			}
+			if (!deepCompare(a[i], b[i], cache)) return false
 		}
 		return true
 	}
 
-	if (a instanceof Date) {
-		const match = b instanceof Date && a.getTime() === b.getTime()
-		if (!match) console.warn(`[deepCompare] Date mismatch`)
-		return match
-	}
-	if (a instanceof RegExp) {
-		const match = b instanceof RegExp && a.toString() === b.toString()
-		if (!match) console.warn(`[deepCompare] RegExp mismatch`)
-		return match
-	}
+	if (a instanceof Date) return b instanceof Date && a.getTime() === b.getTime()
+	if (a instanceof RegExp) return b instanceof RegExp && a.toString() === b.toString()
+
 	if (a instanceof Set) {
-		if (!(b instanceof Set) || a.size !== b.size) {
-			console.warn(`[deepCompare] Set size mismatch`)
-			return false
-		}
+		if (!(b instanceof Set) || a.size !== b.size) return false
 		for (const val of a) {
 			let found = false
 			for (const bVal of b) {
@@ -200,18 +173,12 @@ export function deepCompare(a: any, b: any, cache = new Map<object, Set<object>>
 					break
 				}
 			}
-			if (!found) {
-				console.warn(`[deepCompare] missing Set element`)
-				return false
-			}
+			if (!found) return false
 		}
 		return true
 	}
 	if (a instanceof Map) {
-		if (!(b instanceof Map) || a.size !== b.size) {
-			console.warn(`[deepCompare] Map size mismatch`)
-			return false
-		}
+		if (!(b instanceof Map) || a.size !== b.size) return false
 		for (const [key, val] of a) {
 			if (!b.has(key)) {
 				let foundMatch = false
@@ -221,15 +188,9 @@ export function deepCompare(a: any, b: any, cache = new Map<object, Set<object>>
 						break
 					}
 				}
-				if (!foundMatch) {
-					console.warn(`[deepCompare] missing Map key`)
-					return false
-				}
-			} else {
-				if (!deepCompare(val, b.get(key), cache)) {
-					console.warn(`[deepCompare] Map value mismatch for key`)
-					return false
-				}
+				if (!foundMatch) return false
+			} else if (!deepCompare(val, b.get(key), cache)) {
+				return false
 			}
 		}
 		return true
@@ -238,30 +199,10 @@ export function deepCompare(a: any, b: any, cache = new Map<object, Set<object>>
 	// Compare own properties
 	const keysA = Object.keys(a)
 	const keysB = Object.keys(b)
-	if (keysA.length !== keysB.length) {
-		console.warn(`[deepCompare] keys length mismatch:`, {
-			lenA: keysA.length,
-			lenB: keysB.length,
-			keysA,
-			keysB,
-			a,
-			b,
-		})
-		return false
-	}
+	if (keysA.length !== keysB.length) return false
 
 	for (const key of keysA) {
-		if (!Object.hasOwn(b, key)) {
-			console.warn(`[deepCompare] missing key ${String(key)} in B`)
-			return false
-		}
-		if (!deepCompare(a[key], b[key], cache)) {
-			console.warn(`[deepCompare] value mismatch for key ${String(key)}:`, {
-				valA: a[key],
-				valB: b[key],
-			})
-			return false
-		}
+		if (!Object.hasOwn(b, key) || !deepCompare(a[key], b[key], cache)) return false
 	}
 
 	return true

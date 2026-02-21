@@ -424,6 +424,62 @@ activeEffects.forEach(stop => stop())
 - **Parent cleanup cleans child effects** - stopping a parent also stops its child effects
 - **Child effects are referenced by parent effects** - and therefore are not subject to GC cleanups
 
+### Object Lifecycle with `link` / `unlink`
+
+While effects handle their own cleanup automatically, **derived reactive objects** (morph results, lifted arrays, processed children, etc.) often need explicit lifecycle management. `link` and `unlink` solve this by forming a **cleanup tree** — an ownership graph independent of the effect hierarchy.
+
+```typescript
+import { link, unlink } from 'mutts/reactive'
+```
+
+#### Attaching cleanup dependencies
+
+`link(owner, ...deps)` attaches dependencies to an owner object. Dependencies can be:
+- **Functions** — called with an optional `CleanupReason` on disposal
+- **Objects** — recursively `unlink`ed on disposal
+
+```typescript
+const parent = reactive({ items: [] })
+
+// Attach a cleanup callback
+link(parent, () => console.log('parent disposed'))
+
+// Attach child objects — they will be recursively unlinked
+const childA = morph(parent.items, ({ value }) => value * 2)
+const childB = morph(parent.items, ({ value }) => value + 1)
+link(parent, childA, childB)
+
+// Mixed: objects and functions together
+link(parent, childA, () => timer.clear())
+```
+
+#### Disposing an object
+
+`unlink(obj)` disposes all dependencies attached to `obj`:
+
+```typescript
+unlink(parent)
+// 1. childA is recursively unlinked (its own deps disposed)
+// 2. childB is recursively unlinked
+// 3. the callback runs: "parent disposed"
+```
+
+Calling `unlink` twice is safe — the second call is a no-op.
+
+Not calling `unlink` is also  fine — the object will be cleaned up when garbage is collected.
+
+#### When to use `link`/`unlink` vs effects
+
+| Scenario | Use |
+|---|---|
+| Reacting to state changes | `effect` |
+| Tying a derived object's lifetime to its owner | `link` / `unlink` |
+| Cleaning up timers, listeners, DOM nodes | `effect` return or `link` callback |
+| Building a cleanup tree across multiple reactive objects | `link` / `unlink` |
+
+**Rule of thumb**: if the thing you're cleaning up is a *reactive object* (not a function), prefer `link`. If it's a *side effect* (timer, listener), prefer an `effect` return or a `link` callback.
+
+
 ### Effect Dependencies
 
 Effects automatically track which reactive properties they access.

@@ -11,13 +11,13 @@ export * from './promiseChain'
 export * from './reactive'
 export * from './std-decorators'
 export {
-	zip,
 	arrayEquals,
+	deepCompare,
 	isConstructor,
 	isObject,
-	deepCompare,
-	tag,
 	named,
+	tag,
+	zip,
 } from './utils'
 export * from './zone'
 
@@ -46,9 +46,9 @@ if (globalScope) {
 		else {
 			// Using eval to avoid SyntaxError in CJS environments where import.meta is not allowed
 			const meta = viteEval('import.meta')
-			if (meta && meta.url) source = meta.url
+			if (meta?.url) source = meta.url
 		}
-	} catch (e) {
+	} catch (_e) {
 		// Fallback for environments where neither is available or accessible
 	}
 

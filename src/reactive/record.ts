@@ -1,9 +1,9 @@
 import { FoolProof } from '../utils'
 import { attend } from './buffer'
 import { touched1 } from './change'
-import { cleanedBy } from './effect-context'
+import { link } from './effect-context'
 import { reactive } from './proxy'
-import { type CleanupReason, cleanup, type EffectCloser, type ScopedCallback } from './types'
+import type { CleanupReason, EffectCloser } from './types'
 
 /**
  * Provides type-safe access to a source object's property within the organized callback.
@@ -56,13 +56,7 @@ export type OrganizedCallback<Source extends Record<PropertyKey, any>, Target ex
  * The result type of the organized function, combining the target object with cleanup capability.
  * @template Target - The type of the target object
  */
-export type OrganizedResult<Target extends object> = Target & {
-	/**
-	 * Cleanup function to dispose of all reactive bindings created by organized().
-	 * This is automatically called when the effect that created the organized binding is disposed.
-	 */
-	[cleanup]: ScopedCallback
-}
+export type OrganizedResult<Target extends object> = Target
 
 /**
  * Organizes a source object's properties into a target object using a callback function.
@@ -150,7 +144,7 @@ export function organized<
 		}
 	)
 
-	return cleanedBy(target, (reason?: CleanupReason) => stop(reason)) as OrganizedResult<Target>
+	return link(target, (reason?: CleanupReason) => stop(reason)) as OrganizedResult<Target>
 }
 
 /**

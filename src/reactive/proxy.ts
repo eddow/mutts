@@ -137,7 +137,6 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 		// Read old value, using withEffect(undefined, ...) for getter-only accessors to avoid
 		// breaking memoization dependency tracking during SET operations
 		let oldVal = absent
-		// TODO: Pffft... Find a way to "generalize" this case?
 		const isArrayLength = prop === 'length' && Array.isArray(obj)
 		if (Reflect.has(unwrappedReceiver, prop)) {
 			// We *need* to use `receiver` and not `obj` here, otherwise we break
@@ -207,7 +206,10 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 		return subsRegister.get(obj)?.ownKeys?.(obj) || Reflect.ownKeys(obj)
 	},
 	getOwnPropertyDescriptor(obj, prop) {
-		return subsRegister.get(obj)?.getOwnPropertyDescriptor?.(obj, prop) || Reflect.getOwnPropertyDescriptor(obj, prop)
+		return (
+			subsRegister.get(obj)?.getOwnPropertyDescriptor?.(obj, prop) ||
+			Reflect.getOwnPropertyDescriptor(obj, prop)
+		)
 	},
 }
 

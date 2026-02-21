@@ -1,4 +1,4 @@
-import { cleanup, reactive, reactiveOptions as options, scan } from 'mutts'
+import { reactive, reactiveOptions as options, scan, unlink } from 'mutts'
 import { batch } from '../../src/reactive/effects'
 
 describe('scan', () => {
@@ -32,7 +32,7 @@ describe('scan', () => {
 		source.splice(1, 1) // Remove {val: 10}
 		expect([...result]).toEqual([1, 4, 9])
 		
-		result[cleanup]()
+		unlink(result)
 	})
 
 	it('optimizes updates when items move', () => {
@@ -65,7 +65,7 @@ describe('scan', () => {
 		// A is unchanged and should hit the cache.
 		expect(calls).toBe(5) 
 		
-		result[cleanup]()
+		unlink(result)
 	})
     
     it('handles duplicate items', () => {
@@ -79,6 +79,6 @@ describe('scan', () => {
         A.val = 10
         expect([...result]).toEqual([10, 12, 22])
         
-        result[cleanup]()
+        unlink(result)
     })
 })

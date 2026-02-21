@@ -114,11 +114,12 @@ In `mutts`, you define **what things are**, not **when things happen**.
 
 All user-extensible option hooks in `options` (e.g. `touched`, `enter`, `leave`, `beginChain`, `skipRunningEffect`, `onMemoizationDiscrepancy`, `garbageCollected`) are called via `optionCall('name', ...args)` instead of `options.name(...)`. This wraps each call in try/catch so a throwing user callback cannot crash the reactive engine. `options.warn(...)` is the exception — it's called directly since it's the error reporter for `optionCall` itself.
 
-## Cleanup Semantics: `cleanedBy`, `attend`, `morph`
+## Cleanup Semantics: `link`, `unlink`, `attend`, `morph`
 
 When a reactive bunch (`attend`, `morph`, `scan`, …) is **cleaned up**, all its inner effects are disposed. There is no need to manually undo work done by those effects — cleanup means the owner is being removed from concern entirely.
 
-- `cleanedBy(owner, cleanup)`: ties the cleanup to the owner's lifecycle. When the owner is disposed, the cleanup runs.
+- `link(owner, ...deps)`: builds a cleanup tree. Dependencies can be **functions** (called with `CleanupReason`) or **objects** (recursively `unlink`ed). When `unlink(owner)` is called, all deps are disposed.
+- `unlink(obj, reason?)`: disposes an object's cleanup deps. Safe to call twice (second is a no-op).
 - `attend(enumerate, callback)` returns a cleanup. Each per-key callback can return a cleanup too. All are called when the attend is disposed.
 - `morph(source, callback)` disposes per-item effects when items are removed or the result itself is cleaned up.
 

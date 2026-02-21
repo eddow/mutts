@@ -1,4 +1,4 @@
-import { cleanup, effect, isReactive, organized, reactive } from 'mutts'
+import { effect, isReactive, organized, reactive, unlink } from 'mutts'
 
 describe('organized', () => {
 	it('should mirror entries with per-key cleanups', () => {
@@ -43,7 +43,7 @@ describe('organized', () => {
 		expect(target.a).toBeUndefined()
 		expect(cleanupCalls.a).toBe(2)
 
-		target[cleanup]()
+		unlink(target)
 		expect(cleanupCalls.b).toBe(1)
 		expect(target.b).toBeUndefined()
 	})
@@ -74,7 +74,7 @@ describe('organized', () => {
 		delete source.b
 		expect(target.entries.has('b')).toBe(false)
 
-		target[cleanup]()
+		unlink(target)
 		expect(target.entries.size).toBe(0)
 	})
 })

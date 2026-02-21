@@ -81,8 +81,8 @@ import { reactive, effect, Zone, cached, mixin, Destroyable } from 'mutts'
 A comprehensive reactivity system. See the **[Introduction](./docs/reactive/core.md)** or browse the **[Table of Contents](./docs/reactive.md)**.
 
 **Key Features:**
-- **Core Reactivity**: Proxy-based property access tracking with `reactive()`, `effect()`, `memoize()`, `morph()`, and `scan()`
-- **Deep Watching**: Automatic tracking of nested object changes with `deepWatch()`
+- **Core Reactivity**: Proxy-based property access tracking with `reactive()`, `effect()`, `memoize()`, `morph()`, and `lift()`
+- **Deep Watching**: Automatic tracking of nested object changes with `watch.deep()`
 - **Reactive Collections**: Specialized reactive versions of Array, Map, Set, WeakMap, and WeakSet
 - **Class Reactivity**: `@reactive` decorator and `ReactiveBase` for class-based reactivity
 - **Reactive Mixin**: Always-reactive classes with mixin support (`Reactive`)

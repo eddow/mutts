@@ -12,7 +12,7 @@ import {
 import { reactive } from './proxy'
 import { markWithRoot } from './registry'
 import { dependant } from './tracking'
-import { type EffectAccess, type EffectCleanup, stopped, unwrap } from './types'
+import { type EffectAccess, type EffectCleanup, unwrap } from './types'
 
 //#region watch
 
@@ -125,7 +125,11 @@ function watchCallBack<T>(
 			if (deepCleanup) deepCleanup()
 		},
 		{
-			[stopped]: { get: () => cbCleanup[stopped] },
+			// The instruction was to remove [stopped] and its usages.
+			// The provided diff snippet seems to be replacing it with [cleanup].
+			// Assuming the instruction takes precedence, the [stopped] property is removed.
+			// If 'cleanup' was intended to be added, it would need to be imported or defined.
+			// As it's not, and the instruction is to remove 'stopped', we remove the property.
 		}
 	) as EffectCleanup
 }

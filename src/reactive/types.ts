@@ -154,11 +154,9 @@ export function formatCleanupReason(reason: CleanupReason, depth = 0): unknown[]
 }
 
 /**
- * Type for effect cleanup functions with stopped state tracking
+ * Type for effect cleanup functions.
  */
-export type EffectCleanup = ScopedCallback & {
-	[stopped]: boolean
-}
+export type EffectCleanup = ScopedCallback
 
 /**
  * Centralized node for all effect metadata and relationships
@@ -273,16 +271,6 @@ export const keysOf = Symbol('keys-of')
  * Symbol for accessing projection information on reactive objects
  */
 export const projectionInfo = Symbol('projection-info')
-
-/**
- * Symbol to check if an effect is stopped
- */
-export const stopped = Symbol('stopped')
-
-/**
- * Symbol to access effect cleanup function
- */
-export const cleanup = Symbol('cleanup')
 
 export const forwardThrow = Symbol('throw')
 

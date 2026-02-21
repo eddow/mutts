@@ -1,7 +1,7 @@
 export { attend, lift, morph, morph as project, type ScanResult, scan } from './buffer'
 export { getState, touched, touched1 } from './change'
 export { deepWatch } from './deep-watch'
-export { cleanedBy, effectAggregator, getActiveEffect } from './effect-context'
+export { effectAggregator, getActiveEffect, link, unlink } from './effect-context'
 export {
 	addBatchCleanup,
 	atom,
@@ -24,7 +24,6 @@ export { organize, organized } from './record'
 export { Register, register } from './register'
 export {
 	type CleanupReason,
-	cleanup,
 	type EffectAccess,
 	type EffectCleanup,
 	type EffectCloser,
@@ -40,7 +39,6 @@ export {
 	ReactiveError,
 	ReactiveErrorCode,
 	type ScopedCallback,
-	stopped,
 	unwrap,
 } from './types'
 export { type Resource, resource, unreactive, watch, when } from './watch'
@@ -60,14 +58,12 @@ import { ReactiveSet, ReactiveWeakSet } from './set'
 import { objectToProxy, proxyToObject } from './types'
 
 // Register native collection types to use specialized reactive wrappers
-console.time('mutts-reactive-init')
 metaProtos.set(Array, ReactiveArray.prototype)
 metaProtos.set(Set, ReactiveSet.prototype)
 metaProtos.set(WeakSet, ReactiveWeakSet.prototype)
 metaProtos.set(Map, ReactiveMap.prototype)
 metaProtos.set(WeakMap, ReactiveWeakMap.prototype)
 wrapProtos.set(Array, ReactiveArrayWrapper.prototype)
-console.timeEnd('mutts-reactive-init')
 
 /**
  * Object containing internal reactive system state for debugging and profiling
