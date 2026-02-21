@@ -55,20 +55,6 @@ export declare function biDi<T>(target: (val: T) => void, source: { get: () => T
 // COLLECTIONS
 // --------------------------------------------------------------------------------
 
-export interface Register<T, K extends PropertyKey = PropertyKey> extends Iterable<T> {
-    length: number;
-    [index: number]: T;
-    get(key: K): T | undefined;
-    set(key: K, value: T): void;
-    hasKey(key: K): boolean;
-    indexOfKey(key: K): number;
-    remove(key: K): void;
-    removeAt(index: number): T | undefined;
-    push(...items: T[]): number;
-    // ... complete array methods are supported
-}
-
-export declare function register<T, K extends PropertyKey = PropertyKey>(keyFn: (item: T) => K, initial?: Iterable<T>): Register<T, K>;
 export declare function project<S, R>(source: S, apply: (access: any, target: any) => any): R;
 export declare function organized<S, T>(source: S, apply: (access: any, target: T) => any, baseTarget?: T): T;
 

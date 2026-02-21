@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { reactive, effect, lift, scan, morph, atomic, unlink } from 'mutts'
+import { reactive, effect, lift, morph, atomic, unlink } from 'mutts'
 
 describe('nested lift propagation', () => {
 	it('baseline: effect tracks .length', () => {
@@ -337,63 +337,5 @@ describe('nested lift propagation', () => {
 		unlink(flattened)
 	})
 
-	it('scan + project + lift chain propagates inner growth', () => {
-		// Full reconciler chain: renderers → conditioned (scan) → rendered (project) → flattened (lift)
-		const innerSource = reactive([] as number[])
 
-		// Simulate: renderers produces PounceElement-like objects
-		const renderers = morph([innerSource] as any[], (value) => {
-			return { render: () => value }
-		})
-
-		// Simulate: conditioned (scan) — trivial pass-through
-		const conditioned = scan(
-			renderers,
-			(_acc: { value?: any }, child: any) => ({ value: child }),
-			{ value: undefined } as { value?: any }
-		)
-
-		// Simulate: rendered (project) — calls render, wraps array in processChildren-like lift
-		const rendered = morph(conditioned, (accResult: any) => {
-			if (!accResult?.value) return undefined
-			const nodes = accResult.value.render()
-			if (Array.isArray(nodes)) {
-				// This is what processChildren does — returns a lift over the inner array
-				return lift(() => {
-					const result: number[] = []
-					for (const item of nodes) result.push(item)
-					return result
-				})
-			}
-			return nodes
-		})
-
-		// Simulate: flattened (lift) — reads rendered and flattens
-		const flatRuns: number[] = []
-		const flattened = lift(() => {
-			const next: number[] = []
-			for (const item of rendered) {
-				if (item && Array.isArray(item)) {
-					for (const child of item) next.push(child)
-				}
-			}
-			flatRuns.push(next.length)
-			return next
-		})
-
-		expect([...flattened]).toEqual([])
-
-		// Add an item to innerSource
-		innerSource.push(42)
-
-		expect(flatRuns.length).toBeGreaterThan(1)
-		expect([...flattened]).toEqual([42])
-
-		// Add another
-		innerSource.push(99)
-		expect([...flattened]).toEqual([42, 99])
-
-		unlink(rendered)
-		unlink(flattened)
-	})
 })

@@ -137,6 +137,5 @@ attend(
 | `attend` | — | Reactive lifecycle per key |
 | `organized` | ✅ | Reactive record mapping with access objects |
 | `project` | ❌ | Reactive collection mapping (manages a target + projection context) |
-| `scan` | ❌ | Reactive accumulation (sequential key dependency) |
 
-`project` and `scan` have additional concerns (target management, sequential dependencies) that go beyond `attend`'s independent-key lifecycle model.
+`project` has additional concerns (target management) that go beyond `attend`'s independent-key lifecycle model.

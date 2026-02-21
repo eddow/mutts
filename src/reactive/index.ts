@@ -1,4 +1,4 @@
-export { attend, lift, morph, morph as project, type ScanResult, scan } from './buffer'
+export { attend, lift, morph, morph as project } from './buffer'
 export { getState, touched, touched1 } from './change'
 export { deepWatch } from './deep-watch'
 export { effectAggregator, getActiveEffect, link, unlink } from './effect-context'
@@ -21,9 +21,10 @@ export { type Memoizable, type MemoizableArgument, memoize } from './memoize'
 export { immutables, isNonReactive } from './non-reactive-state'
 export { ReactiveBase, reactive } from './proxy'
 export { organize, organized } from './record'
-export { Register, register } from './register'
 export {
 	type CleanupReason,
+	debugPreset,
+	devPreset,
 	type EffectAccess,
 	type EffectCleanup,
 	type EffectCloser,
@@ -35,6 +36,7 @@ export {
 	objectToProxy,
 	options as reactiveOptions,
 	type PropTrigger,
+	prodPreset,
 	proxyToObject,
 	ReactiveError,
 	ReactiveErrorCode,

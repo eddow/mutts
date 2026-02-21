@@ -1142,15 +1142,14 @@ Mutts provides several ways to derive values from reactive state. They differ in
 | `lift(() => ({...}))` | Eager | Reactive object proxy | Yes (per-prop) | **Yes** | `result[cleanup]()` | Derived objects, computed shapes |
 | `morph(source, fn)` | **Lazy** | Reactive proxy | Yes (per-key) | **Yes** | `cleanedBy` | Lazy per-element map with identity tracking |
 | `morph.pure(source, fn)` | **Lazy** | Reactive proxy | Yes (per-key) | **Yes** | `cleanedBy` | Same, but skips per-item dependency tracking |
-| `scan(source, fn, init)` | Eager | Reactive array | Yes (per-index) | **Yes** | `result[cleanup]()` | Running accumulations (prefix sums) |
 | `when(() => cond)` | Eager | Promise\<T\> | N/A | N/A | Auto (on resolve/timeout) | Awaiting a reactive condition |
 | `watch(source, cb)` | Eager | Callback (old/new) | N/A | N/A | Auto (parent/GC) + Returned cleanup | Observing specific changes |
 
 ### Key distinctions
 
 - **Lazy vs Eager**: `memoize` only recomputes when the result is read. Everything else recomputes immediately when dependencies change — even if nobody is consuming the output.
-- **Trackable**: Can downstream effects depend on the result? `memoize`'s return value is trackable because calling it runs inside an effect context. `lift`/`morph`/`scan` return reactive proxies where each property/index is independently trackable.
-- **Identity stable**: `lift`, `morph`, and `scan` return the **same proxy** across recomputations — only changed slots are updated. This is critical for downstream transformations or DOM reconciliation that relies on reference identity.
+- **Trackable**: Can downstream effects depend on the result? `memoize`'s return value is trackable because calling it runs inside an effect context. `lift`/`morph` return reactive proxies where each property/index is independently trackable.
+- **Identity stable**: `lift` and `morph` return the **same proxy** across recomputations — only changed slots are updated. This is critical for downstream transformations or DOM reconciliation that relies on reference identity.
 
 ### Common patterns
 

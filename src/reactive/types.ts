@@ -599,6 +599,39 @@ export function optionCall<K extends CallableOption>(
 	}
 }
 
+/** Production preset: no introspection, heuristic cycle detection, minimal overhead */
+export const prodPreset: Partial<typeof options> = {
+	maxEffectReaction: 'throw',
+	cycleHandling: 'production',
+	introspection: null,
+	onMemoizationDiscrepancy: undefined,
+}
+
+/** Development preset (default): introspection on, early cycle detection, warnings */
+export const devPreset: Partial<typeof options> = {
+	maxEffectReaction: 'warn',
+	cycleHandling: 'development',
+	introspection: {
+		gatherReasons: { lineages: 'touch' },
+		logErrors: true,
+		enableHistory: true,
+		historySize: 50,
+	},
+	onMemoizationDiscrepancy: undefined,
+}
+
+/** Debug preset: full diagnostics, throws on violations, rich lineage capture */
+export const debugPreset: Partial<typeof options> = {
+	maxEffectReaction: 'debug',
+	cycleHandling: 'debug',
+	introspection: {
+		gatherReasons: { lineages: 'both' },
+		logErrors: true,
+		enableHistory: true,
+		historySize: 200,
+	},
+}
+
 // --- Proxy State (Merged from proxy-state.ts) ---
 
 export const objectToProxy = new WeakMap<object, object>()

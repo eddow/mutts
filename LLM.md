@@ -34,7 +34,6 @@ Each entry point has a `.dev` variant (`entry-browser.dev.ts`, `entry-node.dev.t
     *   `effect(() => { ... })`: Runs side effects when dependencies change.
     *   `memoize(() => ...)`: Computed values.
     *   `morph(source, fn)`: Efficient, lazy collection mapping with identity tracking.
-    *   `scan(array, callback, initialValue)`: Reactive scan/accumulation (optimized for moves).
     *   `reset()`: Restores the system to a clean state. Clears diagnostic lineage tracking data and active dependency stacks.
     *   **Opaque Effects**: `effect(fn, { opaque: true })` bypasses deep-touch optimizations to strict identity tracking.
     *   **`keysOf` tracking**: `Object.keys()`, `for..in`, `Map.keys()` only depend on structure (add/delete), not value changes. `Object.entries()`, `Object.values()`, `Map.entries()` still track values via `get`.
@@ -116,7 +115,7 @@ All user-extensible option hooks in `options` (e.g. `touched`, `enter`, `leave`,
 
 ## Cleanup Semantics: `link`, `unlink`, `attend`, `morph`
 
-When a reactive bunch (`attend`, `morph`, `scan`, …) is **cleaned up**, all its inner effects are disposed. There is no need to manually undo work done by those effects — cleanup means the owner is being removed from concern entirely.
+When a reactive bunch (`attend`, `morph`, …) is **cleaned up**, all its inner effects are disposed. There is no need to manually undo work done by those effects — cleanup means the owner is being removed from concern entirely.
 
 - `link(owner, ...deps)`: builds a cleanup tree. Dependencies can be **functions** (called with `CleanupReason`) or **objects** (recursively `unlink`ed). When `unlink(owner)` is called, all deps are disposed.
 - `unlink(obj, reason?)`: disposes an object's cleanup deps. Safe to call twice (second is a no-op).
@@ -249,4 +248,17 @@ When reactive proxies form prototype chains (e.g. pounce scope objects via `Obje
 5. **Inline `Reflect.get` for non-arrays** — the proxy `get` handler can call `Reflect.get` directly for non-array objects, skipping the `FoolProof.get` → array patch → original `FoolProof.get` chain (3 function calls saved per read).
 6. **`markWithRoot` uses `rootFunctions` WeakMap** — avoids `Object.defineProperty` on every effect creation (which mutates V8 hidden classes). `getRoot` walks the WeakMap chain instead of symbol properties.
 7. **`isOwnAccessor` skip for null-proto** — `Object.getPrototypeOf(obj) === null` means no accessors, so skip the expensive `Object.getOwnPropertyDescriptor` calls.
+
+## Presets
+
+Three presets are available for `reactiveOptions`, mirroring Pounce's preset pattern:
+
+*   **`prodPreset`**: Zero introspection (`introspection: null`), `cycleHandling: 'production'`, `maxEffectReaction: 'throw'`. Minimal overhead for production.
+*   **`devPreset`**: Introspection enabled with touch lineages, `cycleHandling: 'development'`, `maxEffectReaction: 'warn'`. Good balance for development.
+*   **`debugPreset`**: Full lineage capture (`'both'`), `cycleHandling: 'debug'`, `maxEffectReaction: 'debug'`, larger history (200). Maximum diagnostics.
+
+```ts
+import { reactiveOptions, devPreset } from 'mutts'
+Object.assign(reactiveOptions, devPreset)
+```
 

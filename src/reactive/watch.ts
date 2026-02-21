@@ -119,19 +119,10 @@ function watchCallBack<T>(
 			}
 		}, value)
 	)
-	return Object.defineProperties(
-		() => {
-			cbCleanup()
-			if (deepCleanup) deepCleanup()
-		},
-		{
-			// The instruction was to remove [stopped] and its usages.
-			// The provided diff snippet seems to be replacing it with [cleanup].
-			// Assuming the instruction takes precedence, the [stopped] property is removed.
-			// If 'cleanup' was intended to be added, it would need to be imported or defined.
-			// As it's not, and the instruction is to remove 'stopped', we remove the property.
-		}
-	) as EffectCleanup
+	return (() => {
+		cbCleanup()
+		if (deepCleanup) deepCleanup()
+	}) as EffectCleanup
 }
 
 //#endregion

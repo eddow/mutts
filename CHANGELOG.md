@@ -6,6 +6,7 @@
 
 ## Refactoring
 
+- Removed `scan` operator and `ScanResult` from `mutts/reactive` as its complexity outweighed its usage compared to the simpler `lift`.
 - Removed unused `atomic` imports from `map.ts` and `set.ts`.
 
 # 1.0.10

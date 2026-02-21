@@ -21,9 +21,9 @@ Proxy-based **fine-grained reactivity** — changes propagate synchronously thro
 **All exports come from `'mutts'`** — no subpath imports like `mutts/reactive` or `mutts/zone`.
 
 ```ts
-import { reactive, effect, memoize, morph, attend, lift, scan, cleanup,
+import { reactive, effect, memoize, morph, attend, lift, cleanup,
   atom, atomic, defer, untracked, unreactive, watch, when, biDi, caught, why,
-  cleanedBy, organized, Register,
+  cleanedBy, organized,
   Zone, asyncZone, ZoneHistory, ZoneAggregator,
   decorator, mixin, Eventful, Destroyable, flavored, Indexable, chainPromise,
   reactiveOptions, isReactive, unwrap, getState
@@ -274,18 +274,6 @@ await when(() => state.ready, { timeout: 5000 }) // rejects after 5s
 
 Array methods (`push`, `splice`, `sort`, etc.) all trigger reactivity.
 
-### 4.1 Register — Keyed ordered collection
-
-```ts
-const list = new Register(item => item.id, [{ id: 1, label: 'A' }])
-list.get(1)            // O(1) lookup by key
-list.set(1, newItem)   // update by key
-list.remove(1)         // remove by key
-list.keep(x => x.active) // filter in-place
-list.upsert(v => list.push(v), ...items) // update or insert
-// Full array surface + CRUD events: on('add'|'delete'|'update'|'rekey', ...)
-```
-
 ---
 
 ## 5. COLLECTION TRANSFORMS
@@ -319,14 +307,6 @@ const doubled = organized(source, (access, target) => {
   target[access.key] = access.get() * 2
   return () => delete target[access.key]
 })
-```
-
-### 5.4 scan() — Reactive accumulation
-
-```ts
-const result = scan(source, (acc, item) => acc + item.val, 0)
-// [1, 3, 6] — changing source[1] recomputes from index 1 onward
-// Items must be objects (WeakMap keys). Move-optimized.
 ```
 
 ### 5.6 lift() — Sync a computed array/object

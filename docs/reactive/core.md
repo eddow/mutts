@@ -14,7 +14,6 @@
 - [Prototype Chains and Pure Objects](./advanced.md#prototype-chains-and-pure-objects)
 - [Recursive Touching](./advanced.md#recursive-touching)
 - [Collections](./collections.md)
-  - [Register](./collections.md#register)
 - [Class Reactivity](#class-reactivity)
 - [Non-Reactive System](#non-reactive-system)
 - [Morphing](./advanced.md#morph)

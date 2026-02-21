@@ -10,14 +10,12 @@ The Mutts Reactive System documentation has been split into focused sections for
 ## [Collections](./reactive/collections.md)
 *   **[Reactive Collections](./reactive/collections.md#collections)**: Map, Set, WeakMap, WeakSet
 *   **[Reactive Arrays](./reactive/collections.md#reactivearray)**: Full array method support
-*   **[Register](./reactive/collections.md#register)**: ID-keyed ordered collections
 *   **[Morphing](./reactive/collections.md#morph)**: `morph`, `organized`
 *   **[Attend](./reactive/attend.md)**: Reactive enumeration (`attend`)
-*   **[Scan](./reactive/scan.md)**: Reactive scan and accumulation
 *   **[Resource](./reactive/resource.md)**: Async state tracking (`resource`)
 
 ## [Advanced Topics](./reactive/advanced.md)
-*   **[Choosing the Right Primitive](./reactive/advanced.md#choosing-the-right-reactive-primitive)**: Comparison table of effect-value functions (memoize, lift, project, scan, etc.)
+*   **[Choosing the Right Primitive](./reactive/advanced.md#choosing-the-right-reactive-primitive)**: Comparison table of effect-value functions (memoize, lift, project, etc.)
 *   **[Atomic Operations](./reactive/advanced.md#atomic-operations)**: Batching and Bidirectional binding
 *   **[Evolution Tracking](./reactive/advanced.md#evolution-tracking)**: History introspection
 *   **[Prototype Chains](./reactive/advanced.md#prototype-chains-and-pure-objects)**: Advanced inheritance patterns
