@@ -74,7 +74,7 @@ export function attend(
 
 	const keyEffects = new Map<any, ScopedCallback>()
 
-	const outer = effect(({ ascend }) => {
+	const outer = effect.named('attend')(({ ascend }) => {
 		const keys = new Set<any>()
 		for (const key of enumerate()) keys.add(key)
 
@@ -82,7 +82,7 @@ export function attend(
 			if (keyEffects.has(key)) continue
 			keyEffects.set(
 				key,
-				ascend(() => effect(() => callback(key)))
+				ascend(() => effect.named('attend:item')(() => callback(key)))
 			)
 		}
 
@@ -156,7 +156,7 @@ export function lift<Output extends object>(cb: (access: EffectAccess) => Output
 export function lift<Output extends any[] | object>(cb: (access: EffectAccess) => Output): Output {
 	let result!: Output
 	let rawResult!: Output
-	const liftCleanup = effect.named('lift')(
+	const liftCleanup = effect.named(`lift:${cb.name}`)(
 		markWithRoot((access) => {
 			const source = cb(access)
 			if (!source || typeof source !== 'object')
@@ -265,7 +265,7 @@ export function morphArray<I, O>(
 			const indexRef = { value: key }
 			let stop!: ScopedCallback
 			track(() => {
-				stop = effect.opaque(() => {
+				stop = effect.named(`morph:${fn.name}:${key}`).opaque(() => {
 					cache[indexRef.value] = fn(input)
 					return (reason) => {
 						delete cache[indexRef.value]
@@ -290,7 +290,7 @@ export function morphArray<I, O>(
 		},
 	})
 
-	const stopMain = effect.named('morph:array')(({ ascend }) => {
+	const stopMain = effect.named(`morph:${fn.name}`)(({ ascend }) => {
 		track = ascend
 		const newInput = [...(typeof source === 'function' ? source() : source)]
 		const diffs = arrayDiff(input, newInput).toSorted((a, b) => b.indexA - a.indexA)
@@ -447,7 +447,7 @@ export function morphMap<K, V, O>(
 	}) as any
 
 	let stateSnapshot: State = getState(source)
-	const stopMain = effect.named('morph:map')(({ ascend }) => {
+	const stopMain = effect.named(`morph:${fn.name}`)(({ ascend }) => {
 		track = ascend
 		dependant(source, keysOf)
 		while ('evolution' in stateSnapshot) {
@@ -543,7 +543,7 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 	})
 
 	let stateSnapshot: State = getState(source)
-	const stopMain = effect.named('morph:record')(({ ascend }) => {
+	const stopMain = effect.named(`morph:${fn.name}`)(({ ascend }) => {
 		track = ascend
 		// Track only structural changes on source
 		dependant(source, keysOf)

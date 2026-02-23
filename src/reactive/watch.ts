@@ -89,7 +89,7 @@ function watchObject(
 	{ immediate = false, deep = false } = {}
 ): EffectCleanup {
 	if (deep) return deepWatch(value, changed, { immediate })!
-	return effect(function watchObjectEffect() {
+	return effect.named('watch:object')(() => {
 		dependant(value)
 		if (immediate) changed(value)
 		immediate = true
@@ -103,8 +103,8 @@ function watchCallBack<T>(
 ): EffectCleanup {
 	let oldValue: T | typeof unsetYet = unsetYet
 	let deepCleanup: EffectCleanup | undefined
-	const cbCleanup = effect(
-		markWithRoot(function watchCallBackEffect(access) {
+	const cbCleanup = effect.named('watch:callback')(
+		markWithRoot((access) => {
 			const newValue = value(access)
 			if (oldValue !== newValue) {
 				const old = oldValue
@@ -139,7 +139,7 @@ function watchCallBack<T>(
 export function when<T>(predicate: (dep: EffectAccess) => T, timeout?: number): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
 		let timer: ReturnType<typeof setTimeout> | undefined
-		const stop = effect(function whenEffect(access) {
+		const stop = effect.named('watch:when')((access) => {
 			try {
 				const value = predicate(access)
 				if (value) {
@@ -244,7 +244,7 @@ export function resource<T>(
 	const reloadSignal = reactive({ value: 0 })
 	let counter = 0
 
-	const stop = effect(function resourceEffect(access) {
+	const stop = effect.named('watch:resource')((access) => {
 		// Track reload signal to enable manual reloading
 		if (reloadSignal.value) {
 			/* just tracking */

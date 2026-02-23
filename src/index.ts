@@ -14,61 +14,12 @@ export {
 	arrayEquals,
 	deepCompare,
 	isConstructor,
+	isDev,
 	isObject,
+	isProd,
+	isTest,
 	named,
 	tag,
 	zip,
 } from './utils'
 export * from './zone'
-
-import pkg from '../package.json'
-
-const { version } = pkg
-
-// Singleton verification
-const GLOBAL_MUTTS_KEY = '__MUTTS_INSTANCE__'
-const globalScope = (
-	typeof globalThis !== 'undefined'
-		? globalThis
-		: typeof window !== 'undefined'
-			? window
-			: typeof global !== 'undefined'
-				? global
-				: false
-) as any
-if (globalScope) {
-	// Detect the source of this instance safely across different environments
-	let source = 'mutts/index'
-	// biome-ignore lint/security/noGlobalEval: Intentional eval for cross-env import.meta detection
-	const viteEval = eval
-	try {
-		if (typeof __filename !== 'undefined') source = __filename
-		else {
-			// Using eval to avoid SyntaxError in CJS environments where import.meta is not allowed
-			const meta = viteEval('import.meta')
-			if (meta?.url) source = meta.url
-		}
-	} catch (_e) {
-		// Fallback for environments where neither is available or accessible
-	}
-
-	const currentSourceInfo = {
-		version,
-		source,
-		timestamp: Date.now(),
-	}
-
-	if (globalScope[GLOBAL_MUTTS_KEY]) {
-		const existing = globalScope[GLOBAL_MUTTS_KEY]
-		throw new Error(
-			`[Mutts] Multiple instances detected!\n` +
-				`Existing instance: ${JSON.stringify(existing, null, 2)}\n` +
-				`New instance: ${JSON.stringify(currentSourceInfo, null, 2)}\n` +
-				`This usually happens when 'mutts' is both installed as a dependency and bundled, ` +
-				`or when different versions are loaded. ` +
-				`Please check your build configuration (aliases, externals) to ensure a single source of truth.`
-		)
-	}
-
-	globalScope[GLOBAL_MUTTS_KEY] = currentSourceInfo
-}

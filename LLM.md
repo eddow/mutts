@@ -26,7 +26,7 @@ Each entry point has a `.dev` variant (`entry-browser.dev.ts`, `entry-node.dev.t
     *   `mutts/browser/dev`, `mutts/browser/prod`
     *   `mutts/node/dev`, `mutts/node/prod`
 
-### 1. Reactivity (`mutts/reactive`)
+### 1. Reactivity
 *   **Proxy-based**: Uses `Proxy` to track dependencies.
 *   **Robust Batching**: Uses a `batchStack` to support deeply nested `batch()` and `immediate` calls. Each level manages its own sub-queue and cleanups correctly.
 *   **API**:
@@ -38,7 +38,7 @@ Each entry point has a `.dev` variant (`entry-browser.dev.ts`, `entry-node.dev.t
     *   **Opaque Effects**: `effect(fn, { opaque: true })` bypasses deep-touch optimizations to strict identity tracking.
     *   **`keysOf` tracking**: `Object.keys()`, `for..in`, `Map.keys()` only depend on structure (add/delete), not value changes. `Object.entries()`, `Object.values()`, `Map.entries()` still track values via `get`.
 
-### 2. Decorators (`mutts/decorator`)
+### 2. Decorators
 *   **Unified System**: Works with both **Legacy** (`experimentalDecorators: true`) and **Modern** (Stage 3) decorators.
 *   **Usage**: Use the `decorator` helper to define decorators that adapt to the environment.
     ```ts
@@ -48,13 +48,13 @@ Each entry point has a `.dev` variant (`entry-browser.dev.ts`, `entry-node.dev.t
     })
     ```
 
-### 3. PromiseChain (`mutts/promiseChain`)
+### 3. PromiseChain
 *   **Fluent Chaining**: Allows method chaining on promises without awaiting each step.
     ```ts
     const val = await chainPromise(api.getUser()).config.theme;
     ```
 
-### 4. Zones (`mutts/zone`)
+### 4. Zones
 *   **Context Propagation**: Manages stack-based and history-aware execution contexts.
 *   **Async Support**: Register zones in `asyncZone` to automatically preserve context across `Promises`, `setTimeout`, etc.
 *   **Key Classes**: `Zone`, `ZoneHistory`, `ZoneAggregator`.

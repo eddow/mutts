@@ -102,9 +102,9 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 			const gatherReasons = options.introspection.gatherReasons
 			const lineageConfig = gatherReasons.lineages
 
-			let touchStack: unknown | undefined
+			let touchLineage: unknown | undefined
 			if (lineageConfig === 'touch' || lineageConfig === 'both') {
-				touchStack = debugHooks.captureLineage()
+				touchLineage = debugHooks.captureLineage()
 			}
 
 			for (const [effect, dependencyStack] of effects) {
@@ -114,7 +114,7 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 					obj,
 					evolution,
 					dependency: dependencyStack,
-					touch: touchStack,
+					touch: touchLineage,
 				})
 			}
 		}
@@ -158,11 +158,11 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 			}
 			effects.add(effect)
 			if (gather) {
-				let touchStack: unknown | undefined
+				let touchLineage: unknown | undefined
 				let dependencyStack: unknown | undefined
 
 				if (lineageConfig === 'touch' || lineageConfig === 'both') {
-					touchStack = debugHooks.captureLineage()
+					touchLineage = debugHooks.captureLineage()
 				}
 				if (lineageConfig === 'dependency' || lineageConfig === 'both') {
 					dependencyStack = getDependencyStack(effect, obj, prop)
@@ -173,7 +173,7 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 					obj,
 					evolution,
 					dependency: dependencyStack,
-					touch: touchStack,
+					touch: touchLineage,
 				})
 			}
 			recordActivation(effect, obj, evolution, prop)

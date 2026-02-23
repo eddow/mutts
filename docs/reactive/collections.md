@@ -270,7 +270,7 @@ effect(() => {
 #### Basic Usage
 
 ```typescript
-import { cleanup, morph, reactive } from 'mutts/reactive'
+import { cleanup, morph, reactive } from 'mutts'
 
 // Arrays
 const users = reactive([{ name: 'John', age: 30 }, { name: 'Jane', age: 25 }])
@@ -401,7 +401,7 @@ result[cleanup]() // Stops all effects and cleans up
 ### `organized()`
 
 ```typescript
-import { cleanup, organized, reactive } from 'mutts/reactive'
+import { cleanup, organized, reactive } from 'mutts'
 
 const source = reactive<Record<string, number>>({ apples: 1, oranges: 2 })
 

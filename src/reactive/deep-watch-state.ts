@@ -77,9 +77,9 @@ export function bubbleUpChange(changedObject: object, evolution: Evolution) {
 				const gatherReasons = options.introspection.gatherReasons
 				const lineageConfig = gatherReasons.lineages
 
-				let touchStack: unknown | undefined
+				let touchLineage: unknown | undefined
 				if (lineageConfig === 'touch' || lineageConfig === 'both') {
-					touchStack = debugHooks.captureLineage()
+					touchLineage = debugHooks.captureLineage()
 				}
 
 				for (const watcher of parentDeepWatchers) {
@@ -94,7 +94,7 @@ export function bubbleUpChange(changedObject: object, evolution: Evolution) {
 						obj: parent,
 						evolution,
 						dependency: dependencyStack,
-						touch: touchStack,
+						touch: touchLineage,
 					})
 				}
 			}

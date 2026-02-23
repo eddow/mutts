@@ -409,6 +409,12 @@ export const options = {
 	 */
 	skipRunningEffect: (_effect: EffectTrigger) => {},
 	/**
+	 * Debug purpose: called when an effect starts executing.
+	 * @param effect - The effect being executed (root function)
+	 * @param reaction - false for initial creation, true/CleanupReason for subsequent runs
+	 */
+	effectRun: (_effect: Function, _reaction: boolean | CleanupReason) => {},
+	/**
 	 * Debug purpose: maximum effect chain (like call stack max depth)
 	 * Used to prevent infinite loops
 	 * @default 100

@@ -1,5 +1,5 @@
-// Import environment-specific patches first (SIDE EFFECTS)
+// Side effects: singleton check + env-specific patches
+import './init'
 import './async/browser'
 
-// Then export the library
 export * from './index'

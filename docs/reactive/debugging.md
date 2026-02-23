@@ -7,10 +7,10 @@ The `mutts` reactive system provides several built-in tools to help track down s
 
 ## The `reactiveOptions` Reference
 
-The `reactiveOptions` object (exported from `mutts/reactive`) allows you to hook into the reactive system's internals.
+The `reactiveOptions` object (exported from `mutts`) allows you to hook into the reactive system's internals.
 
 ```typescript
-import { reactiveOptions } from 'mutts/reactive';
+import { reactiveOptions } from 'mutts';
 ```
 
 ### Lifecycle Hooks

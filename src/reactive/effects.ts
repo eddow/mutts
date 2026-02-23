@@ -1143,6 +1143,7 @@ export const effect = named(
 				node.nextReason = undefined
 
 				optionCall('enter', getRoot(fn))
+				optionCall('effectRun', getRoot(fn), access.reaction)
 				let result: any
 				let caught = 0
 
@@ -1222,6 +1223,7 @@ export const effect = named(
 						reactionCleanup = result as undefined | EffectCloser
 					}
 				} catch (error) {
+					debugHooks.decorateError(error, runEffect)
 					// catcher:self`
 					errorToThrow = error
 				}
@@ -1450,7 +1452,7 @@ export function biDi<T>(
 		get = get.get
 	}
 	let programmaticallySetValue: any = Symbol()
-	effect(
+	effect.named('biDi')(
 		markWithRoot(() => {
 			const newValue = get()
 			if (unwrap(newValue) !== programmaticallySetValue) received(newValue)

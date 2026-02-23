@@ -263,3 +263,12 @@ export function named<T extends Function>(name: string, fn: T): T {
 export function* stringKeys(o: object) {
 	for (const key in o) yield key
 }
+
+const _mode: string =
+	(typeof process !== 'undefined' && process.env?.NODE_ENV) ||
+	(typeof import.meta !== 'undefined' && (import.meta as any).env?.MODE) ||
+	'production'
+
+export const isDev = _mode === 'development'
+export const isProd = _mode === 'production'
+export const isTest = _mode === 'test'

@@ -6,7 +6,7 @@
 
 ## Refactoring
 
-- Removed `scan` operator and `ScanResult` from `mutts/reactive` as its complexity outweighed its usage compared to the simpler `lift`.
+- Removed `scan` operator and `ScanResult` from `mutts` as its complexity outweighed its usage compared to the simpler `lift`.
 - Removed unused `atomic` imports from `map.ts` and `set.ts`.
 
 # 1.0.10
@@ -30,7 +30,7 @@
 ## Refactoring
 
 - **`memoize`** is now a `flavored` function (decorator support preserved).
-- **`morph`** is a `flavored` function exported from `mutts/reactive`. Split into specialized internal implementations for efficiency.
+- **`morph`** is a `flavored` function exported from `mutts`. Split into specialized internal implementations for efficiency.
 - **`project`**: Removed deprecated API (replaced by `morph`).
 - **`when`**: reactive boolean => promise
 - **`resource`**: reactive resource

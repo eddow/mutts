@@ -137,6 +137,21 @@
     "url": "https://github.com/eddow/mutts/issues"
   },
   "type": "module",
+  "sideEffects": [
+    "./src/init.ts",
+    "./src/entry-browser.ts",
+    "./src/entry-browser.dev.ts",
+    "./src/entry-node.ts",
+    "./src/entry-node.dev.ts",
+    "./dist/browser.esm.js",
+    "./dist/browser.dev.esm.js",
+    "./dist/browser.cjs",
+    "./dist/browser.dev.cjs",
+    "./dist/node.esm.js",
+    "./dist/node.dev.esm.js",
+    "./dist/node.cjs",
+    "./dist/node.dev.cjs"
+  ],
   "engines": {
     "node": ">=16.0.0"
   },

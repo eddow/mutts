@@ -119,9 +119,8 @@ export function getStackFrame(error = new Error()): StackFrame[] {
  * Traces the lineage of the current execution through nested effects
  * @param effect - Starting effect (defaults to active effect)
  */
-export function getLineage(effect?: EffectTrigger): LineageSegment[] {
+export function getLineage(effect?: EffectTrigger, currentStack: StackFrame[] = getStackFrame()): LineageSegment[] {
 	const currentEffect = effect ?? getActiveEffect()
-	const currentStack = getStackFrame() // Robustly skips internal mutts frames
 	const segments: LineageSegment[] = []
 
 	if (!currentEffect) {

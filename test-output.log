@@ -1,0 +1,980 @@
+
+> mutts@1.0.11 test
+> npm run test:node && npm run test:browser
+
+
+> mutts@1.0.11 test:node
+> TEST_ENV=node NODE_OPTIONS='--expose-gc' vitest run
+
+
+[1m[46m RUN [49m[22m [36mv4.0.18 [39m[90m/home/fmdm/dev/ownk/mutts[39m
+
+[90mstdout[2m | tests/reactive/effect-lifecycle.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/interface.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/array-optimisation.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/profiling/tracking.profile.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/async-cancel.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/morph-lift-flat.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/profiling/change.profile.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/profiling/deep-watch.profile.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/array.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/catch.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/decorators-unreactive.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/map.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/atomic.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/profiling/proxy.profile.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/profiling/array.profile.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/profiling/memory.profile.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/std-decorators.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/pure-objects-and-prototypes.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/when.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/deep-touch-filtering.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/nested-lift.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+ [32m✓[39m tests/reactive/effect-cycle.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 103[2mms[22m[39m
+ [32m✓[39m tests/reactive/resource.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 114[2mms[22m[39m
+[90mstdout[2m | tests/reactive/catch.test.ts[2m > [22m[2mcaught - zone re-entry bug[2m > [22m[2mshould handle child throwing during parent first run without zone re-entry error
+[22m[39mParent caught: Child error on first run
+
+ [32m✓[39m tests/reactive/pure-objects-and-prototypes.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 65[2mms[22m[39m
+[90mstdout[2m | tests/profiling/memory.profile.test.ts[2m > [22m[2mMemory Performance Profiling[2m > [22m[2mObject Creation Memory[2m > [22m[2mbenchmark: reactive object creation memory overhead
+[22m[39mBENCHMARK:{"type":"memory","name":"Reactive object creation","heapUsedBefore":12923504,"heapUsedAfter":19134152,"heapTotalBefore":31047680,"heapTotalAfter":31866880,"delta":621.0648,"deltaPercent":48.05699754493828,"deltaKB":0.60650859375,"heapUsedBeforeMB":12.324813842773438,"heapUsedAfterMB":18.24774932861328}
+Memory Profile: Reactive object creation:
+  Before: 12.32 MB
+  After: 18.25 MB
+  Delta: 0.6065 KB/iteration
+  Delta %: 48.06%
+
+ [32m✓[39m tests/reactive/decorators-unreactive.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 81[2mms[22m[39m
+ [32m✓[39m tests/reactive/morph-lift-flat.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 77[2mms[22m[39m
+ [32m✓[39m tests/reactive/array-optimisation.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 84[2mms[22m[39m
+ [32m✓[39m tests/reactive/deep-touch-filtering.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 89[2mms[22m[39m
+ [32m✓[39m tests/reactive/atomic.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 93[2mms[22m[39m
+ [32m✓[39m tests/reactive/map.test.ts [2m([22m[2m47 tests[22m[2m)[22m[32m 97[2mms[22m[39m
+[90mstdout[2m | tests/profiling/memory.profile.test.ts[2m > [22m[2mMemory Performance Profiling[2m > [22m[2mObject Creation Memory[2m > [22m[2mbenchmark: plain object creation vs reactive
+[22m[39mBENCHMARK:{"type":"memory","name":"Plain object creation","heapUsedBefore":13597584,"heapUsedAfter":14721544,"heapTotalBefore":31850496,"heapTotalAfter":31850496,"delta":112.396,"deltaPercent":8.265880174007382,"deltaKB":0.10976171875,"heapUsedBeforeMB":12.967666625976562,"heapUsedAfterMB":14.039558410644531}
+Memory Profile: Plain object creation:
+  Before: 12.97 MB
+  After: 14.04 MB
+  Delta: 0.1098 KB/iteration
+  Delta %: 8.27%
+BENCHMARK:{"type":"memory","name":"Reactive object creation","heapUsedBefore":13597560,"heapUsedAfter":18113024,"heapTotalBefore":31588352,"heapTotalAfter":31588352,"delta":451.5464,"deltaPercent":33.207899064243875,"deltaKB":0.44096328125,"heapUsedBeforeMB":12.967643737792969,"heapUsedAfterMB":17.27392578125}
+Memory Profile: Reactive object creation:
+  Before: 12.97 MB
+  After: 17.27 MB
+  Delta: 0.4410 KB/iteration
+  Delta %: 33.21%
+Memory overhead: 4.02x
+
+ [32m✓[39m tests/reactive/nested-lift.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 115[2mms[22m[39m
+[90mstderr[2m | tests/reactive/catch.test.ts[2m > [22m[2mError Propagation - Additional Tests[2m > [22m[2mError Recovery Patterns[2m > [22m[2mshould handle cleanup errors gracefully
+[22m[39mError during effect cleanup Error: Cleanup error
+    at [90m/home/fmdm/dev/ownk/mutts/[39mtests/reactive/catch.test.ts:531:12
+    at cleanupReaction [90m(/home/fmdm/dev/ownk/mutts/[39msrc/reactive/effects.ts:1139:6[90m)[39m
+    at Object.node2.cleanup [90m(/home/fmdm/dev/ownk/mutts/[39msrc/reactive/effects.ts:1241:6[90m)[39m
+    at stopEffect [90m(/home/fmdm/dev/ownk/mutts/[39msrc/reactive/effects.ts:1340:11[90m)[39m
+    at callIfCollected [90m(/home/fmdm/dev/ownk/mutts/[39msrc/reactive/effects.ts:1351:41[90m)[39m
+    at [90m/home/fmdm/dev/ownk/mutts/[39mtests/reactive/catch.test.ts:539:17
+    at Proxy.assertThrows [90m(file:///home/fmdm/dev/ownk/mutts/[39mnode_modules/[4mchai[24m/index.js:2798:5[90m)[39m
+    at Proxy.methodWrapper [90m(file:///home/fmdm/dev/ownk/mutts/[39mnode_modules/[4mchai[24m/index.js:1700:25[90m)[39m
+    at Proxy.<anonymous> [90m(file:///home/fmdm/dev/ownk/mutts/[39mnode_modules/[4m@vitest[24m/expect/dist/index.js:1149:12[90m)[39m
+    at Proxy.overwritingMethodWrapper [90m(file:///home/fmdm/dev/ownk/mutts/[39mnode_modules/[4mchai[24m/index.js:1750:33[90m)[39m
+
+ [32m✓[39m tests/reactive/when.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 120[2mms[22m[39m
+ [32m✓[39m tests/reactive/catch.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 139[2mms[22m[39m
+ [32m✓[39m tests/reactive/interface.test.ts [2m([22m[2m47 tests[22m[2m)[22m[32m 197[2mms[22m[39m
+ [32m✓[39m tests/reactive/array.test.ts [2m([22m[2m62 tests[22m[2m)[22m[32m 198[2mms[22m[39m
+[90mstdout[2m | tests/reactive/memoize.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/iterableWeak.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/keys-of.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/profiling/memory.profile.test.ts[2m > [22m[2mMemory Performance Profiling[2m > [22m[2mEffect Memory[2m > [22m[2mbenchmark: effect creation and cleanup memory
+[22m[39mBENCHMARK:{"type":"memory","name":"Effect lifecycle","heapUsedBefore":13661552,"heapUsedAfter":24095696,"heapTotalBefore":31850496,"heapTotalAfter":63569920,"delta":10434.144,"deltaPercent":76.37597836614756,"deltaKB":10.18959375,"heapUsedBeforeMB":13.028671264648438,"heapUsedAfterMB":22.979446411132812}
+Memory Profile: Effect lifecycle:
+  Before: 13.03 MB
+  After: 22.98 MB
+  Delta: 10.1896 KB/iteration
+  Delta %: 76.38%
+
+[90mstdout[2m | tests/reactive/bidi.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/decorators-reactive.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/set.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/record.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/recursive-touching-option.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+ [32m✓[39m tests/reactive/memoize.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 43[2mms[22m[39m
+ [32m✓[39m tests/iterableWeak.test.ts [2m([22m[2m33 tests[22m[2m)[22m[32m 43[2mms[22m[39m
+ [32m✓[39m tests/reactive/memoize_object.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m tests/reactive/morph.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 48[2mms[22m[39m
+[90mstdout[2m | tests/async-hook.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/memoize-defaulted-props.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+ [32m✓[39m tests/reactive/set.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m tests/reactive/bidi.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m tests/reactive/keys-of.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 80[2mms[22m[39m
+ [32m✓[39m tests/reactive/record.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 57[2mms[22m[39m
+ [32m✓[39m tests/reactive/broken-state.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m tests/reactive/recursive-touching-option.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+[90mstdout[2m | tests/async-hook.test.ts[2m > [22m[2mAsync Hook Direct Tests[2m > [22m[2mBasic setTimeout
+[22m[39m[DEBUG] asyncHooks object id: no-id
+[DEBUG] addHook implementation: addHook(hook) {
+    hooks.add(hook);
+    return () => hooks.delete(hook);
+  }
+
+ [32m✓[39m tests/reactive/attend.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 54[2mms[22m[39m
+ [32m✓[39m tests/reactive/decorators-reactive.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 64[2mms[22m[39m
+[90mstdout[2m | tests/async-hook.test.ts[2m > [22m[2mAsync Hook Direct Tests[2m > [22m[2mmultiple await resumptions
+[22m[39mCallStack Multiple: [
+  "H1:hook",
+  "H1:restore",
+  "resolve-task",
+  "H1:undo",
+  "after-await-1",
+  "H1:hook",
+  "H1:hook",
+  "H1:hook",
+  "H1:hook",
+  "H1:restore",
+  "H1:restore",
+  "middle-task",
+  "H1:undo",
+  "H1:undo",
+  "H1:restore",
+  "after-await-2",
+  "H1:undo"
+]
+
+ [32m✓[39m tests/reactive/memoize-defaulted-props.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 41[2mms[22m[39m
+ [32m✓[39m tests/async-hook.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+[90mstdout[2m | tests/reactive/non-reactive.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/eventful.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/analysis_all_props.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/prototype-chain.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+ [32m✓[39m tests/reactive/lineage-tracking-simple.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+[90mstdout[2m | tests/reactive/cleanup-reason.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/root-function.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+ [32m✓[39m tests/eventful.test.ts [2m([22m[2m34 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+[90mstdout[2m | tests/destroyable.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/memoize-lazy.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+ [32m✓[39m tests/reactive/non-reactive.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m tests/reactive/analysis_all_props.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+[90mstdout[2m | tests/reactive/integration.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive-base-mixin.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+ [32m✓[39m tests/reactive/prototype-chain.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+[90mstdout[2m | tests/profiling/memory.profile.test.ts[2m > [22m[2mMemory Performance Profiling[2m > [22m[2mEffect Memory[2m > [22m[2mbenchmark: multiple effects memory overhead
+[22m[39mMultiple effects memory (3 runs): 183.29, 196.53, 200.45 KB
+Median: 196.53 KB
+
+[90mstderr[2m | tests/profiling/memory.profile.test.ts[2m > [22m[2mMemory Performance Profiling[2m > [22m[2mEffect Memory[2m > [22m[2mbenchmark: multiple effects memory overhead
+[22m[39m⚠️  Memory overhead is 196.53KB (typical: 40-50KB isolated, 150-250KB in suite, threshold: 300KB)
+
+ [32m✓[39m tests/reactive/memoize-lenient.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m tests/reactive/async-cancel.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 799[2mms[22m[39m
+[90mstdout[2m | tests/reactive/lineage.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+ [32m✓[39m tests/reactive/cleanup-reason.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m tests/reactive/batch-subqueue.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+[90mstdout[2m | tests/profiling/proxy.profile.test.ts[2m > [22m[2mProxy Performance Profiling[2m > [22m[2mProperty Access Overhead[2m > [22m[2mbenchmark: reactive vs plain object property access
+[22m[39mBENCHMARK:{"name":"Plain object access","avgTime":0.00008067855900000006,"opsPerSec":12394866.893941415,"minTime":0.000019999999949504854,"maxTime":3.5484930000000077,"iterations":1000000,"totalTime":80.67855900000006}
+BENCHMARK:{"name":"Reactive object access","avgTime":0.0006940432769999999,"opsPerSec":1440832.3416408517,"minTime":0.0003209999999853608,"maxTime":3.0528759999999693,"iterations":1000000,"totalTime":694.0432769999999}
+=== Profile Comparison ===
+
+Results (sorted by speed):
+Plain object access:
+  Iterations: 1,000,000
+  Total time: 80.68ms
+  Average: 0.000081ms/op
+  Min: 0.000020ms
+  Max: 3.548493ms
+  Throughput: 12,394,866.894 ops/sec
+
+Reactive object access:
+  Iterations: 1,000,000
+  Total time: 694.04ms
+  Average: 0.000694ms/op
+  Min: 0.000321ms
+  Max: 3.052876ms
+  Throughput: 1,440,832.342 ops/sec
+
+Fastest: Plain object access
+Slowest: Reactive object access
+
+Comparisons:
+  Plain object access is 8.60x faster than Reactive object access (0.000613ms difference)
+
+Overhead: 760.26%
+Reactive overhead: 8.60x
+
+ [32m✓[39m tests/reactive/lineage.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m tests/reactive/memoize-lazy.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m tests/reactive/root-function.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 46[2mms[22m[39m
+ [32m✓[39m tests/destroyable.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 55[2mms[22m[39m
+ [32m✓[39m tests/reactive/integration.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 18[2mms[22m[39m
+[90mstdout[2m | tests/profiling/memory.profile.test.ts[2m > [22m[2mMemory Performance Profiling[2m > [22m[2mArray Memory[2m > [22m[2mbenchmark: reactive array operations memory
+[22m[39mBENCHMARK:{"type":"memory","name":"Array operations","heapUsedBefore":33687568,"heapUsedAfter":39962376,"heapTotalBefore":73023488,"heapTotalAfter":73555968,"delta":6274.808,"deltaPercent":18.626479655640324,"deltaKB":6.1277421875,"heapUsedBeforeMB":32.12696838378906,"heapUsedAfterMB":38.11109161376953}
+Memory Profile: Array operations:
+  Before: 32.13 MB
+  After: 38.11 MB
+  Delta: 6.1277 KB/iteration
+  Delta %: 18.63%
+
+ [32m✓[39m tests/reactive-base-mixin.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m tests/reactive/effect-lifecycle.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 952[2mms[22m[39m
+[90mstdout[2m | tests/reactive/memoize-discrepancy.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+ [32m✓[39m tests/reactive/watch-flavor.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+[90mstdout[2m | tests/zone.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/profiling/deep-watch.profile.test.ts[2m > [22m[2mDeep Watch Performance[2m > [22m[2mDeep Watch Setup[2m > [22m[2mbenchmark: deep watch traversal time
+[22m[39m{
+  name: [32m'Deep watch setup (3 levels, 5 props)'[39m,
+  avgTime: [33m0.8698691499999995[39m,
+  totalTime: [33m86.98691499999995[39m,
+  iterations: [33m100[39m,
+  opsPerSec: [33m1149.5981895667878[39m,
+  minTime: [33m0.3764129999999568[39m,
+  maxTime: [33m2.562840000000051[39m
+}
+
+[90mstdout[2m | tests/decorator.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/indexable.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/promiseChain.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+ [32m✓[39m tests/flavored.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+[90mstdout[2m | tests/reactive/reactive.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+ [32m✓[39m tests/diff.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+[90mstdout[2m | tests/mixins.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+ [32m✓[39m tests/reactive/memoize-discrepancy.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m tests/flavored-robustness.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/zone.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/reactive/cumulated-reasons.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+[90mstdout[2m | tests/reactive/proxy-outer-wrap.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+[90mstdout[2m | tests/reactive/atomic-nested.test.ts
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+
+ [32m✓[39m tests/decorator.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+[90mstdout[2m | tests/profiling/memory.profile.test.ts[2m > [22m[2mMemory Performance Profiling[2m > [22m[2mDependency Tracking Memory[2m > [22m[2mbenchmark: dependency tracking memory overhead
+[22m[39mBENCHMARK:{"type":"memory","name":"Dependency tracking","heapUsedBefore":34084408,"heapUsedAfter":54808064,"heapTotalBefore":71843840,"heapTotalAfter":78217216,"delta":20723.656,"deltaPercent":60.80098560021931,"deltaKB":20.2379453125,"heapUsedBeforeMB":32.50542449951172,"heapUsedAfterMB":52.26904296875}
+Memory Profile: Dependency tracking:
+  Before: 32.51 MB
+  After: 52.27 MB
+  Delta: 20.2379 KB/iteration
+  Delta %: 60.80%
+
+ [32m✓[39m tests/profiling/memory.profile.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 1083[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: multiple effects memory overhead [33m 481[2mms[22m[39m
+ [32m✓[39m tests/indexable.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m tests/reactive/reactive.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/mixins.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/promiseChain.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m tests/reactive/proxy-outer-wrap.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/reactive/atomic-nested.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+[90mstdout[2m | tests/profiling/array.profile.test.ts[2m > [22m[2mArray Performance Profiling[2m > [22m[2mArray Access[2m > [22m[2mbenchmark: reactive array index access
+[22m[39mPlain: {
+  name: [32m'Plain array access'[39m,
+  avgTime: [33m0.0003288879999999949[39m,
+  totalTime: [33m3.288879999999949[39m,
+  iterations: [33m10000[39m,
+  opsPerSec: [33m3040548.758239934[39m,
+  minTime: [33m0.00006999999993695383[39m,
+  maxTime: [33m0.25552299999992556[39m
+}
+Reactive: {
+  name: [32m'Reactive array access'[39m,
+  avgTime: [33m0.0968904197[39m,
+  totalTime: [33m968.904197[39m,
+  iterations: [33m10000[39m,
+  opsPerSec: [33m10320.937850163942[39m,
+  minTime: [33m0.05942400000003545[39m,
+  maxTime: [33m3.1964429999998174[39m
+}
+
+[90mstdout[2m | tests/profiling/array.profile.test.ts[2m > [22m[2mArray Performance Profiling[2m > [22m[2mArray Mutations[2m > [22m[2mbenchmark: push operations
+[22m[39m{
+  name: [32m'Reactive array push'[39m,
+  avgTime: [33m0.004054406900000003[39m,
+  totalTime: [33m40.544069000000036[39m,
+  iterations: [33m10000[39m,
+  opsPerSec: [33m246645.1998194851[39m,
+  minTime: [33m0.002731000000039785[39m,
+  maxTime: [33m1.8241769999999633[39m
+}
+
+[90mstdout[2m | tests/profiling/deep-watch.profile.test.ts[2m > [22m[2mDeep Watch Performance[2m > [22m[2mDeep Watch Setup[2m > [22m[2mbenchmark: deep watch on large arrays
+[22m[39m{
+  name: [32m'Deep watch on array[1000]'[39m,
+  avgTime: [33m8.53035420000001[39m,
+  totalTime: [33m85.3035420000001[39m,
+  iterations: [33m10[39m,
+  opsPerSec: [33m117.2284264585401[39m,
+  minTime: [33m7.93319600000018[39m,
+  maxTime: [33m9.632938999999851[39m
+}
+
+[90mstdout[2m | tests/profiling/array.profile.test.ts[2m > [22m[2mArray Performance Profiling[2m > [22m[2mArray Mutations[2m > [22m[2mbenchmark: splice operations
+[22m[39m{
+  name: [32m'Reactive array splice'[39m,
+  avgTime: [33m0.0082523326[39m,
+  totalTime: [33m41.261663[39m,
+  iterations: [33m5000[39m,
+  opsPerSec: [33m121177.8594575793[39m,
+  minTime: [33m0.0036580000000867585[39m,
+  maxTime: [33m1.4356960000000072[39m
+}
+
+[90mstdout[2m | tests/profiling/deep-watch.profile.test.ts[2m > [22m[2mDeep Watch Performance[2m > [22m[2mDeep Watch Memory[2m > [22m[2mbenchmark: memory overhead of deep watching
+[22m[39mBENCHMARK:{"type":"memory","name":"Deep watch overhead","heapUsedBefore":20298568,"heapUsedAfter":43970728,"heapTotalBefore":55951360,"heapTotalAfter":62308352,"delta":236721.6,"deltaPercent":116.6198521984408,"deltaKB":231.1734375,"heapUsedBeforeMB":19.35822296142578,"heapUsedAfterMB":41.933753967285156}
+Memory Profile: Deep watch overhead:
+  Before: 19.36 MB
+  After: 41.93 MB
+  Delta: 231.1734 KB/iteration
+  Delta %: 116.62%
+
+[90mstdout[2m | tests/profiling/change.profile.test.ts[2m > [22m[2mChange Detection Performance[2m > [22m[2mEffect Dispatch[2m > [22m[2mbenchmark: single property change triggering one effect
+[22m[39m{
+  name: [32m'Single change, single effect'[39m,
+  avgTime: [33m0.11347369119999999[39m,
+  totalTime: [33m1134.7369119999998[39m,
+  iterations: [33m10000[39m,
+  opsPerSec: [33m8812.61541265523[39m,
+  minTime: [33m0.05593300000009549[39m,
+  maxTime: [33m5.688938000000007[39m
+}
+Effect was called 11001 times
+
+ [32m✓[39m tests/std-decorators.test.ts [2m([22m[2m28 tests[22m[2m)[22m[33m 1472[2mms[22m[39m
+[90mstdout[2m | tests/profiling/tracking.profile.test.ts[2m > [22m[2mDependency Tracking Performance[2m > [22m[2mdependant() Overhead[2m > [22m[2mbenchmark: property access with active effect
+[22m[39mWith effect: {
+  name: [32m'Access with effect tracking'[39m,
+  avgTime: [33m0.1151814171[39m,
+  totalTime: [33m1151.814171[39m,
+  iterations: [33m10000[39m,
+  opsPerSec: [33m8681.956040980156[39m,
+  minTime: [33m0.04902799999990748[39m,
+  maxTime: [33m7.777552000000014[39m
+}
+Without effect: {
+  name: [32m'Access without effect'[39m,
+  avgTime: [33m0.00050799397[39m,
+  totalTime: [33m50.799397[39m,
+  iterations: [33m100000[39m,
+  opsPerSec: [33m1968527.3035819698[39m,
+  minTime: [33m0.00032599999985905015[39m,
+  maxTime: [33m0.6146860000001197[39m
+}
+
+[90mstdout[2m | tests/profiling/deep-watch.profile.test.ts[2m > [22m[2mDeep Watch Performance[2m > [22m[2mDeep Watch Change Detection[2m > [22m[2mbenchmark: nested property change detection
+[22m[39m{
+  name: [32m'Deep watch change detection'[39m,
+  avgTime: [33m0.09096145599999977[39m,
+  totalTime: [33m90.96145599999977[39m,
+  iterations: [33m1000[39m,
+  opsPerSec: [33m10993.667471637686[39m,
+  minTime: [33m0.06931200000008175[39m,
+  maxTime: [33m1.5066699999999855[39m
+}
+Deep watch triggered 2000 times
+
+[90mstdout[2m | tests/profiling/proxy.profile.test.ts[2m > [22m[2mProxy Performance Profiling[2m > [22m[2mProperty Access Overhead[2m > [22m[2mbenchmark: nested property access overhead
+[22m[39mBENCHMARK:{"name":"Plain nested access","avgTime":0.00007597286200000008,"opsPerSec":13162594.822345892,"minTime":0.000019999999949504854,"maxTime":0.8883450000000721,"iterations":500000,"totalTime":37.98643100000004}
+BENCHMARK:{"name":"Reactive nested access","avgTime":0.0013661866659999996,"opsPerSec":731964.3976088992,"minTime":0.0010819999999966967,"maxTime":0.39108699999997043,"iterations":500000,"totalTime":683.0933329999998}
+=== Profile Comparison ===
+
+Results (sorted by speed):
+Plain nested access:
+  Iterations: 500,000
+  Total time: 37.99ms
+  Average: 0.000076ms/op
+  Min: 0.000020ms
+  Max: 0.888345ms
+  Throughput: 13,162,594.822 ops/sec
+
+Reactive nested access:
+  Iterations: 500,000
+  Total time: 683.09ms
+  Average: 0.001366ms/op
+  Min: 0.001082ms
+  Max: 0.391087ms
+  Throughput: 731,964.398 ops/sec
+
+Fastest: Plain nested access
+Slowest: Reactive nested access
+
+Comparisons:
+  Plain nested access is 17.98x faster than Reactive nested access (0.001290ms difference)
+
+
+[90mstdout[2m | tests/profiling/array.profile.test.ts[2m > [22m[2mArray Performance Profiling[2m > [22m[2mArray Mutations[2m > [22m[2mbenchmark: array iteration methods
+[22m[39mMap: {
+  name: [32m'Array.map()'[39m,
+  avgTime: [33m0.07716347400000018[39m,
+  totalTime: [33m77.16347400000018[39m,
+  iterations: [33m1000[39m,
+  opsPerSec: [33m12959.499464733764[39m,
+  minTime: [33m0.06753300000013951[39m,
+  maxTime: [33m0.8688760000000002[39m
+}
+Filter: {
+  name: [32m'Array.filter()'[39m,
+  avgTime: [33m0.07539246400000002[39m,
+  totalTime: [33m75.39246400000002[39m,
+  iterations: [33m1000[39m,
+  opsPerSec: [33m13263.925158355347[39m,
+  minTime: [33m0.06789200000002893[39m,
+  maxTime: [33m0.6840760000000046[39m
+}
+
+[90mstdout[2m | tests/profiling/change.profile.test.ts[2m > [22m[2mChange Detection Performance[2m > [22m[2mEffect Dispatch[2m > [22m[2mbenchmark: single property change triggering multiple effects
+[22m[39m{
+  name: [32m'Single change, 10 effects'[39m,
+  avgTime: [33m0.08983235199999991[39m,
+  totalTime: [33m89.8323519999999[39m,
+  iterations: [33m1000[39m,
+  opsPerSec: [33m11131.847020993073[39m,
+  minTime: [33m0.07477400000016132[39m,
+  maxTime: [33m1.2623599999997168[39m
+}
+Total effect calls: 20010
+
+[90mstdout[2m | tests/profiling/tracking.profile.test.ts[2m > [22m[2mDependency Tracking Performance[2m > [22m[2mdependant() Overhead[2m > [22m[2mbenchmark: multiple property accesses in effect
+[22m[39m{
+  name: [32m'Multiple property accesses'[39m,
+  avgTime: [33m0.0675370358[39m,
+  totalTime: [33m337.68517900000006[39m,
+  iterations: [33m5000[39m,
+  opsPerSec: [33m14806.690701696443[39m,
+  minTime: [33m0.052669000000150845[39m,
+  maxTime: [33m1.8655619999999544[39m
+}
+
+[90mstdout[2m | tests/profiling/array.profile.test.ts[2m > [22m[2mArray Performance Profiling[2m > [22m[2mArray Length Changes[2m > [22m[2mbenchmark: length changes triggering effects
+[22m[39m{
+  name: [32m'Array push with length tracking'[39m,
+  avgTime: [33m0.14621660500000008[39m,
+  totalTime: [33m146.21660500000007[39m,
+  iterations: [33m1000[39m,
+  opsPerSec: [33m6839.168506203516[39m,
+  minTime: [33m0.123211000000083[39m,
+  maxTime: [33m1.467797999999675[39m
+}
+Effect called 2001 times
+
+ [32m✓[39m tests/profiling/array.profile.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 1907[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: reactive array index access [33m 1137[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: array iteration methods [33m 337[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: length changes triggering effects [33m 329[2mms[22m[39m
+[90mstdout[2m | tests/profiling/proxy.profile.test.ts[2m > [22m[2mProxy Performance Profiling[2m > [22m[2mProperty Access Overhead[2m > [22m[2mbenchmark: property writes overhead
+[22m[39mBENCHMARK:{"name":"Plain object write","avgTime":0.0000628469559999994,"opsPerSec":15911669.612129018,"minTime":0.00002099999983329326,"maxTime":0.49496399999998175,"iterations":500000,"totalTime":31.423477999999704}
+BENCHMARK:{"name":"Reactive object write","avgTime":0.0008456703179999995,"opsPerSec":1182493.9089324884,"minTime":0.0006370000000970322,"maxTime":3.379733000000215,"iterations":500000,"totalTime":422.83515899999975}
+=== Profile Comparison ===
+
+Results (sorted by speed):
+Plain object write:
+  Iterations: 500,000
+  Total time: 31.42ms
+  Average: 0.000063ms/op
+  Min: 0.000021ms
+  Max: 0.494964ms
+  Throughput: 15,911,669.612 ops/sec
+
+Reactive object write:
+  Iterations: 500,000
+  Total time: 422.84ms
+  Average: 0.000846ms/op
+  Min: 0.000637ms
+  Max: 3.379733ms
+  Throughput: 1,182,493.909 ops/sec
+
+Fastest: Plain object write
+Slowest: Reactive object write
+
+Comparisons:
+  Plain object write is 13.46x faster than Reactive object write (0.000783ms difference)
+
+
+[90mstdout[2m | tests/profiling/tracking.profile.test.ts[2m > [22m[2mDependency Tracking Performance[2m > [22m[2mdependant() Overhead[2m > [22m[2mbenchmark: array iteration with tracking
+[22m[39m{
+  name: [32m'Array iteration with tracking'[39m,
+  avgTime: [33m0.07696794200000022[39m,
+  totalTime: [33m76.96794200000022[39m,
+  iterations: [33m1000[39m,
+  opsPerSec: [33m12992.422221708839[39m,
+  minTime: [33m0.06301699999994526[39m,
+  maxTime: [33m1.2372479999999086[39m
+}
+
+[90mstdout[2m | tests/profiling/tracking.profile.test.ts[2m > [22m[2mDependency Tracking Performance[2m > [22m[2mEffect Registration[2m > [22m[2mbenchmark: creating and cleaning up effects
+[22m[39m{
+  name: [32m'Create and cleanup effect'[39m,
+  avgTime: [33m0.059346602600000006[39m,
+  totalTime: [33m296.733013[39m,
+  iterations: [33m5000[39m,
+  opsPerSec: [33m16850.164224902066[39m,
+  minTime: [33m0.049073000000134925[39m,
+  maxTime: [33m3.3050750000002154[39m
+}
+
+[90mstdout[2m | tests/profiling/tracking.profile.test.ts[2m > [22m[2mDependency Tracking Performance[2m > [22m[2mEffect Registration[2m > [22m[2mbenchmark: effect cleanup overhead
+[22m[39m{
+  name: [32m'Bulk effect cleanup'[39m,
+  avgTime: [33m0.05548700000008466[39m,
+  totalTime: [33m0.05548700000008466[39m,
+  iterations: [33m1[39m,
+  opsPerSec: [33m18022.23944344575[39m,
+  minTime: [33m0.0539890000000014[39m,
+  maxTime: [33m0.0539890000000014[39m
+}
+
+ [32m✓[39m tests/profiling/tracking.profile.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 2541[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: property access with active effect [33m 1474[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: multiple property accesses in effect [33m 425[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: creating and cleaning up effects [33m 374[2mms[22m[39m
+[90mstdout[2m | tests/profiling/change.profile.test.ts[2m > [22m[2mChange Detection Performance[2m > [22m[2mEffect Dispatch[2m > [22m[2mbenchmark: multiple property changes
+[22m[39m{
+  name: [32m'Multiple changes'[39m,
+  avgTime: [33m0.19693802719999995[39m,
+  totalTime: [33m984.6901359999997[39m,
+  iterations: [33m5000[39m,
+  opsPerSec: [33m5077.739501190658[39m,
+  minTime: [33m0.16964899999993577[39m,
+  maxTime: [33m2.1853259999998045[39m
+}
+
+[90mstdout[2m | tests/profiling/change.profile.test.ts[2m > [22m[2mChange Detection Performance[2m > [22m[2mBatching[2m > [22m[2mbenchmark: batched changes vs individual changes
+[22m[39mIndividual: {
+  name: [32m'10 individual changes'[39m,
+  avgTime: [33m0.6546848540000001[39m,
+  totalTime: [33m654.6848540000001[39m,
+  iterations: [33m1000[39m,
+  opsPerSec: [33m1527.452474102906[39m,
+  minTime: [33m0.580363999999463[39m,
+  maxTime: [33m2.226778000000195[39m
+}
+Batched: {
+  name: [32m'10 batched changes'[39m,
+  avgTime: [33m0.6128065409999999[39m,
+  totalTime: [33m612.8065409999999[39m,
+  iterations: [33m1000[39m,
+  opsPerSec: [33m1631.8363677518255[39m,
+  minTime: [33m0.5582119999999122[39m,
+  maxTime: [33m1.9550419999995938[39m
+}
+Batching is 1.07x faster
+
+[90mstdout[2m | tests/profiling/change.profile.test.ts[2m > [22m[2mChange Detection Performance[2m > [22m[2mDeep Changes[2m > [22m[2mbenchmark: nested property changes
+[22m[39m{
+  name: [32m'Nested property change'[39m,
+  avgTime: [33m0.06701901179999986[39m,
+  totalTime: [33m335.0950589999993[39m,
+  iterations: [33m5000[39m,
+  opsPerSec: [33m14921.139138610846[39m,
+  minTime: [33m0.05925500000012107[39m,
+  maxTime: [33m0.9892189999991388[39m
+}
+
+[90mstdout[2m | tests/profiling/change.profile.test.ts[2m > [22m[2mChange Detection Performance[2m > [22m[2mDeep Changes[2m > [22m[2mbenchmark: object replacement vs property change
+[22m[39mProperty change: {
+  name: [32m'Property change'[39m,
+  avgTime: [33m0.0007022594000000026[39m,
+  totalTime: [33m3.511297000000013[39m,
+  iterations: [33m5000[39m,
+  opsPerSec: [33m1423975.243336004[39m,
+  minTime: [33m0.0005810000002384186[39m,
+  maxTime: [33m0.06359499999962281[39m
+}
+Object replacement: {
+  name: [32m'Object replacement'[39m,
+  avgTime: [33m0.0020464545999999244[39m,
+  totalTime: [33m10.232272999999623[39m,
+  iterations: [33m5000[39m,
+  opsPerSec: [33m488649.98031231033[39m,
+  minTime: [33m0.001322000000072876[39m,
+  maxTime: [33m0.09776500000043598[39m
+}
+
+ [32m✓[39m tests/profiling/change.profile.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 5775[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: single property change triggering one effect [33m 1436[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: multiple property changes [33m 1190[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: batched changes vs individual changes [33m 2517[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: nested property changes [33m 408[2mms[22m[39m
+[90mstdout[2m | tests/profiling/proxy.profile.test.ts[2m > [22m[2mProxy Performance Profiling[2m > [22m[2mReactive Object Creation[2m > [22m[2mbenchmark: reactive() creation overhead
+[22m[39mBENCHMARK:{"name":"Plain object iteration","avgTime":0.004702590000001692,"opsPerSec":212648.77439871224,"minTime":0.0044100000000071304,"maxTime":0.01590699999997014,"iterations":100,"totalTime":0.4702590000001692}
+BENCHMARK:{"name":"Reactive() creation","avgTime":5.165090289999998,"opsPerSec":193.6074577313924,"minTime":4.923984999999448,"maxTime":6.605196999999862,"iterations":100,"totalTime":516.5090289999998}
+=== Profile Comparison ===
+
+Results (sorted by speed):
+Plain object iteration:
+  Iterations: 100
+  Total time: 0.47ms
+  Average: 0.004703ms/op
+  Min: 0.004410ms
+  Max: 0.015907ms
+  Throughput: 212,648.774 ops/sec
+
+Reactive() creation:
+  Iterations: 100
+  Total time: 516.51ms
+  Average: 5.165090ms/op
+  Min: 4.923985ms
+  Max: 6.605197ms
+  Throughput: 193.607 ops/sec
+
+Fastest: Plain object iteration
+Slowest: Reactive() creation
+
+Comparisons:
+  Plain object iteration is 1098.35x faster than Reactive() creation (5.160388ms difference)
+
+
+[90mstdout[2m | tests/profiling/proxy.profile.test.ts[2m > [22m[2mProxy Performance Profiling[2m > [22m[2mReactive Object Creation[2m > [22m[2mbenchmark: repeated reactive() calls on same object
+[22m[39mBENCHMARK:{"name":"Reactive() cache lookup","avgTime":0.0001630056420000001,"opsPerSec":6134756.97976147,"minTime":0.00011499999891384505,"maxTime":0.5931380000001809,"iterations":1000000,"totalTime":163.00564200000008}
+Reactive() cache lookup:
+  Iterations: 1,000,000
+  Total time: 163.01ms
+  Average: 0.000163ms/op
+  Min: 0.000115ms
+  Max: 0.593138ms
+  Throughput: 6,134,756.98 ops/sec
+
+[90mstdout[2m | tests/profiling/proxy.profile.test.ts[2m > [22m[2mProxy Performance Profiling[2m > [22m[2mPrototype Chain Traversal[2m > [22m[2mbenchmark: inherited property access
+[22m[39mBENCHMARK:{"name":"Plain inherited access","avgTime":0.000053219598000003316,"opsPerSec":18790070.530031767,"minTime":0.00002099999983329326,"maxTime":0.022667000001092674,"iterations":500000,"totalTime":26.609799000001658}
+BENCHMARK:{"name":"Reactive inherited access","avgTime":0.000374633936000002,"opsPerSec":2669272.3320185137,"minTime":0.00031399999897985253,"maxTime":0.029660999998668558,"iterations":500000,"totalTime":187.316968000001}
+=== Profile Comparison ===
+
+Results (sorted by speed):
+Plain inherited access:
+  Iterations: 500,000
+  Total time: 26.61ms
+  Average: 0.000053ms/op
+  Min: 0.000021ms
+  Max: 0.022667ms
+  Throughput: 18,790,070.53 ops/sec
+
+Reactive inherited access:
+  Iterations: 500,000
+  Total time: 187.32ms
+  Average: 0.000375ms/op
+  Min: 0.000314ms
+  Max: 0.029661ms
+  Throughput: 2,669,272.332 ops/sec
+
+Fastest: Plain inherited access
+Slowest: Reactive inherited access
+
+Comparisons:
+  Plain inherited access is 7.04x faster than Reactive inherited access (0.000321ms difference)
+
+
+ [32m✓[39m tests/profiling/proxy.profile.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 8305[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: reactive vs plain object property access [33m 827[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: nested property access overhead [33m 745[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: property writes overhead [33m 464[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: reactive() creation overhead [33m 5877[2mms[22m[39m
+[90mstdout[2m | tests/profiling/deep-watch.profile.test.ts[2m > [22m[2mDeep Watch Performance[2m > [22m[2mDeep Watch Change Detection[2m > [22m[2mbenchmark: deep watch with multiple nested changes
+[22m[39m{
+  name: [32m'Multiple nested changes'[39m,
+  avgTime: [33m6.1445758999999995[39m,
+  totalTime: [33m614.45759[39m,
+  iterations: [33m100[39m,
+  opsPerSec: [33m162.7451619565803[39m,
+  minTime: [33m5.806672000000617[39m,
+  maxTime: [33m6.905382000000827[39m
+}
+
+ [32m✓[39m tests/profiling/deep-watch.profile.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 8368[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: deep watch traversal time [33m 983[2mms[22m[39m
+       [33m[2m✓[22m[39m benchmark: deep watch with multiple nested changes [33m 6870[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m65 passed[39m[22m[90m (65)[39m
+[2m      Tests [22m [1m[32m756 passed[39m[22m[90m (756)[39m
+[2m   Start at [22m 06:25:59
+[2m   Duration [22m 8.95s[2m (transform 6.14s, setup 0ms, import 15.31s, tests 34.01s, environment 8ms)[22m
+
+
+> mutts@1.0.11 test:browser
+> TEST_ENV=browser vitest run --browser
+
+
+[1m[46m RUN [49m[22m [36mv4.0.18 [39m[90m/home/fmdm/dev/ownk/mutts[39m
+
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/effect-cycle.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | tests/async-hook.test.ts[2m > [22m[2mAsync Hook Direct Tests[2m > [22m[2mBasic setTimeout
+[22m[39m[DEBUG] asyncHooks object id: no-id
+[90mstdout[2m | tests/async-hook.test.ts[2m > [22m[2mAsync Hook Direct Tests[2m > [22m[2mBasic setTimeout
+[22m[39m[DEBUG] addHook implementation: addHook(hook) {
+    hooks.add(hook);
+    return () => hooks.delete(hook);
+  }
+[90mstdout[2m | tests/reactive/catch.test.ts[2m > [22m[2mcaught - zone re-entry bug[2m > [22m[2mshould handle child throwing during parent first run without zone re-entry error
+[22m[39mParent caught: Child error on first run
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/memoize.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+[90mstdout[2m | tests/async-hook.test.ts[2m > [22m[2mAsync Hook Direct Tests[2m > [22m[2mmultiple await resumptions
+[22m[39mCallStack Multiple: [
+  "H1:hook",
+  "H1:restore",
+  "resolve-task",
+  "after-await-1",
+  "H1:hook",
+  "H1:hook",
+  "H1:hook",
+  "H1:hook",
+  "H1:restore",
+  "middle-task",
+  "H1:restore",
+  "after-await-2",
+  "H1:undo",
+  "H1:undo",
+  "H1:undo"
+]
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/nested-lift.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/array.test.ts [2m([22m[2m62 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/interface.test.ts [2m([22m[2m47 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/async-hook.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/map.test.ts [2m([22m[2m47 tests[22m[2m)[22m[32m 34[2mms[22m[39m
+[90mstderr[2m | tests/reactive/catch.test.ts[2m > [22m[2mError Propagation - Additional Tests[2m > [22m[2mError Recovery Patterns[2m > [22m[2mshould handle cleanup errors gracefully
+[22m[39mError during effect cleanup [Error: Cleanup error]
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/catch.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 52[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/when.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 60[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/resource.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 108[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/pure-objects-and-prototypes.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/deep-touch-filtering.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+[90mstderr[2m | tests/iterableWeak.test.ts[2m > [22m[2mIterableWeakMap[2m > [22m[2mshould handle garbage collected entries
+[22m[39mGC not available, skipping garbage collection test
+[90mstderr[2m | tests/iterableWeak.test.ts[2m > [22m[2mIterableWeakSet[2m > [22m[2mshould handle garbage collected entries
+[22m[39mGC not available, skipping garbage collection test
+ [32m✓[39m [30m[43m chromium [49m[39m tests/iterableWeak.test.ts [2m([22m[2m33 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/morph.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/eventful.test.ts [2m([22m[2m34 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/atomic.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/morph-lift-flat.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/array-optimisation.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/indexable.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/promiseChain.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/decorator.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/diff.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/decorators-unreactive.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/memoize-defaulted-props.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/record.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/decorators-reactive.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/watch-flavor.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/set.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/analysis_all_props.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/bidi.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/broken-state.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/async-cancel.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 780[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/zone.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/effect-lifecycle.test.ts [2m([22m[2m13 tests[22m[2m | [22m[33m4 skipped[39m[2m)[22m[32m 4[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/attend.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/non-reactive.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/memoize-lenient.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/reactive.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/keys-of.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/recursive-touching-option.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/cleanup-reason.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/flavored.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/flavored-robustness.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/memoize_object.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/batch-subqueue.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive-base-mixin.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/memoize-discrepancy.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/lineage.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 1[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/memoize-lazy.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 1[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/integration.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 1[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/cumulated-reasons.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 1[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/root-function.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/mixins.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/lineage-tracking-simple.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/prototype-chain.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [2m[90m↓[39m[22m [30m[43m chromium [49m[39m tests/destroyable.test.ts [2m([22m[2m7 tests[22m[2m | [22m[33m7 skipped[39m[2m)[22m
+[90mstdout[2m | unknown test
+[22m[39m🦴 Mutts DevTools enabled automatically in development mode
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/atomic-nested.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 1[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/reactive/proxy-outer-wrap.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m [30m[43m chromium [49m[39m tests/std-decorators.test.ts [2m([22m[2m28 tests[22m[2m)[22m[33m 1432[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m58 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (59)[39m
+[2m      Tests [22m [1m[32m712 passed[39m[22m[2m | [22m[33m11 skipped[39m[90m (723)[39m
+[2m   Start at [22m 06:26:09
+[2m   Duration [22m 3.31s[2m (transform 0ms, setup 0ms, import 6.72s, tests 2.84s, environment 0ms)[22m
+

@@ -5,7 +5,7 @@
 The `atomic` function wraps a function to batch all reactive effects triggered within it, ensuring effects run only once after the function completes. It can be used both as a function wrapper and as a decorator.
 
 ```typescript
-import { atomic, reactive, effect } from 'mutts/reactive'
+import { atomic, reactive, effect } from 'mutts'
 
 const state = reactive({ a: 0, b: 0 })
 
@@ -48,7 +48,7 @@ The wrapped function preserves its signature (parameters and return value), and 
 While `atomic()` **wraps** a function for later calls, `atom()` **runs** a function immediately and atomically. It always executes right away, even inside a nested batch.
 
 ```typescript
-import { atom, reactive, effect } from 'mutts/reactive'
+import { atom, reactive, effect } from 'mutts'
 
 const state = reactive({ a: 0, b: 0 })
 
@@ -85,9 +85,9 @@ update(1, 2)  // runs when called
 When an effect needs to perform an action that would modify state the effect depends on, this can create a reactive cycle. The `addBatchCleanup` function (also exported as `defer` for semantic clarity) allows you to defer such work until after the current batch of effects completes.
 
 ```typescript
-import { addBatchCleanup, effect, reactive } from 'mutts/reactive'
+import { addBatchCleanup, effect, reactive } from 'mutts'
 // or use the semantic alias:
-// import { defer } from 'mutts/reactive'
+// import { defer } from 'mutts'
 
 const state = reactive({ 
   items: [],
@@ -298,7 +298,7 @@ effect(() => {
 Creates a bidirectional binding between a reactive value and a non-reactive external value (like DOM elements), automatically preventing infinite loops.
 
 ```typescript
-import { biDi, reactive } from 'mutts/reactive'
+import { biDi, reactive } from 'mutts'
 
 const model = reactive({ value: '' })
 
@@ -1228,7 +1228,7 @@ state.items = fetchedItems // deep touch diffs old vs new per-index — no lift 
 **Signature**
 
 ```typescript
-import { morph } from 'mutts/reactive'
+import { morph } from 'mutts'
 
 function morph<I, O>(
   source: readonly I[] | (() => readonly I[]),
@@ -1253,7 +1253,7 @@ function morph<I, O>(
 **Basic usage**
 
 ```typescript
-import { morph, reactive, effect } from 'mutts/reactive'
+import { morph, reactive, effect } from 'mutts'
 
 const items = reactive(['alice', 'bob', 'charlie'])
 const upper = morph(items, name => name.toUpperCase())
@@ -1354,7 +1354,7 @@ pure[0]     // 10 — stale, no per-item effect to invalidate
 **Signature**
 
 ```typescript
-import { memoize } from 'mutts/reactive'
+import { memoize } from 'mutts'
 
 type Memoizable = object | any[] | symbol
 
@@ -1379,7 +1379,7 @@ function memoize<Result>(
 **Basic usage**
 
 ```typescript
-import { effect, memoize, reactive } from 'mutts/reactive'
+import { effect, memoize, reactive } from 'mutts'
 
 const source = reactive({ value: 1 })
 const args = { node: source }
@@ -1425,7 +1425,7 @@ Use `maxArgs` when the memoized function should only consider the first _n_ argu
 A flavored variant that gracefully handles non-WeakKey arguments (primitives, `null`, `undefined`). Instead of throwing, it falls back to recomputing the function without caching.
 
 ```typescript
-import { memoize } from 'mutts/reactive'
+import { memoize } from 'mutts'
 
 const process = memoize.lenient((value: string | { data: string }) => {
   return typeof value === 'string' ? value.toUpperCase() : value.data
@@ -1446,7 +1446,7 @@ This is useful when a memoized function may receive both objects and primitives,
 Apply `@memoize` (or `@memoize.lenient`) to class getters or methods to share the same cache semantics. Getters cache per instance; methods cache per instance and argument tuple.
 
 ```typescript
-import { memoize, reactive } from 'mutts/reactive'
+import { memoize, reactive } from 'mutts'
 
 class Example {
   state = reactive({ count: 0 })

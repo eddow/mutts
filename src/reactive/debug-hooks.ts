@@ -4,8 +4,8 @@ export interface DebugHooks {
 	isDevtoolsEnabled: () => boolean
 	registerEffect: (effect: EffectTrigger) => void
 	getTriggerChain: (effect: EffectTrigger) => string[]
-	captureStack: () => unknown
-	captureLineage: () => unknown
+	captureStack: (error?: unknown) => unknown
+	captureLineage: (effect?: EffectTrigger, stack?: unknown) => unknown
 	formatStack: (stack: unknown) => unknown[]
 	recordTriggerLink: (
 		source: EffectTrigger | undefined,
@@ -14,6 +14,7 @@ export interface DebugHooks {
 		prop: any,
 		evolution: Evolution
 	) => void
+	decorateError: (error: unknown, trigger: EffectTrigger) => void
 }
 
 export const debugHooks: DebugHooks = {
@@ -24,6 +25,7 @@ export const debugHooks: DebugHooks = {
 	captureLineage: () => new Error().stack,
 	formatStack: (stack: unknown) => [stack],
 	recordTriggerLink: () => {},
+	decorateError: () => {},
 }
 
 export function setDebugHooks(hooks: Partial<DebugHooks>) {

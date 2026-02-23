@@ -496,7 +496,25 @@ export function enableDevTools() {
 			return ['\n', stack]
 		},
 		recordTriggerLink: recordTriggerLink,
+		decorateError: (error, trigger) => {
+			if (
+				options.introspection?.logErrors &&
+				error &&
+				typeof error === 'object' &&
+				'stack' in error &&
+				!('lineage' in error)
+			) {
+				const lineage = getLineage(trigger, getStackFrame(error as Error) as any)
+				;(error as any).lineage = wrapLineageForDebug(lineage)
+			}
+		},
 	})
+
+	const originalWarn = options.warn
+	options.warn = (...args: any[]) => {
+		const lineage = captureLineage()
+		originalWarn(...args, lineage)
+	}
 }
 
 export function forceEnableGraphTracking() {

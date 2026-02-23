@@ -42,7 +42,7 @@ A reactive object implementing the `Resource<T>` interface.
 ### Basic Async Fetch
 
 ```typescript
-import { reactive, resource } from 'mutts/reactive'
+import { reactive, resource } from 'mutts'
 
 // ID usually comes from another reactive source
 const state = reactive({ userId: 1 })

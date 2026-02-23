@@ -299,9 +299,9 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 			const gatherReasons = options.introspection.gatherReasons
 			const lineageConfig = gatherReasons.lineages
 
-			let touchStack: unknown | undefined
+			let touchLineage: unknown | undefined
 			if (lineageConfig === 'touch' || lineageConfig === 'both') {
-				touchStack = debugHooks.captureLineage()
+				touchLineage = debugHooks.captureLineage()
 			}
 
 			for (const effect of combinedEffects) {
@@ -316,7 +316,7 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 						obj: unwrap(target),
 						evolution,
 						dependency: dependencyStack,
-						touch: touchStack,
+						touch: touchLineage,
 					})
 				}
 			}
