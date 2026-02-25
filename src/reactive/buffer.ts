@@ -396,7 +396,7 @@ export function morphMap<K, V, O>(
 			)
 		} else {
 			const stop = track(() =>
-				effect.opaque(() => {
+				effect.named(`morph:${fn.name}:${key}`).opaque(() => {
 					cache.set(key, fn(source.get(key)))
 					return (reason) => {
 						cache.delete(key)
@@ -511,7 +511,7 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 			cache[key] = track(() => fn(val))
 		} else {
 			const stop = track(() =>
-				effect.opaque(() => {
+				effect.named(`morph:${fn.name}:${key}`).opaque(() => {
 					cache[key] = fn(source[key])
 					return (reason) => {
 						delete cache[key]

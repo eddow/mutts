@@ -1,9 +1,9 @@
 import { FoolProof } from '../utils'
 import { touched } from './change'
 import { atomic } from './effects'
-import { makeReactiveEntriesIterator, makeReactiveIterator } from './non-reactive'
 import { reactive } from './proxy'
 import { dependant } from './tracking'
+import { makeReactiveEntriesIterator, makeReactiveIterator } from './iterator-helpers'
 import { keysOf, unwrap } from './types'
 
 function* index(i: number, { length = true } = {}): IterableIterator<number | 'length'> {
@@ -83,6 +83,11 @@ export abstract class ReactiveArrayWrapper extends Array {
 	@atomic
 	fill(value: any, start?: number, end?: number): this {
 		return super.fill(unwrap(value), start, end) as this
+	}
+
+	@atomic
+	copyWithin(target: number, start: number, end?: number): this {
+		return super.copyWithin(target, start, end) as this
 	}
 
 	filter<S>(predicate: (value: any, index: number, array: any[]) => value is S, thisArg?: any): S[]

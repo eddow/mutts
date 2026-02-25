@@ -1,13 +1,30 @@
 import { debugHooks } from './debug-hooks'
 import { getActiveEffect } from './effect-context'
-import { effectToReactiveObjects, watchers } from './registry'
+import { effectToReactiveObjects, getEffectNode, watchers } from './registry'
 import { allProps, type EffectTrigger, keysOf, options, unwrap } from './types'
 
 // Track dependency stacks per (obj, prop, effect)
 let dependencyStacks = new WeakMap<object, Map<any, Map<EffectTrigger, unknown>>>()
+let assertUntrackedFlag = false
 
 export function resetTracking() {
 	dependencyStacks = new WeakMap()
+}
+
+/**
+ * Executes a function and throws if any reactive dependencies are tracked during execution.
+ * Used to assert that code runs in an untracked context.
+ */
+export function assertUntracked<T>(fn: () => T): T {
+	if (assertUntrackedFlag) {
+		throw new Error('assertUntracked: nested calls are not supported')
+	}
+	assertUntrackedFlag = true
+	try {
+		return fn()
+	} finally {
+		assertUntrackedFlag = false
+	}
 }
 
 function getDependencyStack(effect: EffectTrigger, obj: object, prop: any): unknown | undefined {
@@ -24,6 +41,11 @@ export { getDependencyStack }
  * @param prop - The property name (defaults to allProps)
  */
 export function dependant(obj: any, prop: any = allProps) {
+	if (assertUntrackedFlag) {
+		throw new Error(
+			`Reactive dependency tracking detected in assertUntracked context: ${String(prop)} on ${obj}`
+		)
+	}
 	obj = unwrap(obj)
 	const currentActiveEffect = getActiveEffect()
 
@@ -31,9 +53,9 @@ export function dependant(obj: any, prop: any = allProps) {
 	if (!currentActiveEffect || (typeof prop === 'symbol' && prop !== allProps && prop !== keysOf))
 		return
 
-	if ('dependencyHook' in currentActiveEffect) {
-		// @ts-expect-error We declared it nowhere - it's okay as it's really internal and for edge-case debug purpose only
-		currentActiveEffect.dependencyHook(obj, prop)
+	const node = getEffectNode(currentActiveEffect)
+	if ('dependencyHook' in node) {
+		node.dependencyHook(obj, prop)
 	}
 	let objectWatchers = watchers.get(obj)
 	if (!objectWatchers) {

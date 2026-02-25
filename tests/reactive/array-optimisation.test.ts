@@ -104,12 +104,12 @@ describe('ReactiveArray Optimization Tests', () => {
 				expect(result).toBe(true)
 
 				// Pushing an element that satisfies condition -> result true
-				atomic(() => reactiveArray.push(2))()
+				reactiveArray.push(2)
 				expect(effectCount).toBe(2)
 				expect(result).toBe(true)
 
 				// Pushing an element that fails condition -> result false
-				atomic(() => reactiveArray.push(5))()
+				reactiveArray.push(5)
 				expect(effectCount).toBe(3)
 				expect(result).toBe(false)
 			})
@@ -254,7 +254,7 @@ describe('ReactiveArray Optimization Tests', () => {
 
 			// Push new element. Index 2 (value 3) is unchanged.
 			// But at(-1) should now point to index 3 (value 4).
-			atomic(() => reactiveArray.push(4))()
+			reactiveArray.push(4)
 
 			expect(effectCount).toBe(2)
 			expect(lastValue).toBe(4)
@@ -325,7 +325,7 @@ describe('ReactiveArray Optimization Tests', () => {
 			expect(result).toBeUndefined()
 
 			// Push 3. Length changes.
-			atomic(() => reactiveArray.push(3))()
+			reactiveArray.push(3)
 			expect(effectCount).toBe(2)
 			expect(result).toBe(3)
 		})

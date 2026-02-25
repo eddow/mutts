@@ -338,7 +338,7 @@ describe('reactive function', () => {
 	})
 
 	it('should warn when used with inheritance', () => {
-		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+		const warnSpy = vi.spyOn(reactiveOptions, 'warn').mockImplementation(() => {})
 
 		class BaseClass {
 			baseProp = 'base'
@@ -354,8 +354,8 @@ describe('reactive function', () => {
 		const _instance = new DerivedClass()
 
 		// The warning should be triggered when creating the instance
-		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('has been inherited by'))
+		expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('has been inherited by'))
 
-		consoleSpy.mockRestore()
+		warnSpy.mockRestore()
 	})
 })

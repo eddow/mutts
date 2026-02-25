@@ -1,9 +1,9 @@
 import { contentRef } from '../utils'
 import { touched, touched1 } from './change'
 import { batch } from './effects'
-import { makeReactiveEntriesIterator, makeReactiveIterator } from './non-reactive'
 import { reactive } from './proxy'
 import { dependant } from './tracking'
+import { makeReactiveEntriesIterator, makeReactiveIterator } from './iterator-helpers'
 
 /**
  * Reactive wrapper around JavaScript's WeakSet class
@@ -12,7 +12,7 @@ import { dependant } from './tracking'
 export abstract class ReactiveWeakSet<T extends object> extends WeakSet<T> {
 	add(value: T): this {
 		const had = this.has(value)
-		this.add(value)
+		super.add(value)
 		if (!had) {
 			// touch the specific value and the collection view
 			touched1(contentRef(this), { type: 'add', prop: value }, value)
@@ -23,14 +23,14 @@ export abstract class ReactiveWeakSet<T extends object> extends WeakSet<T> {
 
 	delete(value: T): boolean {
 		const had = this.has(value)
-		const res = this.delete(value)
+		const res = super.delete(value)
 		if (had) touched1(contentRef(this), { type: 'del', prop: value }, value)
 		return res
 	}
 
 	has(value: T): boolean {
 		dependant(contentRef(this), value)
-		return this.has(value)
+		return super.has(value)
 	}
 }
 
@@ -48,7 +48,7 @@ export abstract class ReactiveSet<T> extends Set<T> {
 	add(value: T): this {
 		const had = this.has(value)
 		const reactiveValue = reactive(value)
-		this.add(reactiveValue)
+		super.add(reactiveValue)
 		if (!had) {
 			const evolution = { type: 'add', prop: reactiveValue } as const
 			// touch for value-specific and aggregate dependencies
@@ -62,7 +62,7 @@ export abstract class ReactiveSet<T> extends Set<T> {
 
 	clear(): void {
 		const hadEntries = this.size > 0
-		this.clear()
+		super.clear()
 		if (hadEntries) {
 			const evolution = { type: 'bunch', method: 'clear' } as const
 			batch(() => {
@@ -74,7 +74,7 @@ export abstract class ReactiveSet<T> extends Set<T> {
 
 	delete(value: T): boolean {
 		const had = this.has(value)
-		const res = this.delete(value)
+		const res = super.delete(value)
 		if (had) {
 			const evolution = { type: 'del', prop: value } as const
 			batch(() => {

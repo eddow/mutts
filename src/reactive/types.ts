@@ -59,6 +59,11 @@ export interface EffectAccess {
 	 * ```
 	 */
 	reaction: boolean | CleanupReason
+	/**
+	 * AbortSignal that is aborted when the effect is cleaned up or re-runs.
+	 * Use this to cancel async operations (like fetch) when the effect is no longer valid.
+	 */
+	signal: AbortSignal
 }
 // Zone-based async context preservation is implemented in zone.ts
 // It automatically preserves effect context across Promise boundaries (.then, .catch, .finally)
@@ -554,35 +559,6 @@ export const options = {
 		enableHistory: boolean
 		historySize: number
 	} | null,
-
-	/**
-	 * Configuration for zone hooks - control which async APIs are hooked
-	 * Each option controls whether the corresponding async API is wrapped to preserve effect context
-	 * Only applies when asyncMode is enabled (truthy)
-	 * @deprecated Should take all when we made sure PIXI.create, Game.create, ... are -> .root()
-	 */
-	zones: {
-		/**
-		 * Hook setTimeout to preserve effect context
-		 * @default true
-		 */
-		setTimeout: true,
-		/**
-		 * Hook setInterval to preserve effect context
-		 * @default true
-		 */
-		setInterval: true,
-		/**
-		 * Hook requestAnimationFrame (runs in untracked context when hooked)
-		 * @default true
-		 */
-		requestAnimationFrame: true,
-		/**
-		 * Hook queueMicrotask to preserve effect context
-		 * @default true
-		 */
-		queueMicrotask: true,
-	},
 }
 // biome-ignore-end lint/correctness/noUnusedFunctionParameters: Interface declaration with empty defaults
 

@@ -1119,6 +1119,7 @@ export const effect = named(
 				if (runningPromise) {
 					if (asyncMode === 'cancel' && cancelPrevious) {
 						// Cancel previous execution
+						abort()
 						cancelPrevious()
 						cancelPrevious = null
 						runningPromise = null
@@ -1231,6 +1232,7 @@ export const effect = named(
 				// Create cleanup function for next run
 				node.cleanup = (reason?: CleanupReason) => {
 					node.cleanup = undefined
+					abort()
 					cleanupReaction(reason)
 					delete node.catchers
 					// Remove this effect from all reactive objects it's watching
@@ -1241,13 +1243,9 @@ export const effect = named(
 							if (objectWatchers) {
 								for (const [prop, deps] of objectWatchers.entries()) {
 									deps.delete(runEffect)
-									if (deps.size === 0) {
-										objectWatchers.delete(prop)
-									}
+									if (deps.size === 0) objectWatchers.delete(prop)
 								}
-								if (objectWatchers.size === 0) {
-									watchers.delete(reactiveObj)
-								}
+								if (objectWatchers.size === 0) watchers.delete(reactiveObj)
 							}
 						}
 						effectToReactiveObjects.delete(runEffect)
@@ -1288,6 +1286,8 @@ export const effect = named(
 
 			// let thrower: CatchFunction | undefined // Moved inside runEffect
 			let effectStopped = false
+			let abortController: AbortController | undefined
+
 			const access: EffectAccess = {
 				tracked,
 				ascend: named(effectMarker.leave, (fn) =>
@@ -1295,12 +1295,16 @@ export const effect = named(
 				),
 				//named(effectMarker.enter, (fn) => ascended(fn)),
 				reaction: false,
+				get signal() {
+					if (!abortController) {
+						abortController = new AbortController()
+					}
+					return abortController.signal
+				},
 			}
 			let runningPromise: Promise<any> | null = null
 			let cancelPrevious: (() => void) | null = null
-			if (effectOptions?.dependencyHook) {
-				node.dependencyHook = effectOptions.dependencyHook
-			}
+			if (effectOptions?.dependencyHook) node.dependencyHook = effectOptions.dependencyHook
 			// Mark the runEffect callback with the original function as its root
 			markWithRoot(runEffect, fn)
 
@@ -1315,6 +1319,15 @@ export const effect = named(
 
 			// Store parent relationship for hierarchy traversal - ALREADY DONE ABOVE via getEffectNode
 
+			const abort = () => {
+				if (abortController) {
+					abortController.abort(
+						new ReactiveError('[reactive] Effect aborted due to dependency change or stop')
+					)
+					abortController = undefined
+				}
+			}
+
 			batch(runEffect, 'immediate')
 			// Only ROOT effects are registered for GC cleanup and zone tracking
 			const isRootEffect = !parent
@@ -1324,6 +1337,7 @@ export const effect = named(
 				effectStopped = true
 				node.stopped = true
 				// Cancel any running async work
+				abort()
 				if (cancelPrevious) {
 					cancelPrevious()
 					cancelPrevious = null

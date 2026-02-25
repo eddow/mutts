@@ -2,9 +2,9 @@ import { contentRef } from '../utils'
 import { touched, touched1 } from './change'
 import { notifyPropertyChange } from './deep-touch'
 import { batch } from './effects'
-import { makeReactiveEntriesIterator, makeReactiveIterator } from './non-reactive'
 import { reactive } from './proxy'
 import { dependant } from './tracking'
+import { makeReactiveEntriesIterator, makeReactiveIterator } from './iterator-helpers'
 import { keysOf } from './types'
 
 /**
@@ -15,7 +15,7 @@ export abstract class ReactiveWeakMap<K extends object, V> extends WeakMap<K, V>
 	// Implement WeakMap interface methods with reactivity
 	delete(key: K): boolean {
 		const hadKey = this.has(key)
-		const result = this.delete(key)
+		const result = super.delete(key)
 
 		if (hadKey) touched1(contentRef(this), { type: 'del', prop: key }, key)
 
@@ -24,12 +24,12 @@ export abstract class ReactiveWeakMap<K extends object, V> extends WeakMap<K, V>
 
 	get(key: K): V | undefined {
 		dependant(contentRef(this), key)
-		return reactive(this.get(key))
+		return reactive(super.get(key))
 	}
 
 	has(key: K): boolean {
 		dependant(contentRef(this), key)
-		return this.has(key)
+		return super.has(key)
 	}
 
 	set(key: K, value: V): this {
@@ -54,12 +54,12 @@ export abstract class ReactiveMap<K, V> extends Map<K, V> {
 	// Implement Map interface methods with reactivity
 	get size(): number {
 		dependant(this, 'size') // The ReactiveMap instance still goes through proxy
-		return this.size
+		return super.size
 	}
 
 	clear(): void {
 		const hadEntries = this.size > 0
-		this.clear()
+		super.clear()
 
 		if (hadEntries) {
 			const evolution = { type: 'bunch', method: 'clear' } as const
@@ -107,7 +107,7 @@ export abstract class ReactiveMap<K, V> extends Map<K, V> {
 	// Implement Map methods with reactivity
 	delete(key: K): boolean {
 		const hadKey = this.has(key)
-		const result = this.delete(key)
+		const result = super.delete(key)
 
 		if (hadKey) {
 			const evolution = { type: 'del', prop: key } as const
@@ -122,19 +122,19 @@ export abstract class ReactiveMap<K, V> extends Map<K, V> {
 
 	get(key: K): V | undefined {
 		dependant(contentRef(this), key)
-		return reactive(this.get(key))
+		return reactive(super.get(key))
 	}
 
 	has(key: K): boolean {
 		dependant(contentRef(this), key)
-		return this.has(key)
+		return super.has(key)
 	}
 
 	set(key: K, value: V): this {
 		const hadKey = this.has(key)
 		const oldValue = this.get(key)
 		const reactiveValue = reactive(value)
-		this.set(key, reactiveValue)
+		super.set(key, reactiveValue)
 
 		if (!hadKey || oldValue !== reactiveValue) {
 			batch(() => {

@@ -3,9 +3,9 @@ import {
 	cached,
 	debounce,
 	deprecated,
-	descriptor as describeDecorator,
 	descriptor,
 	isCached,
+	reactiveOptions,
 	throttle,
 } from 'mutts'
 
@@ -622,7 +622,7 @@ describe('throttle decorator', () => {
 
 describe('deprecated decorator with string parameter', () => {
 	it('should use custom warning message for methods', () => {
-		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+		const warnSpy = vi.spyOn(reactiveOptions, 'warn').mockImplementation(() => {})
 
 		class TestClass {
 			@deprecated('Use newMethod() instead')
@@ -634,15 +634,15 @@ describe('deprecated decorator with string parameter', () => {
 		const obj = new TestClass()
 		obj.oldMethod()
 
-		expect(consoleSpy).toHaveBeenCalledWith(
+		expect(warnSpy).toHaveBeenCalledWith(
 			'TestClass.oldMethod is deprecated: Use newMethod() instead'
 		)
 
-		consoleSpy.mockRestore()
+		warnSpy.mockRestore()
 	})
 
 	it('should use custom warning message for getters', () => {
-		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+		const warnSpy = vi.spyOn(reactiveOptions, 'warn').mockImplementation(() => {})
 
 		class TestClass {
 			@deprecated('Use newValue instead')
@@ -654,15 +654,15 @@ describe('deprecated decorator with string parameter', () => {
 		const obj = new TestClass()
 		obj.oldValue
 
-		expect(consoleSpy).toHaveBeenCalledWith(
+		expect(warnSpy).toHaveBeenCalledWith(
 			'TestClass.oldValue is deprecated: Use newValue instead'
 		)
 
-		consoleSpy.mockRestore()
+		warnSpy.mockRestore()
 	})
 
 	it('should use custom warning message for setters', () => {
-		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+		const warnSpy = vi.spyOn(reactiveOptions, 'warn').mockImplementation(() => {})
 
 		class TestClass {
 			@deprecated('Use setNewValue() instead')
@@ -674,15 +674,15 @@ describe('deprecated decorator with string parameter', () => {
 		const obj = new TestClass()
 		obj.oldValue = 'test'
 
-		expect(consoleSpy).toHaveBeenCalledWith(
+		expect(warnSpy).toHaveBeenCalledWith(
 			'TestClass.oldValue is deprecated: Use setNewValue() instead'
 		)
 
-		consoleSpy.mockRestore()
+		warnSpy.mockRestore()
 	})
 
 	it('should use custom warning message for classes', () => {
-		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+		const warnSpy = vi.spyOn(reactiveOptions, 'warn').mockImplementation(() => {})
 
 		@deprecated('Use NewClass instead')
 		class OldClass {
@@ -691,13 +691,13 @@ describe('deprecated decorator with string parameter', () => {
 
 		new OldClass()
 
-		expect(consoleSpy).toHaveBeenCalledWith('.constructor is deprecated: Use NewClass instead')
+		expect(warnSpy).toHaveBeenCalledWith('.constructor is deprecated: Use NewClass instead')
 
-		consoleSpy.mockRestore()
+		warnSpy.mockRestore()
 	})
 
 	it('should work with different custom messages', () => {
-		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+		const warnSpy = vi.spyOn(reactiveOptions, 'warn').mockImplementation(() => {})
 
 		class TestClass {
 			@deprecated('This will be removed in v2.0')
@@ -711,11 +711,11 @@ describe('deprecated decorator with string parameter', () => {
 		obj.method1()
 		obj.method2()
 
-		expect(consoleSpy).toHaveBeenCalledWith(
+		expect(warnSpy).toHaveBeenCalledWith(
 			'TestClass.method1 is deprecated: This will be removed in v2.0'
 		)
-		expect(consoleSpy).toHaveBeenCalledWith('TestClass.method2 is deprecated: Use the new API')
+		expect(warnSpy).toHaveBeenCalledWith('TestClass.method2 is deprecated: Use the new API')
 
-		consoleSpy.mockRestore()
+		warnSpy.mockRestore()
 	})
 })

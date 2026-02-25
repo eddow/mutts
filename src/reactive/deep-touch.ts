@@ -2,7 +2,7 @@ import { addState, collectEffects, touched1, touchedOpaque } from './change'
 import { debugHooks } from './debug-hooks'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { batch, untracked } from './effects'
-import { isNonReactive } from './non-reactive-state'
+import { isNonReactive } from './non-reactive'
 import { getEffectNode, watchers } from './registry'
 import { getDependencyStack } from './tracking'
 import {
@@ -33,7 +33,7 @@ export function shouldRecurseTouch(oldValue: any, newValue: any): boolean {
 		(typeof newValue !== 'object' && !Array.isArray(newValue))
 	)
 		return false
-	if (isNonReactive(oldValue) || isNonReactive(newValue)) return false
+	if (isNonReactive(oldValue) /*|| isNonReactive(newValue)*/) return false
 	return getPrototypeToken(oldValue) === getPrototypeToken(newValue)
 }
 
@@ -187,12 +187,11 @@ function diffObjectProperties(
 		if (!newKeys.has(key))
 			local.push({ target: oldObj, evolution: { type: 'del', prop: key }, prop: key, origin })
 
-	for (const key of newKeys)
-		if (!oldKeys.has(key))
-			local.push({ target: oldObj, evolution: { type: 'add', prop: key }, prop: key, origin })
-
 	for (const key of newKeys) {
-		if (!oldKeys.has(key)) continue
+		if (!oldKeys.has(key)) {
+			local.push({ target: oldObj, evolution: { type: 'add', prop: key }, prop: key, origin })
+			continue
+		}
 		const oldEntry = unwrap((oldObj as any)[key])
 		const newEntry = unwrap((newObj as any)[key])
 		if (shouldRecurseTouch(oldEntry, newEntry)) {
@@ -246,10 +245,10 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 				[allProps],
 				[origin.prop]
 			)
-			for (const effect of originEffects.keys()) allowedEffects.add(effect)
+			allowedEffects = new Set(originEffects.keys())
 		}
 		// If no allowed effects, skip all notifications (no one should be notified)
-		if (allowedEffects.size === 0) return
+		if (!allowedEffects?.size) return
 	}
 
 	for (const notification of notifications) {

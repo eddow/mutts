@@ -11,10 +11,11 @@ import {
 	removeBackReference,
 } from './deep-watch-state'
 import { untracked } from './effects'
-import { absent, isNonReactive, isUnreactiveProp } from './non-reactive-state'
+import { absent, isNonReactive, isUnreactiveProp } from './non-reactive'
 import { dependant } from './tracking'
 import {
 	getExistingProxy,
+	isReactive,
 	keysOf,
 	options,
 	proxyToObject,
@@ -33,13 +34,28 @@ export type SubProxy = {
 	ownKeys?(obj: any): ArrayLike<string | symbol>
 	getOwnPropertyDescriptor?(obj: any, prop: PropertyKey): PropertyDescriptor | undefined
 }
-const subsRegister = new WeakMap<any, SubProxy>()
-
 // Sub-proxy registration for custom reactive behaviors
+const subsRegister = new WeakMap<any, SubProxy>()
+// Internal untracked flag for setter/getter operations - only used when testing oldValue while setting a value
+// TODO: `touched` trigger also compares to old value and should use the internalUntracked flag
+let internalUntracked = false
+
+const independentHandler: ProxyHandler<any> & Record<symbol, unknown> = {
+	get(obj, prop, receiver) {
+		if(internalUntracked) return FoolProof.get(obj, prop, receiver)
+		internalUntracked = true
+		try {
+			return FoolProof.get(obj, prop, receiver)
+		} finally {
+			internalUntracked = false
+		}
+	},
+}
 
 const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj, prop, receiver) {
+		if (internalUntracked) return FoolProof.get(obj, prop, receiver)
 		if (obj && typeof obj === 'object' && prop !== Symbol.toStringTag) {
 			const metaProto = metaProtos.get(obj.constructor)
 			if (metaProto && Object.hasOwn(metaProto, prop)) {
@@ -54,14 +70,24 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 			const wrapProto = wrapProtos.get(obj.constructor)
 			if (wrapProto && Object.hasOwn(wrapProto, prop)) return wrapProto[prop]
 		}
-		// Symbols: fast-path — no reactivity tracking, no unreactive check needed
-		if (typeof prop === 'symbol') return FoolProof.get(obj, prop, receiver)
-		// Check if this property is marked as unreactive (WeakMap lookup — no proxy traps)
-		if (isUnreactiveProp(obj, prop)) return FoolProof.get(obj, prop, receiver)
+		// Symbols: fast-path — no reactivity tracking
+		if (typeof prop === 'symbol' || prop === 'constructor' || isUnreactiveProp(obj, prop)) return FoolProof.get(obj, prop, receiver)
 
 		// Check if property exists using a trap-free walk to avoid triggering
 		// the has-trap cascade on prototype chains of reactive proxies.
 		const isOwnProp = Object.hasOwn(obj, prop)
+
+		// For accessor properties, check the unwrapped object to see if it's an accessor
+		// This ensures ignoreAccessors works correctly even after operations like Object.setPrototypeOf
+		// Skip for null-proto objects (pounce scopes) — they never have accessors
+		const shouldIgnoreAccessor =
+			options.ignoreAccessors &&
+			isOwnProp &&
+			Object.getPrototypeOf(obj) !== null &&
+			(isOwnAccessor(receiver, prop) || isOwnAccessor(obj, prop))
+
+		// Check if property exists using a trap-free walk to avoid triggering
+		// the has-trap cascade on prototype chains of reactive proxies.
 		let hasProp = isOwnProp
 		let owner: any = isOwnProp ? obj : undefined
 		if (!isOwnProp) {
@@ -77,15 +103,6 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 		}
 		const isInheritedAccess = hasProp && !isOwnProp
 
-		// For accessor properties, check the unwrapped object to see if it's an accessor
-		// This ensures ignoreAccessors works correctly even after operations like Object.setPrototypeOf
-		// Skip for null-proto objects (pounce scopes) — they never have accessors
-		const shouldIgnoreAccessor =
-			options.ignoreAccessors &&
-			isOwnProp &&
-			Object.getPrototypeOf(obj) !== null &&
-			(isOwnAccessor(receiver, prop) || isOwnAccessor(obj, prop))
-
 		// Depend if...
 		if (
 			!hasProp ||
@@ -94,17 +111,15 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 		)
 			dependant(obj, prop)
 
-		// Two-Point Tracking: for inherited access on null-proto chains, only track
-		// the owning ancestor — not every intermediate level.  This relies on the
-		// "structural stability" contract: key presence in the chain is fixed at
-		// creation time, so intermediate levels never gain/lose shadowing properties.
+		// Two-Point Tracking: for inherited access on null-proto chains, also track
+		// the owning ancestor so that writing directly to it triggers dependent effects.
 		if (isInheritedAccess && owner && (!options.instanceMembers || !(obj instanceof Object))) {
 			dependant(owner, prop)
 		}
 		// For arrays, use FoolProof.get (Indexer path) for numeric index reactivity.
 		// For all other objects, inline Reflect.get directly (skips 3 function calls).
 		const value = (subsRegister.get(obj)?.get || FoolProof.get)(obj, prop, receiver)
-		if (typeof value === 'object' && value !== null) {
+		if (!isReactive(value) && typeof value === 'object' && value !== null) {
 			const reactiveValue = reactiveObject(value)
 
 			// Only create back-references if this object needs them
@@ -117,10 +132,19 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 		return value
 	},
 	set(obj, prop, value, receiver) {
-		const unwrappedReceiver = unwrap(receiver)
+		const unwrapped = unwrap(receiver)
+		if(obj!== unwrapped)
+			return Object.defineProperty(unwrapped, prop, {
+				value,
+				configurable: true,
+				writable: true,
+				enumerable: true
+			})
+		if(internalUntracked) throw new Error('Internal untracked: setting a value in an getter in a set operation')
+		//return FoolProof.set(obj, prop, value, receiver)
 
 		// Check if this property is marked as unreactive
-		if (isUnreactiveProp(obj, prop) || obj !== unwrappedReceiver)
+		if (isUnreactiveProp(obj, prop))
 			return FoolProof.set(obj, prop, value, receiver)
 		const newValue = unwrap(value)
 		// metaProto setter dispatch (e.g., reactive array length)
@@ -138,14 +162,17 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 		// breaking memoization dependency tracking during SET operations
 		let oldVal = absent
 		const isArrayLength = prop === 'length' && Array.isArray(obj)
-		if (Reflect.has(unwrappedReceiver, prop)) {
-			// We *need* to use `receiver` and not `obj` here, otherwise we break
-			// the dependency tracking for memoized getters
-			oldVal = isArrayLength
-				? arrayLengths.get(obj) === newValue
-					? newValue
-					: absent
-				: untracked(() => Reflect.get(obj, prop, receiver))
+		internalUntracked = true
+		try {
+			if (Reflect.has(obj, prop)) {
+				oldVal = isArrayLength
+					? arrayLengths.get(obj) === newValue
+						? newValue
+						: absent
+					: Reflect.get(obj, prop, receiver)
+			}
+		} finally {
+			internalUntracked = false
 		}
 		if (objectsWithDeepWatchers.has(obj)) {
 			if (typeof oldVal === 'object' && oldVal !== null) {
@@ -176,7 +203,7 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 				}
 			)
 		hasReentry.add(obj)
-		dependant(obj, prop)
+		if(!internalUntracked && !isUnreactiveProp(obj, prop)) dependant(obj, prop)
 		const rv = (subsRegister.get(obj)?.has || Reflect.has)(obj, prop)
 		hasReentry.delete(obj)
 		return rv

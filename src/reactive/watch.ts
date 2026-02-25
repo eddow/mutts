@@ -5,14 +5,11 @@ import { effect, untracked } from './effects'
 import {
 	addUnreactiveProps,
 	isNonReactive,
-	nonReactiveClass,
-	nonReactiveObjects,
-	unreactiveProps,
-} from './non-reactive-state'
+} from './non-reactive'
 import { reactive } from './proxy'
 import { markWithRoot } from './registry'
 import { dependant } from './tracking'
-import { type EffectAccess, type EffectCleanup, unwrap } from './types'
+import { type EffectAccess, type EffectCleanup, unreactiveProperties, unwrap } from './types'
 
 //#region watch
 
@@ -175,7 +172,7 @@ export function when<T>(predicate: (dep: EffectAccess) => T, timeout?: number): 
 function shallowNonReactive<T>(obj: T): T {
 	obj = unwrap(obj)
 	if (isNonReactive(obj)) return obj
-	nonReactiveObjects.add(obj as object)
+	;(obj as any)[unreactiveProperties] = true
 	return obj
 }
 function unreactiveApplication<T extends object>(...args: (keyof T)[]): GenericClassDecorator<T>
@@ -188,12 +185,17 @@ function unreactiveApplication<T extends object>(
 		? shallowNonReactive(arg1)
 		: (((original) => {
 				// Copy the parent's unreactive properties if they exist
-				const parentSet = unreactiveProps.get(original.prototype)
-				const set = new Set<PropertyKey>(parentSet || [])
-				// Add all arguments (including the first one)
-				set.add(arg1)
-				for (const arg of args) set.add(arg)
-				addUnreactiveProps(original.prototype, set)
+				const parentMarker = (original.prototype as any)[unreactiveProperties]
+				// If parent is fully unreactive, child is too
+				if (parentMarker === true) {
+					;(original.prototype as any)[unreactiveProperties] = true
+				} else {
+					const set = new Set<PropertyKey>(parentMarker || [])
+					// Add all arguments (including the first one)
+					set.add(arg1)
+					for (const arg of args) set.add(arg)
+					addUnreactiveProps(original.prototype, set)
+				}
 				return original // Return the class
 			}) as GenericClassDecorator<T>)
 }
@@ -204,7 +206,7 @@ function unreactiveApplication<T extends object>(
 export const unreactive = decorator({
 	class(original) {
 		// Called without arguments, mark entire class as non-reactive
-		nonReactiveClass(original)
+		;(original.prototype as any)[unreactiveProperties] = true
 	},
 	default: unreactiveApplication,
 })
@@ -228,7 +230,7 @@ export interface Resource<T> {
  * @returns Reactive Resource object with value, loading, error, latest properties
  */
 export function resource<T>(
-	fetcher: (dep: EffectAccess) => Promise<T> | T,
+	fetcher: (dep: EffectAccess, signal: AbortSignal) => Promise<T> | T,
 	options: { initialValue?: T } = {}
 ): Resource<T> {
 	const state = reactive({
@@ -255,7 +257,7 @@ export function resource<T>(
 		state.error = undefined
 
 		try {
-			const result = fetcher(access)
+			const result = fetcher(access, access.signal)
 
 			if (result instanceof Promise) {
 				result.then(

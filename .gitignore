@@ -9,3 +9,4 @@ benchmarks
 __screenshots__
 *.txt
 *.tsbuildinfo
+*.log

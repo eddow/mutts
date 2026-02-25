@@ -104,8 +104,8 @@ export const FoolProof = {
 		if (hasNode && obj instanceof Node) {
 			;(obj as any)[prop] = value
 			return true
-		}
-		if (!(obj instanceof Object) && !Reflect.has(obj, prop)) {
+		}/*
+		if (!(obj instanceof Object) && !Object.hasOwn(obj, prop)) {
 			Object.defineProperty(obj, prop, {
 				value,
 				configurable: true,
@@ -113,7 +113,7 @@ export const FoolProof = {
 				enumerable: true,
 			})
 			return true
-		}
+		}*/
 		return Reflect.set(obj, prop, value, receiver)
 	},
 }

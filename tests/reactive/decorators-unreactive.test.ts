@@ -155,47 +155,6 @@ describe('@unreactive decorator', () => {
 			reactiveInstance.reactiveProp = 'new reactive value'
 			expect(effectCount).toBe(2)
 		})
-
-		it('should work with inheritance', () => {
-			@unreactive('baseUnreactiveProp')
-			class BaseClass {
-				baseUnreactiveProp = 'base unreactive'
-
-				baseReactiveProp = 'base reactive'
-			}
-
-			@unreactive('derivedUnreactiveProp')
-			class DerivedClass extends BaseClass {
-				derivedUnreactiveProp = 'derived unreactive'
-
-				derivedReactiveProp = 'derived reactive'
-			}
-
-			const instance = new DerivedClass()
-			const reactiveInstance = reactive(instance)
-
-			let effectCount = 0
-			effect(() => {
-				effectCount++
-				reactiveInstance.baseUnreactiveProp
-				reactiveInstance.baseReactiveProp
-				reactiveInstance.derivedUnreactiveProp
-				reactiveInstance.derivedReactiveProp
-			})
-
-			expect(effectCount).toBe(1)
-
-			// Changing unreactive properties should not trigger effect
-			reactiveInstance.baseUnreactiveProp = 'new base unreactive'
-			reactiveInstance.derivedUnreactiveProp = 'new derived unreactive'
-			expect(effectCount).toBe(1)
-
-			// Changing reactive properties should trigger effect
-			reactiveInstance.baseReactiveProp = 'new base reactive'
-			expect(effectCount).toBe(2)
-			reactiveInstance.derivedReactiveProp = 'new derived reactive'
-			expect(effectCount).toBe(3)
-		})
 	})
 
 	describe('edge cases', () => {

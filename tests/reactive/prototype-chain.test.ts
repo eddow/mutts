@@ -54,6 +54,29 @@ describe('prototype chain dependency tracking', () => {
 		expect(runs).toBe(4)
 	})
 
+	it('should track through plain intermediate prototypes (full chain)', () => {
+		const root = reactive(Object.create(null) as any)
+		root.x = 1
+		const plain = Object.create(unwrap(root)) // plain, non-reactive intermediate
+		const leaf = reactive(Object.create(plain))
+
+		let runs = 0
+		effect(() => {
+			runs++
+			;(leaf as any).x
+		})
+
+		expect(runs).toBe(1)
+		// Writing to root must trigger — dependency tracked through plain intermediate
+		root.x = 2
+		expect(runs).toBe(2)
+		// Shadowing at leaf must trigger
+		leaf.x = 4
+		expect(runs).toBe(3)
+		// Note: plain.x = ... cannot trigger effects — plain is not reactive,
+		// so no set trap fires touched(). Only reactive objects can trigger effects.
+	})
+
 	it('should not loop infinitely when accessing unknown property on ReactiveArray (regression)', () => {
 		const arr = reactive([1, 2, 3])
 		// This should not hang

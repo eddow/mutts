@@ -10,7 +10,7 @@ describe('effect cycle detection and ordering', () => {
 		options.cycleHandling = 'production'
 		options.maxEffectChain = 100
 		options.maxTriggerPerBatch = 100
-		vi.spyOn(console, 'warn').mockImplementation(() => {})
+		vi.spyOn(options, 'warn').mockImplementation(() => {})
 	})
 	afterEach(() => {
 		options.cycleHandling = originalCycleHandling

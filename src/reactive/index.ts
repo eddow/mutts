@@ -18,9 +18,10 @@ export {
 	untracked,
 } from './effects'
 export { type Memoizable, type MemoizableArgument, memoize } from './memoize'
-export { immutables, isNonReactive } from './non-reactive-state'
+export { isNonReactive, addUnreactiveProps } from './non-reactive'
 export { ReactiveBase, reactive } from './proxy'
 export { organize, organized } from './record'
+export { assertUntracked } from './tracking'
 export {
 	type CleanupReason,
 	debugPreset,
@@ -53,7 +54,6 @@ import {
 	objectsWithDeepWatchers,
 } from './deep-watch-state'
 import { ReactiveMap, ReactiveWeakMap } from './map'
-import { nonReactiveObjects } from './non-reactive-state'
 import { metaProtos, wrapProtos } from './proxy'
 import { effectToReactiveObjects, watchers } from './registry'
 import { ReactiveSet, ReactiveWeakSet } from './set'
@@ -79,5 +79,4 @@ export const profileInfo: any = {
 	objectsWithDeepWatchers,
 	deepWatchers,
 	effectToDeepWatchedObjects,
-	nonReactiveObjects,
 }

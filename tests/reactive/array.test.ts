@@ -109,7 +109,7 @@ describe('ReactiveArray', () => {
 			expect(effectCount).toBe(1)
 
 			// Push should trigger the effect
-			atomic(() => reactiveArray.push(4, 5))()
+			reactiveArray.push(4, 5)
 			expect(effectCount).toBe(2)
 			expect(reactiveArray.length).toBe(5)
 		})
@@ -204,7 +204,7 @@ describe('ReactiveArray', () => {
 			expect(effectCount).toBe(1)
 
 			let shifted: number
-			atomic(() => shifted = reactiveArray.shift())()
+			shifted = reactiveArray.shift()
 			expect(effectCount).toBe(2)
 			expect(shifted).toBe(1)
 			expect(reactiveArray[0]).toBe(2)
@@ -225,7 +225,7 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			atomic(() => reactiveArray.unshift(0))()
+			reactiveArray.unshift(0)
 			expect(effectCount).toBe(2)
 			expect(reactiveArray[0]).toBe(0)
 			expect(reactiveArray[1]).toBe(1)
@@ -249,7 +249,7 @@ describe('ReactiveArray', () => {
 			expect(effectCount).toBe(1)
 
 			let removed: number[]
-			atomic(() => removed = reactiveArray.splice(1, 2))()
+			removed = reactiveArray.splice(1, 2)
 			expect(effectCount).toBe(2)
 			expect(removed).toEqual([2, 3])
 			expect(reactiveArray[1]).toBe(4)
@@ -271,7 +271,7 @@ describe('ReactiveArray', () => {
 			expect(effectCount).toBe(1)
 
 			let removed: number[]
-			atomic(() => removed = reactiveArray.splice(1, 0, 10, 20))()
+			removed = reactiveArray.splice(1, 0, 10, 20)
 			expect(effectCount).toBe(2)
 			expect(removed).toEqual([])
 			expect(reactiveArray[1]).toBe(10)
@@ -294,7 +294,7 @@ describe('ReactiveArray', () => {
 			expect(effectCount).toBe(1)
 
 			let removed: number[]
-			atomic(() => removed = reactiveArray.splice(1, 2, 10, 20))()
+			removed = reactiveArray.splice(1, 2, 10, 20)
 			expect(effectCount).toBe(2)
 			expect(removed).toEqual([2, 3])
 			expect(reactiveArray[1]).toBe(10)
@@ -354,7 +354,7 @@ describe('ReactiveArray', () => {
 			expect(effectCount).toBe(1)
 
 			let removed: number[]
-			atomic(() => removed = reactiveArray.reverse())()
+			removed = reactiveArray.reverse()
 			expect(effectCount).toBe(2)
 			expect(removed).toEqual([4, 3, 2, 1])
 			expect(reactiveArray[0]).toBe(4)
@@ -377,7 +377,7 @@ describe('ReactiveArray', () => {
 			expect(effectCount).toBe(1)
 
 			let removed: number[]
-			atomic(() => removed = reactiveArray.sort())()
+			removed = reactiveArray.sort()
 			expect(effectCount).toBe(2)
 			expect(removed).toEqual([1, 2, 3, 4])
 			expect(reactiveArray[0]).toBe(1)
@@ -397,7 +397,7 @@ describe('ReactiveArray', () => {
 			expect(effectCount).toBe(1)
 
 			let removed: number[]
-			atomic(() => removed = reactiveArray.sort((a, b) => b - a))() // Descending order
+			removed = reactiveArray.sort((a, b) => b - a)
 			expect(effectCount).toBe(2)
 			expect(removed).toEqual([4, 3, 2, 1])
 			expect(reactiveArray[0]).toBe(4)
@@ -418,7 +418,7 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			atomic(() => reactiveArray.fill(0, 1, 4))()
+			reactiveArray.fill(0, 1, 4)
 			expect(effectCount).toBe(2)
 			expect(reactiveArray[1]).toBe(0)
 			expect(reactiveArray[3]).toBe(0)
@@ -439,7 +439,7 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			atomic(() => reactiveArray.fill(0))()
+			reactiveArray.fill(0)
 			expect(effectCount).toBe(2)
 			expect(reactiveArray[0]).toBe(0)
 			expect(reactiveArray[4]).toBe(0)
@@ -458,7 +458,7 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			atomic(() => reactiveArray.fill(0, 2))()
+			reactiveArray.fill(0, 2)
 			expect(effectCount).toBe(2)
 			expect(reactiveArray[2]).toBe(0)
 			expect(reactiveArray[4]).toBe(0)
@@ -480,7 +480,7 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			atomic(() => reactiveArray.copyWithin(0, 3, 5))()
+			reactiveArray.copyWithin(0, 3, 5)
 			expect(effectCount).toBe(2)
 			expect(reactiveArray[0]).toBe(4)
 			expect(reactiveArray[1]).toBe(5)
@@ -498,7 +498,7 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			atomic(() => reactiveArray.copyWithin(0, 2))()
+			reactiveArray.copyWithin(0, 2)
 			expect(effectCount).toBe(2)
 			expect(reactiveArray[0]).toBe(3)
 			expect(reactiveArray[1]).toBe(4)
@@ -521,7 +521,7 @@ describe('ReactiveArray', () => {
 			expect(effectCount).toBe(1)
 
 			let removed: number[]
-			atomic(() => removed = reactiveArray.splice(1, 2))()
+			removed = reactiveArray.splice(1, 2)
 			expect(effectCount).toBe(2)
 			expect(removed).toEqual([2, 3])
 			expect(reactiveArray.length).toBe(1)
@@ -541,7 +541,7 @@ describe('ReactiveArray', () => {
 			expect(val).toBe(2)
 
 			let removed: number[]
-			atomic(() => removed = reactiveArray.splice(1, 2))()
+			removed = reactiveArray.splice(1, 2)
 			expect(effectCount).toBe(2)
 			expect(val).toBeUndefined()
 		})
@@ -619,7 +619,7 @@ describe('ReactiveArray', () => {
 			reactiveArray[0] = 100
 			expect(effectCount).toBe(2)
 
-			atomic(() => reactiveArray.push(4))()
+			reactiveArray.push(4)
 			expect(effectCount).toBe(3)
 		})
 
@@ -639,7 +639,7 @@ describe('ReactiveArray', () => {
 			reactiveArray[0] = 100
 			expect(effectCount).toBe(1)
 
-			atomic(() => reactiveArray.push(4))()
+			reactiveArray.push(4)
 			expect(effectCount).toBe(2)
 		})
 
@@ -659,7 +659,7 @@ describe('ReactiveArray', () => {
 			reactiveArray[0] = 100
 			expect(effectCount).toBe(2)
 
-			atomic(() => reactiveArray.push(4))()
+			reactiveArray.push(4)
 			expect(effectCount).toBe(3)
 		})
 
@@ -681,7 +681,7 @@ describe('ReactiveArray', () => {
 			reactiveArray[0] = 100
 			expect(effectCount).toBe(2)
 
-			atomic(() => reactiveArray.push(4))()
+			reactiveArray.push(4)
 			expect(effectCount).toBe(3)
 		})
 
@@ -708,7 +708,7 @@ describe('ReactiveArray', () => {
 			expect(unwrap(values)).toEqual([100, 2, 3])
 
 			// Adding an element should trigger the effect
-			atomic(() => reactiveArray.push(4))()
+			reactiveArray.push(4)
 			expect(effectCount).toBe(3)
 			expect(unwrap(values)).toEqual([100, 2, 3, 4])
 		})
@@ -729,7 +729,7 @@ describe('ReactiveArray', () => {
 
 			expect(effectCount).toBe(1)
 
-			atomic(() => reactiveArray.push(1))()
+			reactiveArray.push(1)
 			expect(effectCount).toBe(2)
 		})
 
@@ -752,7 +752,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(found).toBe(-1)
 
-				atomic(() => ra.push(2))()
+				ra.push(2)
 				expect(runs).toBe(3)
 				expect(found).toBe(3)
 			})
@@ -796,7 +796,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(allTrue).toBe(false)
 
-				atomic(() => ra.splice(1, 1, 2))()
+				ra.splice(1, 1, 2)
 				expect(runs).toBe(3)
 				expect(allTrue).toBe(true)
 			})
@@ -819,7 +819,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(unwrap(filtered)).toEqual([4])
 
-				atomic(() => ra.unshift(6))()
+				ra.unshift(6)
 				expect(runs).toBe(3)
 				expect(unwrap(filtered)).toEqual([6, 4])
 			})
@@ -842,7 +842,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(unwrap(mapped)).toEqual([2, 10, 6])
 
-				atomic(() => ra.push(4))()
+				ra.push(4)
 				expect(runs).toBe(3)
 				expect(unwrap(mapped)).toEqual([2, 10, 6, 8])
 			})
@@ -865,7 +865,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(sum).toBe(15)
 
-				atomic(() => ra.push(4))()
+				ra.push(4)
 				expect(runs).toBe(3)
 				expect(sum).toBe(19)
 			})
@@ -888,7 +888,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(concat).toBe('329')
 
-				atomic(() => ra.unshift(0))()
+				ra.unshift(0)
 				expect(runs).toBe(3)
 				expect(concat).toBe('3290')
 			})
@@ -935,7 +935,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(concatenated).toEqual([1, 20, 3])
 
-				atomic(() => ra.push(4))()
+				ra.push(4)
 				expect(runs).toBe(3)
 				expect(concatenated).toEqual([1, 20, 4, 3])
 			})
@@ -958,7 +958,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(joined).toBe('1-9-3')
 
-				atomic(() => ra.push(4))()
+				ra.push(4)
 				expect(runs).toBe(3)
 				expect(joined).toBe('1-9-3-4')
 			})
@@ -984,7 +984,7 @@ describe('ReactiveArray', () => {
 				expect(runs).toBe(2)
 				expect(sum).toBe(15)
 
-				atomic(() => ra.push(4))()
+				ra.push(4)
 				expect(runs).toBe(3)
 				expect(sum).toBe(19)
 			})
@@ -1012,7 +1012,7 @@ describe('ReactiveArray', () => {
 				expect(unwrap(values)).toEqual([100, 2, 3])
 
 				// Adding an element should also trigger the effect
-				atomic(() => reactiveArray.push(4))()
+				reactiveArray.push(4)
 				expect(effectCount).toBe(3)
 				expect(unwrap(values)).toEqual([100, 2, 3, 4])
 			})

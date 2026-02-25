@@ -5,7 +5,7 @@ import {
 	registerDeepWatcher,
 } from './deep-watch-state'
 import { effect, untracked } from './effects'
-import { isNonReactive } from './non-reactive-state'
+import { isNonReactive } from './non-reactive'
 import { reactive } from './proxy'
 import { markWithRoot } from './registry'
 import { dependant } from './tracking'

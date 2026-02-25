@@ -109,4 +109,32 @@ describe('resource', () => {
 		await new Promise(resolve => setTimeout(resolve, 0))
 		expect(r.value).toBe(2)
 	})
+
+	it('should provide AbortSignal and abort it on re-run', async () => {
+		const state = reactive({ id: 1 })
+		const signals: AbortSignal[] = []
+		
+		const r = resource(async (_, signal) => {
+			signals.push(signal)
+			const id = state.id // Track state.id
+			await new Promise(resolve => setTimeout(resolve, 50))
+			return `item-${id}`
+		})
+
+		await new Promise(resolve => setTimeout(resolve, 5))
+		expect(signals.length).toBe(1)
+		expect(signals[0].aborted).toBe(false)
+
+		// Trigger re-run
+		state.id = 2
+		await new Promise(resolve => setTimeout(resolve, 5))
+		
+		expect(signals.length).toBe(2)
+		expect(signals[0].aborted).toBe(true)
+		expect(signals[0].reason?.message).toContain('Effect aborted')
+		expect(signals[1].aborted).toBe(false)
+		
+		await new Promise(resolve => setTimeout(resolve, 60))
+		expect(r.value).toBe('item-2')
+	})
 })
