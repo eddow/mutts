@@ -39,27 +39,27 @@ import {
  */
 export function attend<T>(
 	source: readonly T[],
-	callback: (index: number) => EffectCloser | undefined
+	callback: (index: number, access: EffectAccess) => EffectCloser | void
 ): ScopedCallback
 export function attend<K, V>(
 	source: Map<K, V>,
-	callback: (key: K) => EffectCloser | undefined
+	callback: (key: K, access: EffectAccess) => EffectCloser | void
 ): ScopedCallback
 export function attend<T>(
 	source: Set<T>,
-	callback: (value: T) => EffectCloser | undefined
+	callback: (value: T, access: EffectAccess) => EffectCloser | void
 ): ScopedCallback
-export function attend<S extends Record<PropertyKey, any>>(
+export function attend<S extends object>(
 	source: S,
-	callback: (key: keyof S & string) => EffectCloser | undefined
+	callback: (key: keyof S & string, access: EffectAccess) => EffectCloser | void
 ): ScopedCallback
 export function attend<Key>(
 	enumerate: () => Iterable<Key>,
-	callback: (key: Key) => EffectCloser | undefined
+	callback: (key: Key, access: EffectAccess) => EffectCloser | void
 ): ScopedCallback
 export function attend(
 	source: any,
-	callback: (key: any) => EffectCloser | undefined
+	callback: (key: any, access: EffectAccess) => EffectCloser | void
 ): ScopedCallback {
 	const enumerate: () => Iterable<any> =
 		typeof source === 'function'
@@ -82,7 +82,7 @@ export function attend(
 			if (keyEffects.has(key)) continue
 			keyEffects.set(
 				key,
-				ascend(() => effect.named('attend:item')(() => callback(key)))
+				ascend(() => effect.named(`attend:${key}`)((access) => callback(key, access)))
 			)
 		}
 
@@ -234,11 +234,11 @@ export type MorphOptions<I> = { pure?: boolean | ((i: I) => boolean) }
  */
 export function morphArray<I, O>(
 	source: readonly I[] | (() => readonly I[]),
-	fn: (arg: I) => O,
+	fn: (arg: I, access?: EffectAccess) => O,
 	options?: MorphOptions<I>
 ): readonly O[] {
 	if (typeof source !== 'function' && !isReactive(source) && options?.pure === true) {
-		return source.map(fn) as any
+		return source.map(i=> fn(i)) as any
 	}
 
 	let track!: FunctionWrapper
@@ -263,17 +263,16 @@ export function morphArray<I, O>(
 			})
 		} else {
 			const indexRef = { value: key }
-			let stop!: ScopedCallback
-			track(() => {
-				stop = effect.named(`morph:${fn.name}:${key}`).opaque(() => {
-					cache[indexRef.value] = fn(input)
+			const stop = track(() => 
+				effect.named(`morph:${fn.name}:${key}`).opaque((access) => {
+					cache[indexRef.value] = fn(input, access)
 					return (reason) => {
 						delete cache[indexRef.value]
 						touched1(cache, { type: 'invalidate', prop: 'morph' }, String(key))
-						stop({ type: 'invalidate', cause: reason })
+						stop?.({ type: 'invalidate', cause: reason })
 					}
 				})
-			})
+			)
 			itemEffects.set(key, { stop, index: indexRef })
 		}
 	}
@@ -364,12 +363,12 @@ export function morphArray<I, O>(
  */
 export function morphMap<K, V, O>(
 	source: Map<K, V>,
-	fn: (arg: V) => O,
+	fn: (arg: V, key: K, access?: EffectAccess) => O,
 	options?: MorphOptions<V>
 ): Map<K, O> {
 	if (!isReactive(source) && options?.pure === true) {
 		const res = new Map<K, O>()
-		for (const [k, v] of source) res.set(k, fn(v))
+		for (const [k, v] of source) res.set(k, fn(v, k))
 		return res as any
 	}
 
@@ -392,16 +391,16 @@ export function morphMap<K, V, O>(
 		if (isPure) {
 			cache.set(
 				key,
-				track(() => fn(val))
+				track(() => fn(val, key))
 			)
 		} else {
 			const stop = track(() =>
-				effect.named(`morph:${fn.name}:${key}`).opaque(() => {
-					cache.set(key, fn(source.get(key)))
+				effect.named(`morph:${fn.name}:${key}`).opaque((access) => {
+					cache.set(key, fn(source.get(key), key, access))
 					return (reason) => {
 						cache.delete(key)
 						touched1(cache, { type: 'invalidate', prop: 'morph' }, String(key))
-						stop({ type: 'invalidate', cause: reason })
+						stop?.({ type: 'invalidate', cause: reason })
 					}
 				})
 			)
@@ -483,12 +482,12 @@ export function morphMap<K, V, O>(
  */
 export function morphRecord<S extends Record<PropertyKey, any>, O>(
 	source: S,
-	fn: (arg: S[keyof S]) => O,
+	fn: (arg: S[keyof S], key: keyof S, access?: EffectAccess) => O,
 	options?: MorphOptions<S[keyof S]>
 ): { [K in keyof S]: O } {
 	if (!isReactive(source) && options?.pure === true) {
 		const res = {} as any
-		for (const k of Object.keys(source)) res[k] = fn(source[k])
+		for (const k of Object.keys(source)) res[k] = fn(source[k], k)
 		return res
 	}
 
@@ -508,15 +507,15 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 		const isPure =
 			options?.pure === true || (typeof options?.pure === 'function' && options.pure(val))
 		if (isPure) {
-			cache[key] = track(() => fn(val))
+			cache[key] = track(() => fn(val, key))
 		} else {
 			const stop = track(() =>
-				effect.named(`morph:${fn.name}:${key}`).opaque(() => {
-					cache[key] = fn(source[key])
+				effect.named(`morph:${fn.name}:${key}`).opaque((access) => {
+					cache[key] = fn(source[key], key, access)
 					return (reason) => {
 						delete cache[key]
 						touched1(cache, { type: 'invalidate', prop: 'morph' }, String(key))
-						stop({ type: 'invalidate', cause: reason })
+						stop?.({ type: 'invalidate', cause: reason })
 					}
 				})
 			)
@@ -578,15 +577,15 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 export type Morph = {
 	<I, O>(
 		source: readonly I[] | (() => readonly I[]),
-		fn: (arg: I) => O,
+		fn: (arg: I, access?: EffectAccess) => O,
 		options?: MorphOptions<I>
 	): readonly O[]
 
-	<K, V, O>(source: Map<K, V>, fn: (arg: V) => O, options?: MorphOptions<V>): Map<K, O>
+	<K, V, O>(source: Map<K, V>, fn: (arg: V, key: K, access?: EffectAccess) => O, options?: MorphOptions<V>): Map<K, O>
 
 	<S extends Record<PropertyKey, any>, O>(
 		source: S,
-		fn: (arg: S[keyof S]) => O,
+		fn: (arg: S[keyof S], key: keyof S, access?: EffectAccess) => O,
 		options?: MorphOptions<S[keyof S]>
 	): { [K in keyof S]: O }
 

@@ -1083,12 +1083,24 @@ const fr = new FinalizationRegistry<() => void>((f) => f())
  * @returns The cleanup function
  */
 /**
+ * Reactive effect function with chainable flavor modifiers.
+ */
+export interface Effect {
+	// biome-ignore lint/suspicious/noConfusingVoidType: Effect callbacks commonly return void
+	(fn: (access: EffectAccess) => EffectCloser | undefined | void | Promise<any>, effectOptions?: EffectOptions): EffectCleanup
+	/** Opaque flavor: bypasses deep-touch optimizations */
+	readonly opaque: Effect
+	/** Named flavor: assigns a debug name */
+	named(name: string): Effect
+}
+
+/**
  * Creates a reactive effect that automatically re-runs when dependencies change
  * @param fn - The effect function that provides dependencies and may return a cleanup function or Promise
  * @param options - Options for effect execution
  * @returns A cleanup function to stop the effect
  */
-export const effect = named(
+export const effect: Effect = named(
 	effectMarker.leave,
 	flavored(
 		function effect(
@@ -1394,7 +1406,7 @@ export const effect = named(
 			},
 		}
 	)
-)
+) as Effect
 
 /**
  * Executes a function without tracking dependencies but maintains parent cleanup relationship

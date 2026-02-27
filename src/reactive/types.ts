@@ -91,7 +91,7 @@ export type PropTrigger = {
 export type CleanupReason =
 	| { type: 'propChange'; triggers: PropTrigger[] }
 	| { type: 'invalidate'; cause: CleanupReason }
-	| { type: 'stopped' } // explicit stop() call
+	| { type: 'stopped', detail?: string } // explicit stop() call
 	| { type: 'gc' } // FinalizationRegistry collected the holder
 	| { type: 'lineage'; parent: CleanupReason } // parent effect cleaned up (recursive)
 	| { type: 'error'; error: unknown } // error handler chain (reactionCleanup called with error)
@@ -281,7 +281,7 @@ export const forwardThrow = Symbol('throw')
 
 export type EffectCloser = (reason?: CleanupReason) => void
 // biome-ignore lint/suspicious/noConfusingVoidType: Catch handlers commonly return void
-export type CatchFunction = (error: any) => EffectCloser | undefined | void
+export type CatchFunction = (error: unknown) => EffectCloser | undefined | void
 
 /**
  * Context for a running projection item effect
