@@ -1481,7 +1481,9 @@ export function biDi<T>(
 	effect.named('biDi')(
 		markWithRoot(() => {
 			const newValue = get()
-			if (unwrap(newValue) !== programmaticallySetValue) received(newValue)
+			const pValue = programmaticallySetValue
+			programmaticallySetValue = Symbol()
+			if (unwrap(newValue) !== pValue) received(newValue)
 		}, received)
 	)
 	return set
