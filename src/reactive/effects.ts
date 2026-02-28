@@ -1087,7 +1087,10 @@ const fr = new FinalizationRegistry<() => void>((f) => f())
  */
 export interface Effect {
 	// biome-ignore lint/suspicious/noConfusingVoidType: Effect callbacks commonly return void
-	(fn: (access: EffectAccess) => EffectCloser | undefined | void | Promise<any>, effectOptions?: EffectOptions): EffectCleanup
+	(
+		fn: (access: EffectAccess) => EffectCloser | undefined | void | Promise<any>,
+		effectOptions?: EffectOptions
+	): EffectCleanup
 	/** Opaque flavor: bypasses deep-touch optimizations */
 	readonly opaque: Effect
 	/** Named flavor: assigns a debug name */

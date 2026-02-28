@@ -1,9 +1,9 @@
 import { contentRef } from '../utils'
 import { touched, touched1 } from './change'
 import { batch } from './effects'
+import { makeReactiveEntriesIterator, makeReactiveIterator } from './iterator-helpers'
 import { reactive } from './proxy'
 import { dependant } from './tracking'
-import { makeReactiveEntriesIterator, makeReactiveIterator } from './iterator-helpers'
 
 /**
  * Reactive wrapper around JavaScript's WeakSet class

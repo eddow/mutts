@@ -10,7 +10,6 @@ import {
 	objectsWithDeepWatchers,
 	removeBackReference,
 } from './deep-watch-state'
-import { untracked } from './effects'
 import { absent, isNonReactive, isUnreactiveProp } from './non-reactive'
 import { dependant } from './tracking'
 import {
@@ -42,7 +41,7 @@ let internalUntracked = false
 
 const independentHandler: ProxyHandler<any> & Record<symbol, unknown> = {
 	get(obj, prop, receiver) {
-		if(internalUntracked) return FoolProof.get(obj, prop, receiver)
+		if (internalUntracked) return FoolProof.get(obj, prop, receiver)
 		internalUntracked = true
 		try {
 			return FoolProof.get(obj, prop, receiver)
@@ -71,7 +70,8 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 			if (wrapProto && Object.hasOwn(wrapProto, prop)) return wrapProto[prop]
 		}
 		// Symbols: fast-path — no reactivity tracking
-		if (typeof prop === 'symbol' || prop === 'constructor' || isUnreactiveProp(obj, prop)) return FoolProof.get(obj, prop, receiver)
+		if (typeof prop === 'symbol' || prop === 'constructor' || isUnreactiveProp(obj, prop))
+			return FoolProof.get(obj, prop, receiver)
 
 		// Check if property exists using a trap-free walk to avoid triggering
 		// the has-trap cascade on prototype chains of reactive proxies.
@@ -133,19 +133,19 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 	},
 	set(obj, prop, value, receiver) {
 		const unwrapped = unwrap(receiver)
-		if(obj!== unwrapped)
+		if (obj !== unwrapped)
 			return Object.defineProperty(unwrapped, prop, {
 				value,
 				configurable: true,
 				writable: true,
-				enumerable: true
+				enumerable: true,
 			})
-		if(internalUntracked) throw new Error('Internal untracked: setting a value in an getter in a set operation')
+		if (internalUntracked)
+			throw new Error('Internal untracked: setting a value in an getter in a set operation')
 		//return FoolProof.set(obj, prop, value, receiver)
 
 		// Check if this property is marked as unreactive
-		if (isUnreactiveProp(obj, prop))
-			return FoolProof.set(obj, prop, value, receiver)
+		if (isUnreactiveProp(obj, prop)) return FoolProof.set(obj, prop, value, receiver)
 		const newValue = unwrap(value)
 		// metaProto setter dispatch (e.g., reactive array length)
 		if (obj && typeof obj === 'object' && prop !== Symbol.toStringTag) {
@@ -203,7 +203,7 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 				}
 			)
 		hasReentry.add(obj)
-		if(!internalUntracked && !isUnreactiveProp(obj, prop)) dependant(obj, prop)
+		if (!internalUntracked && !isUnreactiveProp(obj, prop)) dependant(obj, prop)
 		const rv = (subsRegister.get(obj)?.has || Reflect.has)(obj, prop)
 		hasReentry.delete(obj)
 		return rv

@@ -238,7 +238,7 @@ export function morphArray<I, O>(
 	options?: MorphOptions<I>
 ): readonly O[] {
 	if (typeof source !== 'function' && !isReactive(source) && options?.pure === true) {
-		return source.map(i=> fn(i)) as any
+		return source.map((i) => fn(i)) as any
 	}
 
 	let track!: FunctionWrapper
@@ -263,7 +263,7 @@ export function morphArray<I, O>(
 			})
 		} else {
 			const indexRef = { value: key }
-			const stop = track(() => 
+			const stop = track(() =>
 				effect.named(`morph:${fn.name}:${key}`).opaque((access) => {
 					cache[indexRef.value] = fn(input, access)
 					return (reason) => {
@@ -581,7 +581,11 @@ export type Morph = {
 		options?: MorphOptions<I>
 	): readonly O[]
 
-	<K, V, O>(source: Map<K, V>, fn: (arg: V, key: K, access?: EffectAccess) => O, options?: MorphOptions<V>): Map<K, O>
+	<K, V, O>(
+		source: Map<K, V>,
+		fn: (arg: V, key: K, access?: EffectAccess) => O,
+		options?: MorphOptions<V>
+	): Map<K, O>
 
 	<S extends Record<PropertyKey, any>, O>(
 		source: S,

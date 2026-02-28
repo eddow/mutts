@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { reactive } from '../../src/reactive/proxy'
-import { watch } from '../../src/reactive/watch'
+import { watch } from '../../src/reactive/satellite'
 
 describe('watch flavor', () => {
 	it('should support watch.immediate', () => {

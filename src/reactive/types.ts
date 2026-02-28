@@ -91,7 +91,7 @@ export type PropTrigger = {
 export type CleanupReason =
 	| { type: 'propChange'; triggers: PropTrigger[] }
 	| { type: 'invalidate'; cause: CleanupReason }
-	| { type: 'stopped', detail?: string } // explicit stop() call
+	| { type: 'stopped'; detail?: string } // explicit stop() call
 	| { type: 'gc' } // FinalizationRegistry collected the holder
 	| { type: 'lineage'; parent: CleanupReason } // parent effect cleaned up (recursive)
 	| { type: 'error'; error: unknown } // error handler chain (reactionCleanup called with error)

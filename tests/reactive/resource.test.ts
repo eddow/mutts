@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resource } from '../../src/reactive/watch'
+import { resource } from '../../src/reactive/satellite'
 import { reactive } from '../../src/reactive/proxy'
 
 describe('resource', () => {

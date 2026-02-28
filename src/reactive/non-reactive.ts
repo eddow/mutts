@@ -17,21 +17,25 @@ export function addUnreactiveProps<T extends object>(proto: T, set?: Iterable<Pr
 			return proto
 		}
 		// Merge sets
-		set = (proto as any)[unreactiveProperties] = new Set<PropertyKey>((proto as any)[unreactiveProperties])
+		set = (proto as any)[unreactiveProperties] = new Set<PropertyKey>(
+			(proto as any)[unreactiveProperties]
+		)
 		for (const p of set) existing.add(p)
-	} else 
-		// If no set, mark as fully unreactive, otherwise create set
-		;(proto as any)[unreactiveProperties] = set ? new Set<PropertyKey>(set) : true
+	}
+	// If no set, mark as fully unreactive, otherwise create set
+	else proto[unreactiveProperties] = set ? new Set<PropertyKey>(set) : true
 	return proto
 }
 
 /** Check if a property is marked unreactive on obj or any of its prototypes (trap-free) */
 export function isUnreactiveProp(obj: object, prop: PropertyKey): boolean {
-	if(typeof prop === 'symbol' || prop === 'constructor') return true
+	if (typeof prop === 'symbol' || prop === 'constructor') return true
 	const marker = obj[unreactiveProperties]
-	return (marker === true) 				// Fully unreactive
-		|| (marker && marker.has?.(prop))	// Property is unreactive
-		|| false
+	return (
+		marker === true || // Fully unreactive
+		(marker && marker.has?.(prop)) || // Property is unreactive
+		false
+	)
 }
 
 export function nonReactive<T extends object[]>(...obj: T): T[0] {

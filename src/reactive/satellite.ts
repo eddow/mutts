@@ -1,15 +1,19 @@
 import { decorator, type GenericClassDecorator } from '../decorator'
 import { flavored, flavorOptions } from '../flavored'
 import { deepWatch } from './deep-watch'
+import { link } from './effect-context'
 import { effect, untracked } from './effects'
-import {
-	addUnreactiveProps,
-	isNonReactive,
-} from './non-reactive'
+import { addUnreactiveProps, isNonReactive } from './non-reactive'
 import { reactive } from './proxy'
 import { markWithRoot } from './registry'
 import { dependant } from './tracking'
-import { type EffectAccess, type EffectCleanup, unreactiveProperties, unwrap } from './types'
+import {
+	type EffectAccess,
+	type EffectCleanup,
+	type ScopedCallback,
+	unreactiveProperties,
+	unwrap,
+} from './types'
 
 //#region watch
 
@@ -215,12 +219,27 @@ export const unreactive = decorator({
 
 //#region resource
 
+export function lazyInit<T extends object>(resource: T, load: ScopedCallback) {
+	let fresh = true
+	return new Proxy(resource, {
+		[Symbol.toStringTag]: 'LazyInit',
+		get(target, prop) {
+			if (fresh) {
+				load()
+				fresh = false
+			}
+			return target[prop]
+		},
+	} as ProxyHandler<T>)
+}
+
 export interface Resource<T> {
 	value: T | undefined
 	loading: boolean
 	error: any
 	latest: T | undefined
-	reload: () => void
+	reload(): void
+	promise: Promise<void>
 }
 
 /**
@@ -230,15 +249,15 @@ export interface Resource<T> {
  * @returns Reactive Resource object with value, loading, error, latest properties
  */
 export function resource<T>(
-	fetcher: (dep: EffectAccess, signal: AbortSignal) => Promise<T> | T,
+	fetcher: (access: EffectAccess, signal: AbortSignal) => Promise<T> | T,
 	options: { initialValue?: T } = {}
 ): Resource<T> {
-	const state = reactive({
+	const resource: Partial<Resource<T>> = reactive({
 		value: options.initialValue,
 		loading: true,
 		error: undefined as any,
 		latest: options.initialValue,
-		reload: () => {
+		reload() {
 			reloadSignal.value++
 		},
 	})
@@ -246,50 +265,51 @@ export function resource<T>(
 	const reloadSignal = reactive({ value: 0 })
 	let counter = 0
 
-	const stop = effect.named('watch:resource')((access) => {
-		// Track reload signal to enable manual reloading
-		if (reloadSignal.value) {
-			/* just tracking */
-		}
+	return lazyInit(resource as Resource<T>, () => {
+		link(
+			resource,
+			effect.named('watch:resource')((access) => {
+				// Track reload signal to enable manual reloading
+				void reloadSignal.value
 
-		const id = ++counter
-		state.loading = true
-		state.error = undefined
+				const id = ++counter
+				resource.loading = true
+				resource.error = undefined
 
-		try {
-			const result = fetcher(access, access.signal)
+				try {
+					const result = fetcher(access, access.signal)
 
-			if (result instanceof Promise) {
-				result.then(
-					(val) => {
-						if (id === counter) {
-							state.value = val
-							state.latest = val
-							state.loading = false
-						}
-					},
-					(err) => {
-						if (id === counter) {
-							state.error = err
-							state.loading = false
-						}
+					if (result instanceof Promise) {
+						resource.promise = result.then(() => {})
+						result.then(
+							(val) => {
+								if (id === counter) {
+									resource.value = val
+									resource.latest = val
+									resource.loading = false
+								}
+							},
+							(err) => {
+								if (id === counter) {
+									resource.error = err
+									resource.loading = false
+								}
+							}
+						)
+					} else {
+						resource.promise = Promise.resolve()
+						resource.value = result
+						resource.latest = result
+						resource.loading = false
 					}
-				)
-			} else {
-				state.value = result
-				state.latest = result
-				state.loading = false
-			}
-		} catch (err) {
-			state.error = err
-			state.loading = false
-		}
+				} catch (err) {
+					resource.promise = Promise.reject(err)
+					resource.error = err
+					resource.loading = false
+				}
+			})
+		)
 	})
-
-	// Expose stop method for manual cleanup if needed
-	;(state as any).stop = stop
-
-	return state as Resource<T>
 }
 
 //#endregion

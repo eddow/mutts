@@ -47,10 +47,13 @@ const cleanups = new WeakMap<object, Set<ScopedCallback | object>>()
  * unlink(parent) // disposes childA, childB, calls the function
  * ```
  */
-export function link<T extends object>(obj: T, ...cleanupFns: (ScopedCallback | object | undefined)[]): T {
+export function link<T extends object>(
+	obj: T,
+	...cleanupFns: (ScopedCallback | object | undefined)[]
+): T {
 	const set = cleanups.get(obj)
 	if (!set) cleanups.set(obj, new Set(cleanupFns.filter(Boolean)))
-	else for (const fn of cleanupFns) if(fn) set.add(fn)
+	else for (const fn of cleanupFns) if (fn) set.add(fn)
 	return obj
 }
 

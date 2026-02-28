@@ -18,9 +18,10 @@ export {
 	untracked,
 } from './effects'
 export { type Memoizable, type MemoizableArgument, memoize } from './memoize'
-export { isNonReactive, addUnreactiveProps } from './non-reactive'
+export { addUnreactiveProps, isNonReactive } from './non-reactive'
 export { ReactiveBase, reactive } from './proxy'
 export { organize, organized } from './record'
+export { type Resource, resource, unreactive, watch, when } from './satellite'
 export { assertUntracked } from './tracking'
 export {
 	type CleanupReason,
@@ -44,7 +45,6 @@ export {
 	type ScopedCallback,
 	unwrap,
 } from './types'
-export { type Resource, resource, unreactive, watch, when } from './watch'
 
 import { ReactiveArray, ReactiveArrayWrapper } from './array'
 import {

@@ -104,7 +104,7 @@ export const FoolProof = {
 		if (hasNode && obj instanceof Node) {
 			;(obj as any)[prop] = value
 			return true
-		}/*
+		} /*
 		if (!(obj instanceof Object) && !Object.hasOwn(obj, prop)) {
 			Object.defineProperty(obj, prop, {
 				value,
