@@ -37,6 +37,7 @@
 			"suspicious": {
 				"noExplicitAny": "off",
 				"noDebugger": "warn",
+				"noConfusingVoidType": "off",
 				"noConsole": "info",
 				"noRedeclare": "off"
 			},

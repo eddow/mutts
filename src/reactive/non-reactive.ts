@@ -33,7 +33,7 @@ export function isUnreactiveProp(obj: object, prop: PropertyKey): boolean {
 	const marker = obj[unreactiveProperties]
 	return (
 		marker === true || // Fully unreactive
-		(marker && marker.has?.(prop)) || // Property is unreactive
+		marker?.has?.(prop) || // Property is unreactive
 		false
 	)
 }

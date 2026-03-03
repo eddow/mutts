@@ -39,18 +39,6 @@ const subsRegister = new WeakMap<any, SubProxy>()
 // TODO: `touched` trigger also compares to old value and should use the internalUntracked flag
 let internalUntracked = false
 
-const independentHandler: ProxyHandler<any> & Record<symbol, unknown> = {
-	get(obj, prop, receiver) {
-		if (internalUntracked) return FoolProof.get(obj, prop, receiver)
-		internalUntracked = true
-		try {
-			return FoolProof.get(obj, prop, receiver)
-		} finally {
-			internalUntracked = false
-		}
-	},
-}
-
 const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj, prop, receiver) {

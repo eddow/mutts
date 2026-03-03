@@ -59,13 +59,18 @@ describe('ZoneHistory', () => {
         });
     });
 
-    test('throws on re-entry of historical zone', () => {
+    test('permits re-entry of historical zone (no double-add)', () => {
         const zone = new ZoneHistory<string>();
         zone.present.with('a', () => {
-            expect(() => {
-                zone.present.with('a', () => {});
-            }).toThrow('ZoneHistory: re-entering historical zone');
+            // Re-entering 'a' should NOT throw — it's permissive now
+            zone.present.with('a', () => {
+                expect(zone.has('a')).toBe(true);
+            });
+            // 'a' should still be in history (not removed by the redundant leave)
+            expect(zone.has('a')).toBe(true);
         });
+        // After outer leave, history is clean
+        expect(zone.active.history.size).toBe(0);
     });
 
     test('active setter restores history from snapshot (async hook path)', () => {

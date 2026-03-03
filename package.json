@@ -138,7 +138,7 @@
   },
   "type": "module",
   "sideEffects": [
-    "./src/init.ts",
+    "./src/index.ts",
     "./src/entry-browser.ts",
     "./src/entry-browser.dev.ts",
     "./src/entry-node.ts",

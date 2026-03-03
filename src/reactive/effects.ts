@@ -889,6 +889,7 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 		optionCall('beginChain', roots)
 	}
 
+	// TODO: Consider this has been produced but was useless - it might be more correct ?const caller = executingStack.length > 0 ? getActiveEffect() : undefined
 	const caller = getActiveEffect()
 
 	// Optimization: If nested and NOT immediate, just join the existing batch
@@ -1086,7 +1087,6 @@ const fr = new FinalizationRegistry<() => void>((f) => f())
  * Reactive effect function with chainable flavor modifiers.
  */
 export interface Effect {
-	// biome-ignore lint/suspicious/noConfusingVoidType: Effect callbacks commonly return void
 	(
 		fn: (access: EffectAccess) => EffectCloser | undefined | void | Promise<any>,
 		effectOptions?: EffectOptions
@@ -1107,7 +1107,6 @@ export const effect: Effect = named(
 	effectMarker.leave,
 	flavored(
 		function effect(
-			// biome-ignore lint/suspicious/noConfusingVoidType: Effect callbacks commonly return void
 			fn: (access: EffectAccess) => EffectCloser | undefined | void | Promise<any>,
 			effectOptions: EffectOptions = {}
 		): EffectCleanup {

@@ -1,8 +1,9 @@
 import { decorator, type GenericClassDecorator } from '../decorator'
 import { flavored, flavorOptions } from '../flavored'
+import type { FunctionWrapper } from '../zone'
 import { deepWatch } from './deep-watch'
-import { link } from './effect-context'
-import { effect, untracked } from './effects'
+import { effectAggregator, effectHistory, getActiveEffect, link } from './effect-context'
+import { effect, root, untracked } from './effects'
 import { addUnreactiveProps, isNonReactive } from './non-reactive'
 import { reactive } from './proxy'
 import { markWithRoot } from './registry'
@@ -219,13 +220,19 @@ export const unreactive = decorator({
 
 //#region resource
 
-export function lazyInit<T extends object>(resource: T, load: ScopedCallback) {
+export function lazyInit<T extends object>(resource: T, load: ScopedCallback) {/* TODO: architecture - when ?
+	let ascender: FunctionWrapper
+	effect(({ ascend }) => {
+		ascender = ascend
+	})*/
 	let fresh = true
+	let anchor: any
 	return new Proxy(resource, {
 		[Symbol.toStringTag]: 'LazyInit',
 		get(target, prop) {
 			if (fresh) {
-				load()
+				//ascender(load)
+				anchor = root(load)
 				fresh = false
 			}
 			return target[prop]
@@ -249,7 +256,7 @@ export interface Resource<T> {
  * @returns Reactive Resource object with value, loading, error, latest properties
  */
 export function resource<T>(
-	fetcher: (access: EffectAccess, signal: AbortSignal) => Promise<T> | T,
+	fetcher: (access: EffectAccess) => Promise<T> | T,
 	options: { initialValue?: T } = {}
 ): Resource<T> {
 	const resource: Partial<Resource<T>> = reactive({
@@ -277,7 +284,7 @@ export function resource<T>(
 				resource.error = undefined
 
 				try {
-					const result = fetcher(access, access.signal)
+					const result = fetcher(access)
 
 					if (result instanceof Promise) {
 						resource.promise = result.then(() => {})

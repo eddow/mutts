@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resource } from '../../src/reactive/satellite'
-import { reactive } from '../../src/reactive/proxy'
+import { resource, reactive, effect, unwrap } from '../../src/entry-browser'
+import { watchers } from '../../src/reactive/registry'
 
 describe('resource', () => {
 	it('should load initial value (async)', () => {
@@ -46,6 +46,7 @@ describe('resource', () => {
 		const r = resource(async () => {
 			throw new Error('fail')
 		})
+		void r.loading // Trigger lazy init
 
 		await new Promise(resolve => setTimeout(resolve, 10))
 		expect(r.loading).toBe(false)
@@ -63,6 +64,74 @@ describe('resource', () => {
 		state.id = 2
 		await new Promise(resolve => setTimeout(resolve, 0))
 		expect(r.value).toBe('item-2')
+	})
+
+	it('should not stall after multiple async transitions (parenting trap regression)', async () => {
+		const state = reactive({ id: 1 })
+		const log: string[] = []
+
+		const r = resource(async () => {
+			const id = state.id
+			await new Promise(resolve => setTimeout(resolve, 5))
+			return `page-${id}`
+		})
+
+		// Observe the resource value via an effect to simulate a render effect
+		effect(() => {
+			if (r.value !== undefined) log.push(r.value)
+		})
+
+		// Wait for initial fetch (id=1)
+		await new Promise(resolve => setTimeout(resolve, 20))
+		expect(r.value).toBe('page-1')
+
+		// Transition 1→2
+		state.id = 2
+		await new Promise(resolve => setTimeout(resolve, 20))
+		expect(r.value).toBe('page-2')
+
+		// Transition 2→3 — this is the one that stalled before the fix
+		state.id = 3
+		await new Promise(resolve => setTimeout(resolve, 20))
+		expect(r.value).toBe('page-3')
+
+		// Transition 3→4 — extra check for stability
+		state.id = 4
+		await new Promise(resolve => setTimeout(resolve, 20))
+		expect(r.value).toBe('page-4')
+
+		expect(log).toEqual(['page-1', 'page-2', 'page-3', 'page-4'])
+	})
+
+	it('should not stall with zone-restored .then() (browser polyfill scenario)', async () => {
+		// Simulate the browser async polyfill scenario:
+		// .then() callbacks run with effectHistory restored to the resource effect
+
+		const state = reactive({ postId: 1 })
+
+		const r = resource(async () => {
+			const id = state.postId
+			await new Promise(resolve => setTimeout(resolve, 5))
+			return `Post ${id}`
+		})
+
+		const rendered: string[] = []
+		effect(() => {
+			rendered.push(`${r.value ?? '(loading)'}`)
+		})
+
+		await new Promise(resolve => setTimeout(resolve, 20))
+		expect(r.value).toBe('Post 1')
+
+		// Check that postId is still tracked
+		const stateRaw = unwrap(state)
+		const stateWatchers = watchers.get(stateRaw)
+		const postIdDeps = stateWatchers?.get('postId')
+		expect(postIdDeps?.size).toBeGreaterThan(0)
+
+		state.postId = 2
+		await new Promise(resolve => setTimeout(resolve, 20))
+		expect(r.value).toBe('Post 2')
 	})
 
 	it('should handle race conditions', async () => {
@@ -114,12 +183,13 @@ describe('resource', () => {
 		const state = reactive({ id: 1 })
 		const signals: AbortSignal[] = []
 		
-		const r = resource(async (_, signal) => {
+		const r = resource(async ({ signal }) => {
 			signals.push(signal)
 			const id = state.id // Track state.id
 			await new Promise(resolve => setTimeout(resolve, 50))
 			return `item-${id}`
 		})
+		void r.loading // Trigger lazy init
 
 		await new Promise(resolve => setTimeout(resolve, 5))
 		expect(signals.length).toBe(1)

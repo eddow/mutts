@@ -280,7 +280,6 @@ export const projectionInfo = Symbol('projection-info')
 export const forwardThrow = Symbol('throw')
 
 export type EffectCloser = (reason?: CleanupReason) => void
-// biome-ignore lint/suspicious/noConfusingVoidType: Catch handlers commonly return void
 export type CatchFunction = (error: unknown) => EffectCloser | undefined | void
 
 /**
