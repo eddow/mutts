@@ -38,13 +38,13 @@ export abstract class AZone<T> {
 			this.leave(prev)
 		}
 	}
-	get zoned(): FunctionWrapper {
+	get zoned(): GetterWrapper {
 		const active = this.active
 		return named(`${this}@${active}`, (fn) => this.with(active, fn))
 	}
 }
 
-export type FunctionWrapper = <R>(fn: () => R) => R
+export type GetterWrapper = <R>(fn: () => R) => R
 
 export class Zone<T> extends AZone<T> {
 	active: T | undefined

@@ -52,7 +52,7 @@ The base class for all zone implementations.
 - `active: T | undefined`: The current value in the zone.
 - `with<R>(value: T, fn: () => R): R`: Executes `fn` with `value` set as active.
 - `root<R>(fn: () => R): R`: Executes `fn` with the zone cleared (undefined).
-- `zoned: FunctionWrapper`: A getter that returns a function which, when called, restores the zone to its **current** state.
+- `zoned: GetterWrapper`: A getter that returns a function which, when called, restores the zone to its **current** state.
 
 ### `Zone<T>`
 Simple stack-based storage.

@@ -23,6 +23,7 @@ export {
 	zip,
 } from './utils'
 export * from './zone'
+
 // Important: let it here!
 import pkg from '../package.json'
 

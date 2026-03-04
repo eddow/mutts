@@ -1,9 +1,8 @@
 import { decorator, type GenericClassDecorator } from '../decorator'
 import { flavored, flavorOptions } from '../flavored'
-import type { FunctionWrapper } from '../zone'
 import { deepWatch } from './deep-watch'
-import { effectAggregator, effectHistory, getActiveEffect, link } from './effect-context'
-import { effect, root, untracked } from './effects'
+import { getActiveEffect, link } from './effect-context'
+import { captured, effect, root, untracked } from './effects'
 import { addUnreactiveProps, isNonReactive } from './non-reactive'
 import { reactive } from './proxy'
 import { markWithRoot } from './registry'
@@ -220,19 +219,14 @@ export const unreactive = decorator({
 
 //#region resource
 
-export function lazyInit<T extends object>(resource: T, load: ScopedCallback) {/* TODO: architecture - when ?
-	let ascender: FunctionWrapper
-	effect(({ ascend }) => {
-		ascender = ascend
-	})*/
+export function lazyInit<T extends object>(resource: T, load: ScopedCallback) {
+	const creation = getActiveEffect()
 	let fresh = true
-	let anchor: any
 	return new Proxy(resource, {
 		[Symbol.toStringTag]: 'LazyInit',
 		get(target, prop) {
 			if (fresh) {
-				//ascender(load)
-				anchor = root(load)
+				captured(creation, load)()
 				fresh = false
 			}
 			return target[prop]
@@ -270,6 +264,7 @@ export function resource<T>(
 	})
 
 	const reloadSignal = reactive({ value: 0 })
+	// Solve race conditions: make sure a new fast request is not overloaded by a slow old one
 	let counter = 0
 
 	return lazyInit(resource as Resource<T>, () => {
@@ -315,7 +310,7 @@ export function resource<T>(
 					resource.loading = false
 				}
 			})
-		)
+		) as Resource<T>
 	})
 }
 

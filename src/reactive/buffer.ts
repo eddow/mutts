@@ -1,6 +1,6 @@
 import { arrayDiff } from '../diff'
 import { flavored } from '../flavored'
-import type { FunctionWrapper } from '../zone'
+import type { GetterWrapper } from '../zone'
 import { getState, touched, touched1 } from './change'
 import { link } from './effect-context'
 import { effect } from './effects'
@@ -171,11 +171,10 @@ export function lift<Output extends any[] | object>(cb: (access: EffectAccess) =
 
 			if (Array.isArray(source)) {
 				const res = result as unknown[]
-				const patches = arrayDiff(res, source)
-				for (let i = patches.length - 1; i >= 0; i--) {
-					const { indexA, sliceA, sliceB } = patches[i]
+				for (const { indexA, sliceA, sliceB } of arrayDiff(res, source).sort(
+					(a, b) => a.indexA - b.indexA
+				))
 					res.splice(indexA, sliceA.length, ...sliceB)
-				}
 			} else {
 				for (const key of Object.keys(source)) {
 					const had = key in rawResult
@@ -241,7 +240,7 @@ export function morphArray<I, O>(
 		return source.map((i) => fn(i)) as any
 	}
 
-	let track!: FunctionWrapper
+	let track!: GetterWrapper
 	const itemEffects = new Map<any, { stop: ScopedCallback; index: { value: number } }>()
 	const cache = [] as O[]
 	let input: readonly I[] = []
@@ -372,7 +371,7 @@ export function morphMap<K, V, O>(
 		return res as any
 	}
 
-	let track!: FunctionWrapper
+	let track!: GetterWrapper
 	const itemEffects = new Map<any, ScopedCallback>()
 	const cache = new Map<K, O>()
 	Object.defineProperty(cache, 'constructor', { value: Object, enumerable: false })
@@ -491,7 +490,7 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 		return res
 	}
 
-	let track!: FunctionWrapper
+	let track!: GetterWrapper
 	const itemEffects = new Map<any, ScopedCallback>()
 	const cache = {} as any
 

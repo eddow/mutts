@@ -9,6 +9,7 @@ export {
 	//batch, - NEVER export batch, it deals with EffectTriggers who are internal types - mutts consumers use `atomic` or `atom`
 	biDi,
 	caught,
+	captured,
 	defer,
 	effect,
 	getActivationLog,

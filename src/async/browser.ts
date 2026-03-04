@@ -39,6 +39,7 @@ function wrap<Args extends any[], R>(
 		try {
 			return fn.apply(this, args)
 		} finally {
+			/* cf BROWSER_ASYNC_POLYFILL.md
 			if (originals.queueMicrotask) {
 				// Double microtask ensures we run after the first await resumption microtask
 				originals.queueMicrotask.call(globalThis, () => {
@@ -50,7 +51,7 @@ function wrap<Args extends any[], R>(
 				})
 			} else {
 				for (let i = undoers.length - 1; i >= 0; i--) undoers[i]()
-			}
+			}*/
 		}
 	}
 }

@@ -1056,6 +1056,25 @@ export const atomic = decorator({
 })
 
 /**
+ * Wraps `fn` so it runs within `effect`'s zone context when invoked later.
+ *
+ * Useful for deferred callbacks (event listeners, `DOMContentLoaded`, etc.)
+ * that need sub-effects parented to the original effect.
+ *
+ * @param effect - The effect whose context should be restored, or `undefined` for root context
+ * @param fn - The function to wrap
+ * @returns A function with the same signature that restores the effect context before calling `fn`
+ */
+export function captured<Args extends any[], Return>(
+	effect: EffectTrigger | undefined,
+	fn: (...args: Args) => Return,
+): (...args: Args) => Return {
+	return named(effectMarker.leave, (...args: Args) =>
+		effectHistory.present.with(effect, () => fn(...args))
+	)
+}
+
+/**
  * Runs `fn` atomically and **always immediately**, batching all reactive effects
  * triggered inside it so they fire only once after `fn` completes.
  *

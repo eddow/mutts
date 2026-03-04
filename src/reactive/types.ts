@@ -1,4 +1,4 @@
-import type { FunctionWrapper } from '../zone'
+import type { GetterWrapper } from '../zone'
 import { debugHooks } from './debug-hooks'
 
 export type EffectAccessEvents = {
@@ -22,7 +22,7 @@ export interface EffectAccess {
 	 * })
 	 * ```
 	 */
-	tracked: FunctionWrapper
+	tracked: GetterWrapper
 	/**
 	 * Tracks dependencies in the parent effect context
 	 * Use this when child effects should track dependencies in the parent,
@@ -40,7 +40,7 @@ export interface EffectAccess {
 	 * })
 	 * ```
 	 */
-	ascend: FunctionWrapper
+	ascend: GetterWrapper
 	/**
 	 * `false` on the first execution, `true` or `CleanupReason` on subsequent runs.
 	 * `true` means this is a re-run but detailed reason gathering is disabled or unavailable.
