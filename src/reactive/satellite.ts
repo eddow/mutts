@@ -1,8 +1,8 @@
 import { decorator, type GenericClassDecorator } from '../decorator'
 import { flavored, flavorOptions } from '../flavored'
 import { deepWatch } from './deep-watch'
-import { effectHistory, getActiveEffect, link } from './effect-context'
-import { captured, effect, root, untracked } from './effects'
+import { effectHistory, link } from './effect-context'
+import { captured, effect, untracked } from './effects'
 import { addUnreactiveProps, isNonReactive } from './non-reactive'
 import { reactive } from './proxy'
 import { markWithRoot } from './registry'
@@ -282,8 +282,8 @@ export function resource<T>(
 					const result = fetcher(access)
 
 					if (result instanceof Promise) {
-						resource.promise = result.then(
-							(val) => {
+						resource.promise = result
+							.then((val) => {
 								if (id === counter) {
 									resource.value = val
 									resource.latest = val
@@ -295,8 +295,7 @@ export function resource<T>(
 									resource.error = err
 									resource.loading = false
 								}
-							}
-						)
+							})
 					} else {
 						resource.promise = Promise.resolve()
 						resource.value = result

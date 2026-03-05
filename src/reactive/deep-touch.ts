@@ -86,9 +86,9 @@ export function notifyPropertyChange(
 		const origin = { obj: unwrappedObj, prop }
 		// Deep touch: only notify nested property changes with origin filtering
 		// Don't notify direct property change - the whole point is to avoid parent effects re-running
-		
+
 		const changes = untracked(() => recursiveTouch(oldValue, newValue, new WeakMap(), [], origin))
-		
+
 		// When deep touch found no child differences, the object identity still changed.
 		// Migrate watchers from old → new so the dependency chain is preserved.
 		if (changes.length === 0) {
@@ -290,7 +290,6 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 		let currentEffects: Map<EffectTrigger, unknown> | undefined
 		const propsArray = [prop]
 		if (objectWatchers) {
-			// console.log(`[DEBUG] dispatchNotifications: processing ${obj.constructor.name} (has watchers)`)
 			currentEffects = new Map<EffectTrigger, unknown>()
 			const broad = evolution.type !== 'set' ? [allProps, keysOf] : [allProps]
 			collectEffects(obj, evolution, currentEffects, objectWatchers, broad, propsArray)

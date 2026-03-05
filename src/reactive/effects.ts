@@ -1,8 +1,8 @@
-import { type HistoryValue } from '../zone'
 import { decorator } from '../decorator'
 import { flavored, flavorOptions } from '../flavored'
 import { IterableWeakSet } from '../iterableWeak'
 import { named } from '../utils'
+import type { HistoryValue } from '../zone'
 import { debugHooks } from './debug-hooks'
 import { effectAggregator, effectHistory, getActiveEffect } from './effect-context'
 import {
@@ -1068,7 +1068,7 @@ export const atomic = decorator({
  */
 export function captured<Args extends any[], Return>(
 	prev: HistoryValue<EffectTrigger> | undefined,
-	fn: (...args: Args) => Return,
+	fn: (...args: Args) => Return
 ): (...args: Args) => Return {
 	prev ??= effectHistory.active
 	return named(effectMarker.leave, (...args: Args) => {

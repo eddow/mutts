@@ -1,8 +1,15 @@
+# 1.0.13
+
+# 1.0.12
+
+- `node:async_hooks` removed from browser imports
+
 # 1.0.11
 
 ## Bugfixes
 
 - **Deep Watch deduplication for Map/Set**: Map/Set mutators (`.set()`, `.add()`, `.delete()`, `.clear()`) no longer double-trigger deep watchers. Previously, both the content change and the `size` notification would independently bubble up, causing watchers to fire twice per mutation. The `size` notification now skips `bubbleUpChange` via a new `bubble` parameter on `touched1`/`touched`.
+- Async zones deep testing and fixing
 
 ## Refactoring
 

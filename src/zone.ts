@@ -134,7 +134,7 @@ export class ZoneAggregator extends AZone<Map<AZone<unknown>, unknown>> {
 /**
  * Aggregator of zones that should be preserved across async boundaries.
  * If you add a zone here, it will be preserved across async boundaries.
- * 
+ *
  * @example
  * ```ts
  * import { Zone, asyncZone } from 'mutts'
@@ -143,12 +143,15 @@ export class ZoneAggregator extends AZone<Map<AZone<unknown>, unknown>> {
  * ```
  */
 export const asyncZone = tag('async', new ZoneAggregator())
-asyncHooks.addHook(() => {	// capture state before async boundary
+asyncHooks.addHook(() => {
+	// capture state before async boundary
 	const zone = asyncZone.active
-	return () => {	// restore state after async boundary, temporarily
+	return () => {
+		// restore state after async boundary, temporarily
 		const prev = asyncZone.active
 		asyncZone.active = zone
-		return () => {	// restore previous state from before our restore
+		return () => {
+			// restore previous state from before our restore
 			asyncZone.active = prev
 		}
 	}
