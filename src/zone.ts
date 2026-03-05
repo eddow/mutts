@@ -50,7 +50,7 @@ export class Zone<T> extends AZone<T> {
 	active: T | undefined
 }
 
-type HistoryValue<T> = { present: T | undefined; history: Set<T> }
+export type HistoryValue<T> = { present: T | undefined; history: Set<T> }
 export class ZoneHistory<T> extends AZone<HistoryValue<T>> {
 	private history = new Set<T>()
 	public readonly present: AZone<T>
@@ -131,13 +131,24 @@ export class ZoneAggregator extends AZone<Map<AZone<unknown>, unknown>> {
 	}
 }
 
+/**
+ * Aggregator of zones that should be preserved across async boundaries.
+ * If you add a zone here, it will be preserved across async boundaries.
+ * 
+ * @example
+ * ```ts
+ * import { Zone, asyncZone } from 'mutts'
+ * const userZone = new Zone<User>()
+ * asyncZone.add(userZone)
+ * ```
+ */
 export const asyncZone = tag('async', new ZoneAggregator())
-asyncHooks.addHook(() => {
+asyncHooks.addHook(() => {	// capture state before async boundary
 	const zone = asyncZone.active
-	return () => {
+	return () => {	// restore state after async boundary, temporarily
 		const prev = asyncZone.active
 		asyncZone.active = zone
-		return () => {
+		return () => {	// restore previous state from before our restore
 			asyncZone.active = prev
 		}
 	}

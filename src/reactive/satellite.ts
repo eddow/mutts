@@ -1,7 +1,7 @@
 import { decorator, type GenericClassDecorator } from '../decorator'
 import { flavored, flavorOptions } from '../flavored'
 import { deepWatch } from './deep-watch'
-import { getActiveEffect, link } from './effect-context'
+import { effectHistory, getActiveEffect, link } from './effect-context'
 import { captured, effect, root, untracked } from './effects'
 import { addUnreactiveProps, isNonReactive } from './non-reactive'
 import { reactive } from './proxy'
@@ -220,7 +220,7 @@ export const unreactive = decorator({
 //#region resource
 
 export function lazyInit<T extends object>(resource: T, load: ScopedCallback) {
-	const creation = getActiveEffect()
+	const creation = effectHistory.active
 	let fresh = true
 	return new Proxy(resource, {
 		[Symbol.toStringTag]: 'LazyInit',
@@ -282,16 +282,15 @@ export function resource<T>(
 					const result = fetcher(access)
 
 					if (result instanceof Promise) {
-						resource.promise = result.then(() => {})
-						result.then(
+						resource.promise = result.then(
 							(val) => {
 								if (id === counter) {
 									resource.value = val
 									resource.latest = val
 									resource.loading = false
 								}
-							},
-							(err) => {
+							})
+							.catch((err) => {
 								if (id === counter) {
 									resource.error = err
 									resource.loading = false

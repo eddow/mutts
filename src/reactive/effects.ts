@@ -1,3 +1,4 @@
+import { type HistoryValue } from '../zone'
 import { decorator } from '../decorator'
 import { flavored, flavorOptions } from '../flavored'
 import { IterableWeakSet } from '../iterableWeak'
@@ -1061,17 +1062,18 @@ export const atomic = decorator({
  * Useful for deferred callbacks (event listeners, `DOMContentLoaded`, etc.)
  * that need sub-effects parented to the original effect.
  *
- * @param effect - The effect whose context should be restored, or `undefined` for root context
+ * @param prev - The effect whose context should be restored, or `undefined` for root context
  * @param fn - The function to wrap
  * @returns A function with the same signature that restores the effect context before calling `fn`
  */
 export function captured<Args extends any[], Return>(
-	effect: EffectTrigger | undefined,
+	prev: HistoryValue<EffectTrigger> | undefined,
 	fn: (...args: Args) => Return,
 ): (...args: Args) => Return {
-	return named(effectMarker.leave, (...args: Args) =>
-		effectHistory.present.with(effect, () => fn(...args))
-	)
+	prev ??= effectHistory.active
+	return named(effectMarker.leave, (...args: Args) => {
+		return effectHistory.with(prev, () => fn(...args))
+	})
 }
 
 /**

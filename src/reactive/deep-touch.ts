@@ -3,7 +3,7 @@ import { debugHooks } from './debug-hooks'
 import { bubbleUpChange, objectsWithDeepWatchers } from './deep-watch-state'
 import { batch, untracked } from './effects'
 import { isNonReactive } from './non-reactive'
-import { getEffectNode, watchers } from './registry'
+import { effectToReactiveObjects, getEffectNode, watchers } from './registry'
 import { getDependencyStack } from './tracking'
 import {
 	allProps,
@@ -38,6 +38,29 @@ export function shouldRecurseTouch(oldValue: any, newValue: any): boolean {
 }
 
 /**
+ * Migrate all watcher registrations from oldRef to newRef.
+ * Called when deep touch replaces an object identity without any child value differences,
+ * to prevent watcher orphaning (effects still pointing at the discarded old object).
+ */
+function migrateWatchers(oldRef: object, newRef: object) {
+	const oldMap = watchers.get(oldRef)
+	if (!oldMap) return
+	// Move the entire watcher map
+	watchers.set(newRef, oldMap)
+	watchers.delete(oldRef)
+	// Update the reverse map (effect → objects it watches)
+	for (const deps of oldMap.values()) {
+		for (const effect of deps) {
+			const objects = effectToReactiveObjects.get(effect)
+			if (objects) {
+				objects.delete(oldRef)
+				objects.add(newRef)
+			}
+		}
+	}
+}
+
+/**
  * Centralized function to handle property change notifications with optional recursive touch
  * @param targetObj - The object whose property changed
  * @param prop - The property that changed
@@ -63,9 +86,16 @@ export function notifyPropertyChange(
 		const origin = { obj: unwrappedObj, prop }
 		// Deep touch: only notify nested property changes with origin filtering
 		// Don't notify direct property change - the whole point is to avoid parent effects re-running
-		dispatchNotifications(
-			untracked(() => recursiveTouch(oldValue, newValue, new WeakMap(), [], origin))
-		)
+		
+		const changes = untracked(() => recursiveTouch(oldValue, newValue, new WeakMap(), [], origin))
+		
+		// When deep touch found no child differences, the object identity still changed.
+		// Migrate watchers from old → new so the dependency chain is preserved.
+		if (changes.length === 0) {
+			migrateWatchers(unwrap(oldValue), unwrap(newValue))
+		} else {
+			dispatchNotifications(changes)
+		}
 
 		// Notify opaque listeners (like memoize) that always want to know about identity changes
 		touchedOpaque(targetObj, evolution, prop)
