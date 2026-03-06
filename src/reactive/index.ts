@@ -1,4 +1,4 @@
-export { attend, lift, morph, morph as project } from './buffer'
+export { attend, lift, morph } from './buffer'
 export { getState, touched, touched1 } from './change'
 export { deepWatch } from './deep-watch'
 export { effectAggregator, getActiveEffect, link, unlink } from './effect-context'

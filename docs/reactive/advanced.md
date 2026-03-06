@@ -1171,7 +1171,7 @@ effect(() => console.log(profile.displayName)) // tracks .displayName only
 **Derived filtered collection**:
 ```typescript
 const active = lift(() => items.filter(x => x.active))
-// active is a reactive array — project() or effects on active[i] work fine
+// active is a reactive array — morph() or effects on active[i] work fine
 ```
 
 **Per-element transform**:

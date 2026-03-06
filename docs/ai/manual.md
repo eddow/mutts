@@ -13,7 +13,7 @@ Proxy-based **fine-grained reactivity** — changes propagate synchronously thro
 | State | `reactive(obj)` — proxy wraps, tracks reads/writes |
 | Reactions | `effect(() => {})` — auto-tracks deps, re-runs on change |
 | Computed | `memoize(fn)` — cached, invalidates on tracked deps |
-| Collections | `project(arr, fn)` — per-entry effects, not `.map()` |
+| Collections | `morph(arr, fn)` — per-entry reactive transform |
 | Async context | `Zone` + `asyncZone` — propagates across await |
 | Batching | `atomic(() => {})` wraps, `atom(() => {})` runs immediately — fire effects once after all mutations |
 | Cleanup | Return fn from effect — runs before re-run/disposal |
@@ -107,14 +107,14 @@ array.splice(0)   // also works — explicit clear
 ```
 
 ### TRAP 6: Using .map() for reactive transforms
-`.map()` is static — full rebuild on any change. Use `project()` for per-entry reactivity.
+`.map()` is static — full rebuild on any change. Use `morph()` for per-entry reactivity.
 
 ```ts
 // BAD — full rebuild
 const doubled = items.map(x => x.value * 2)
 
 // GOOD — per-entry effects
-const doubled = project(items, ({ get }) => get().value * 2)
+const doubled = morph(items, (value) => value * 2)
 ```
 
 ### TRAP 7: Deep watch overhead
@@ -280,12 +280,12 @@ Array methods (`push`, `splice`, `sort`, etc.) all trigger reactivity.
 
 All transforms return reactive results. Cleanup via `result[cleanup]()`.
 
-### 5.1 project() — Per-entry reactive map
+### 5.1 morph() — Per-entry reactive map
 
 ```ts
-const names = project(users, ({ get }) => get().name.toUpperCase())
+const names = morph(users, ({ get }) => get().name.toUpperCase())
 // names[0] recomputes ONLY when users[0] changes
-// Variants: project.record(), project.map() — auto-dispatches by source type
+// Variants: morph.record(), morph.map() — auto-dispatches by source type
 ```
 
 **Access object**: `{ get(), set(v), key, source, old, value }`
@@ -309,7 +309,7 @@ const doubled = organized(source, (access, target) => {
 })
 ```
 
-### 5.6 lift() — Sync a computed array/object
+### 5.4 lift() — Sync a computed array/object
 
 ```ts
 const filtered = lift(() => items.filter(x => x.active))
@@ -318,7 +318,7 @@ const filtered = lift(() => items.filter(x => x.active))
 
 **lift vs deep touching**: Deep touching handles `state.items = newArray` (replacement diffs). `lift` is for **derived collections** (filter/map/reshape) where there's no single assignment — the output is recomputed from scratch.
 
-**lift vs memoize**: `memoize` is lazy (invalidate → recompute on next read), returns raw values, keyed by args. `lift` is eager (recompute immediately), returns a **stable reactive proxy** with per-element diffing. Use `lift` for derived collections consumed by `project()`/effects; use `memoize` for parameterized caching or lazy evaluation.
+**lift vs memoize**: `memoize` is lazy (invalidate → recompute on next read), returns raw values, keyed by args. `lift` is eager (recompute immediately), returns a **stable reactive proxy** with per-element diffing. Use `lift` for derived collections consumed by effects; use `memoize` for parameterized caching or lazy evaluation.
 
 ---
 
@@ -484,7 +484,7 @@ const theme = await chainPromise(api.getUser('123')).getProfile().getSettings().
 ## 11. PHILOSOPHY
 
 - **Affirmative state**: Declare `Y = f(X)`. Don't say "when X changes, update Y".
-- **Events are legacy**: Use reactive derivations (`effect`, `memoize`, `project`) for internal logic. Events only for DOM/external APIs.
+- **Events are legacy**: Use reactive derivations (`effect`, `memoize`, `morph`) for internal logic. Events only for DOM/external APIs.
 - **Cleanup ≠ undo**: Cleanup releases subscriptions, does NOT undo side effects.
 
 ---
