@@ -1112,4 +1112,39 @@ describe('ReactiveArray', () => {
 			}
 		})
 	})
+
+	describe('flat() dependency tracking', () => {
+		it('should re-run effect when array element changes after flat()', () => {
+			const ra = reactive([[1], [2], [3]])
+			let flatResult: number[] = []
+			let effectCount = 0
+
+			effect(() => {
+				effectCount++
+				flatResult = ra.flat()
+			})
+
+			expect(effectCount).toBe(1)
+			expect(flatResult).toEqual([1, 2, 3])
+
+			ra[1] = [20]
+			expect(effectCount).toBe(2)
+			expect(flatResult).toEqual([1, 20, 3])
+		})
+
+		it('should re-run effect when array structure changes after flat()', () => {
+			const ra = reactive([[1], [2]])
+			let effectCount = 0
+
+			effect(() => {
+				effectCount++
+				ra.flat()
+			})
+
+			expect(effectCount).toBe(1)
+
+			ra.push([3])
+			expect(effectCount).toBe(2)
+		})
+	})
 })

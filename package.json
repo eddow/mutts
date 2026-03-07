@@ -4,7 +4,6 @@
   "version": "1.0.12",
   "main": "dist/browser.cjs",
   "module": "dist/browser.esm.js",
-  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "node": {

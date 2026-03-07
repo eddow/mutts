@@ -137,6 +137,7 @@ export abstract class ReactiveArrayWrapper extends Array {
 	}
 
 	flat(depth?: number): any[] {
+		dependant(this, keysOf)
 		return reactive(super.flat(depth))
 	}
 

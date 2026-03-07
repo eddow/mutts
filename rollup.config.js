@@ -2,15 +2,43 @@ import resolve from '@rollup/plugin-node-resolve'
 import commonjs from '@rollup/plugin-commonjs'
 import typescript from 'rollup-plugin-typescript2'
 import pluginDts from 'rollup-plugin-dts'
+import { mkdirSync, writeFileSync, existsSync } from 'node:fs'
+import { dirname, resolve as resolvePath } from 'node:path'
 import { rm } from 'node:fs/promises'
 import terser from '@rollup/plugin-terser'
 import json from '@rollup/plugin-json'
 
-await rm('dist', { recursive: true, force: true })
-
 const external = [
 	// Add any external dependencies here
 ]
+
+const isWatch = process.argv.includes('--watch')
+
+if (!isWatch) {
+	await rm('dist', { recursive: true, force: true })
+}
+
+function ensureStableTypeEntrypoints() {
+	const distDir = resolvePath('dist')
+	const entrypoints = [
+		['browser.d.ts', "export * from './src/entry-browser'\n"],
+		['browser.dev.d.ts', "export * from './src/entry-browser.dev'\n"],
+		['node.d.ts', "export * from './src/entry-node'\n"],
+		['node.dev.d.ts', "export * from './src/entry-node.dev'\n"],
+		['debug.d.ts', "export * from './debug/index'\n"],
+	]
+	return {
+		name: 'ensure-stable-type-entrypoints',
+		buildStart() {
+			mkdirSync(distDir, { recursive: true })
+			for (const [file, content] of entrypoints) {
+				const target = resolvePath(distDir, file)
+				mkdirSync(dirname(target), { recursive: true })
+				if (!existsSync(target)) writeFileSync(target, content)
+			}
+		},
+	}
+}
 
 const plugins = [
 	resolve({
@@ -24,6 +52,7 @@ const plugins = [
 		exclude: ['**/*.test.ts', '**/*.spec.ts'],
 	}),
 	json(),
+	...(isWatch ? [ensureStableTypeEntrypoints()] : []),
 ]
 
 // Single entry with multiple inputs for efficient chunking
@@ -60,17 +89,18 @@ const config = [
 	},
 	// DTS bundles with chunking
 	{
-		input: { ...input, index: 'src/index.ts' },
+		input,
 		output: [
 			{
 				dir: 'dist',
 				format: 'es',
 				entryFileNames: '[name].d.ts',
-				chunkFileNames: '[name]-[hash].d.ts',
+				chunkFileNames: '[name].d.ts',
 			},
 		],
 		external,
 		plugins: [
+			...(isWatch ? [ensureStableTypeEntrypoints()] : []),
 			pluginDts(),
 		],
 	},

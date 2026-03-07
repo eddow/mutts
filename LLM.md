@@ -263,3 +263,11 @@ import { reactiveOptions, devPreset } from 'mutts'
 Object.assign(reactiveOptions, devPreset)
 ```
 
+## Gotchas
+
+### tsx resolves `.d.ts` files as runtime modules
+
+`tsx` (used by mARC and other dev servers) overrides Node's ESM resolver. For symlinked packages, it can prefer a top-level `"types"` field or an `index.d.ts` over the `"exports"` map. If a `.d.ts` entry imports a DTS chunk (e.g. `./types.js` referencing `types.d.ts`), tsx tries to load the `.js` at runtime → `ERR_MODULE_NOT_FOUND`.
+
+**Fix applied:** removed the top-level `"types"` field from `package.json` (the `"exports"` map already provides per-condition `"types"` entries) and removed `index.d.ts` from the DTS build inputs since it was never referenced by `"exports"`. Pure Node ESM correctly uses the `"exports"` map; tsx now falls through to it too.
+
