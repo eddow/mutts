@@ -22,11 +22,11 @@ Proxy-based **fine-grained reactivity** — changes propagate synchronously thro
 
 ```ts
 import { reactive, effect, memoize, morph, attend, lift, cleanup,
-  atom, atomic, defer, untracked, unreactive, watch, when, biDi, caught, why,
-  cleanedBy, organized,
+  atom, atomic, defer, untracked, unreactive, watch, when, biDi, caught,
+  organized, organize, resource, root,
   Zone, asyncZone, ZoneHistory, ZoneAggregator,
   decorator, mixin, Eventful, Destroyable, flavored, Indexable, chainPromise,
-  reactiveOptions, isReactive, unwrap, getState
+  reactiveOptions, isReactive, unwrap, getState, ReactiveBase
 } from 'mutts'
 ```
 
@@ -164,7 +164,11 @@ state.count++ // triggers
 stop()        // disposes
 ```
 
-- **Access object**: `{ reaction, tracked(fn), ascend(fn) }` — `reaction` = false on first run, true after. `tracked` restores context in async. `ascend` tracks in parent effect.
+- **Access object**: `{ reaction, tracked(fn), ascend(fn), signal }`
+- `reaction` is `false` on first run, then `true` or a `CleanupReason` on re-runs.
+- `tracked` restores effect tracking in async or escaped callbacks.
+- `ascend` records dependencies on the parent effect context.
+- `signal` aborts when the effect is cleaned up or invalidated.
 - **Parent-child**: effects inside effects are children — parent disposal cascades.
 - **GC**: unreferenced top-level effects may GC — store `stop` to keep alive.
 - **Modifiers**: `effect.opaque(() => {})` (identity-only), `effect.named('x')(() => {})` (debug label). Chainable.
@@ -231,16 +235,15 @@ input.addEventListener('input', () => provide(input.value))
 ```ts
 watch(() => state.count, (newVal, oldVal) => {}) // specific derivation
 watch(state, () => {}) // any property
-watch(state, () => {}, { deep: true }) // deep (expensive)
+watch.deep(state, () => {}) // deep (expensive)
+watch.immediate(() => state.count, (newVal, oldVal) => {}) // immediate first call
 ```
 
-### 3.10 cleanedBy() — Attach cleanup to objects
+`watch` has 3 useful shapes:
 
-```ts
-const obj = cleanedBy({ data: [] }, () => console.log('cleaned up'))
-obj[cleanup]() // triggers cleanup
-// Chains: if obj already has a cleanup, both run
-```
+- `watch(() => value, callback)`
+- `watch.deep(() => object, callback)`
+- `watch(object, callback)`
 
 ### 3.11 Lazy computed values
 
@@ -258,8 +261,24 @@ effect(() => console.log(d.value)) // recomputes immediately, .value is reactive
 
 ```ts
 await when(() => state.loaded)        // resolves when truthy
-await when(() => state.ready, { timeout: 5000 }) // rejects after 5s
+await when(() => state.ready, 5000)   // rejects after 5s
 ```
+
+### 3.13 resource() — Async reactive state
+
+```ts
+const user = resource(async () => fetchUser(state.userId), { initialValue: null })
+
+effect(() => {
+  if (user.loading) return
+  console.log(user.value)
+})
+
+user.reload()
+await user.promise
+```
+
+`resource()` returns `{ value, loading, error, latest, reload(), promise }`.
 
 ---
 
@@ -283,12 +302,13 @@ All transforms return reactive results. Cleanup via `result[cleanup]()`.
 ### 5.1 morph() — Per-entry reactive map
 
 ```ts
-const names = morph(users, ({ get }) => get().name.toUpperCase())
+const names = morph(users, (user) => user.name.toUpperCase())
 // names[0] recomputes ONLY when users[0] changes
-// Variants: morph.record(), morph.map() — auto-dispatches by source type
+// Use morph.pure(...) when the callback has no reactive reads
 ```
 
-**Access object**: `{ get(), set(v), key, source, old, value }`
+For arrays the callback is `(value, access?) => mapped`.
+For Maps and records it also receives the key.
 
 ### 5.2 attend() — Per-key lifecycle
 
@@ -386,6 +406,8 @@ const graph = buildReactivityGraph()
 ```
 
 **ReactiveError.debugInfo**: `causalChain`, `creationStack`, `cycle` (for CYCLE_DETECTED).
+
+`onEffectThrow` is still exported as a deprecated alias of `caught`.
 
 ---
 
@@ -504,5 +526,5 @@ const theme = await chainPromise(api.getUser('123')).getProfile().getSettings().
 | `isReactive(obj)` to check | `obj._mutts_isReactive` |
 | Store `stop = effect(...)` | letting effect GC unintentionally |
 | `import { x } from 'mutts'` | `import { x } from 'mutts/reactive'` (no subpaths) |
-| `cleanedBy(obj, fn)` for cleanup | manual `obj[cleanup] = fn` |
+| `caught(handler)` for effect-local error handling | ad-hoc try/catch around reactive graph edges |
 | `memoize(() => a + b)` for computed | `effect` + manual state sync |

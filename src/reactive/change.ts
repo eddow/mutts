@@ -53,7 +53,7 @@ export function collectEffects(
 			const deps = objectWatchers.get(key)
 			if (deps) {
 				// Make sure `some.prop++` does not keep a dependency to `some.props`
-				deps.delete(sourceEffect)
+				if (sourceEffect) deps.delete(sourceEffect)
 				for (const effect of deps) {
 					const runningChain = isRunning(effect)
 					if (runningChain) {

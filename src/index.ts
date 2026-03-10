@@ -12,6 +12,7 @@ export * from './reactive'
 export * from './std-decorators'
 export {
 	arrayEquals,
+	CompareSymbol,
 	deepCompare,
 	isConstructor,
 	isDev,
@@ -30,19 +31,25 @@ import pkg from '../package.json'
 const { version } = pkg
 
 const GLOBAL_MUTTS_KEY = '__MUTTS_INSTANCE__'
+const runtimeGlobals = globalThis as typeof globalThis & {
+	window?: typeof window
+	global?: typeof globalThis
+	__filename?: string
+	[GLOBAL_MUTTS_KEY]?: unknown
+}
 const globalScope = (
 	typeof globalThis !== 'undefined'
 		? globalThis
-		: typeof window !== 'undefined'
-			? window
-			: typeof global !== 'undefined'
-				? global
+		: runtimeGlobals.window
+			? runtimeGlobals.window
+			: runtimeGlobals.global
+				? runtimeGlobals.global
 				: false
 ) as any
 if (globalScope) {
 	let source = 'mutts/index'
 	try {
-		if (typeof __filename !== 'undefined') source = __filename
+		if (runtimeGlobals.__filename) source = runtimeGlobals.__filename
 		else if (typeof import.meta !== 'undefined' && import.meta.url) {
 			source = import.meta.url
 		}

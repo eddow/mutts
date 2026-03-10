@@ -10,6 +10,7 @@ import {
 	objectsWithDeepWatchers,
 	removeBackReference,
 } from './deep-watch-state'
+import { getActiveEffect } from './effect-context'
 import { absent, isNonReactive, isUnreactiveProp } from './non-reactive'
 import { dependant } from './tracking'
 import {
@@ -39,6 +40,20 @@ const subsRegister = new WeakMap<any, SubProxy>()
 // TODO: `touched` trigger also compares to old value and should use the internalUntracked flag
 let internalUntracked = false
 
+function wrapReactiveValue(obj: any, prop: PropertyKey, value: any) {
+	if (!isReactive(value) && typeof value === 'object' && value !== null) {
+		const reactiveValue = reactiveObject(value)
+
+		// Only create back-references if this object needs them
+		if (needsBackReferences(obj)) {
+			addBackReference(reactiveValue, obj, prop)
+		}
+
+		return reactiveValue
+	}
+	return value
+}
+
 const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj, prop, receiver) {
@@ -60,6 +75,11 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 		// Symbols: fast-path — no reactivity tracking
 		if (typeof prop === 'symbol' || prop === 'constructor' || isUnreactiveProp(obj, prop))
 			return FoolProof.get(obj, prop, receiver)
+
+		if (!getActiveEffect()) {
+			const value = (subsRegister.get(obj)?.get || FoolProof.get)(obj, prop, receiver)
+			return wrapReactiveValue(obj, prop, value)
+		}
 
 		// Check if property exists using a trap-free walk to avoid triggering
 		// the has-trap cascade on prototype chains of reactive proxies.
@@ -107,17 +127,7 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 		// For arrays, use FoolProof.get (Indexer path) for numeric index reactivity.
 		// For all other objects, inline Reflect.get directly (skips 3 function calls).
 		const value = (subsRegister.get(obj)?.get || FoolProof.get)(obj, prop, receiver)
-		if (!isReactive(value) && typeof value === 'object' && value !== null) {
-			const reactiveValue = reactiveObject(value)
-
-			// Only create back-references if this object needs them
-			if (needsBackReferences(obj)) {
-				addBackReference(reactiveValue, obj, prop)
-			}
-
-			return reactiveValue
-		}
-		return value
+		return wrapReactiveValue(obj, prop, value)
 	},
 	set(obj, prop, value, receiver) {
 		const unwrapped = unwrap(receiver)

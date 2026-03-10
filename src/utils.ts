@@ -124,19 +124,25 @@ export function isOwnAccessor(obj: any, prop: any) {
 }
 
 /**
- * Deeply compares two values.
- * For objects, compares prototypes with === and then own properties recursively.
- * Uses a cache to handle circular references.
- * @param a - First value
- * @param b - Second value
- * @param cache - Map for circular reference protection (internal use)
- * @returns True if values are deeply equal
+ * Symbol used to provide custom comparison logic for an object.
+ */
+export const CompareSymbol = Symbol.for('mutts.compare')
+
+/**
  */
 export function deepCompare(a: any, b: any, cache = new Map<object, Set<object>>()): boolean {
 	if (a === b) return true
 
 	if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) {
 		return a === b
+	}
+
+	// Custom comparison support
+	if (typeof (a as any)[CompareSymbol] === 'function') {
+		return (a as any)[CompareSymbol](b, (x: any, y: any) => deepCompare(x, y, cache))
+	}
+	if (typeof (b as any)[CompareSymbol] === 'function') {
+		return (b as any)[CompareSymbol](a, (x: any, y: any) => deepCompare(x, y, cache))
 	}
 
 	// Prototype check
@@ -264,8 +270,16 @@ export function* stringKeys(o: object) {
 	for (const key in o) yield key
 }
 
+const runtimeGlobals = globalThis as typeof globalThis & {
+	process?: {
+		env?: {
+			NODE_ENV?: string
+		}
+	}
+}
+
 const _mode: string =
-	(typeof process !== 'undefined' && process.env?.NODE_ENV) ||
+	runtimeGlobals.process?.env?.NODE_ENV ||
 	(typeof import.meta !== 'undefined' && (import.meta as any).env?.MODE) ||
 	'production'
 

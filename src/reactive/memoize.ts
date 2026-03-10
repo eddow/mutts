@@ -3,7 +3,7 @@ import { flavored } from '../flavored'
 import { deepCompare, named } from '../utils'
 import { touched1 } from './change'
 import { effect, root, untracked } from './effects'
-import { getRoot, markWithRoot, rootFunctionSymbol } from './registry'
+import { getRoot, markWithRoot, type RootMarkedFunction, rootFunctionSymbol } from './registry'
 import { dependant } from './tracking'
 import { type CleanupReason, optionCall, options, proxyToObject } from './types'
 
@@ -43,7 +43,7 @@ function memoizeFunction<Result, Args extends MemoizableArgument[]>(
 	if (existing) return existing as (...args: Args) => Result
 
 	const cacheRoot: MemoCacheTree<Result> = {}
-	const memoized = markWithRoot(function memoized(...args: Args): Result {
+	const memoized = markWithRoot(function memoized(this: unknown, ...args: Args): Result {
 		if (args.some((arg) => !(arg && ['object', 'symbol', 'function'].includes(typeof arg)))) {
 			if (opts?.lenient) return fn.apply(this, args)
 			throw new Error('memoize expects non-null object arguments')
@@ -87,7 +87,7 @@ function memoizeFunction<Result, Args extends MemoizableArgument[]>(
 						// Lazy memoization: stop the effect so it doesn't re-run immediately.
 						// It will be re-created on next access.
 						if (node.cleanup) {
-							node.cleanup({ type: 'invalidate', cause: reason })
+							node.cleanup({ type: 'invalidate', cause: reason ?? { type: 'stopped' } })
 							node.cleanup = undefined
 						}
 					}
@@ -148,8 +148,8 @@ function memoizeObject<T extends Record<string, any>>(target: T, opts?: { lenien
 							propertyKey: prop,
 						}
 					)
-					const origRoot = originalGetter[rootFunctionSymbol]
-					if (origRoot) wrapper[rootFunctionSymbol] = origRoot
+					const origRoot = (originalGetter as RootMarkedFunction)[rootFunctionSymbol]
+					if (origRoot) (wrapper as RootMarkedFunction)[rootFunctionSymbol] = origRoot
 					wrapperRegistry.set(originalGetter, wrapper)
 				}
 				const memoized = memoizeFunction(wrapper, opts)
@@ -213,8 +213,8 @@ function makeMemoizeDecorator(memoizeOpts?: { lenient?: boolean }) {
 							propertyKey,
 						}
 					)
-					const origRoot = original[rootFunctionSymbol]
-					if (origRoot) wrapper[rootFunctionSymbol] = origRoot
+					const origRoot = (original as RootMarkedFunction)[rootFunctionSymbol]
+					if (origRoot) (wrapper as RootMarkedFunction)[rootFunctionSymbol] = origRoot
 					wrapperRegistry.set(original, wrapper)
 				}
 				const memoized = memoizeFunction(wrapper as any, memoizeOpts)
@@ -237,8 +237,8 @@ function makeMemoizeDecorator(memoizeOpts?: { lenient?: boolean }) {
 							propertyKey: name,
 						}
 					)
-					const origRoot = original[rootFunctionSymbol]
-					if (origRoot) wrapper[rootFunctionSymbol] = origRoot
+					const origRoot = (original as RootMarkedFunction)[rootFunctionSymbol]
+					if (origRoot) (wrapper as RootMarkedFunction)[rootFunctionSymbol] = origRoot
 					wrapperRegistry.set(original, wrapper)
 				}
 				const memoized = memoizeFunction(wrapper as any, memoizeOpts) as (

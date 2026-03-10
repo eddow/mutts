@@ -55,7 +55,7 @@ export function dependant(obj: any, prop: any = allProps) {
 
 	const node = getEffectNode(currentActiveEffect)
 	if ('dependencyHook' in node) {
-		node.dependencyHook(obj, prop)
+		node.dependencyHook?.(obj, prop)
 	}
 	let objectWatchers = watchers.get(obj)
 	if (!objectWatchers) {

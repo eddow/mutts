@@ -222,6 +222,7 @@ export const unreactive = decorator({
 export function lazyInit<T extends object>(resource: T, load: ScopedCallback) {
 	const creation = effectHistory.active
 	let fresh = true
+	const target = resource as T & Record<PropertyKey, unknown>
 	return new Proxy(resource, {
 		[Symbol.toStringTag]: 'LazyInit',
 		get(target, prop) {
@@ -229,7 +230,7 @@ export function lazyInit<T extends object>(resource: T, load: ScopedCallback) {
 				captured(creation, load)()
 				fresh = false
 			}
-			return target[prop]
+			return (target as typeof target & Record<PropertyKey, unknown>)[prop]
 		},
 	} as ProxyHandler<T>)
 }

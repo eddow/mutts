@@ -1,7 +1,15 @@
 export { attend, lift, morph } from './buffer'
 export { getState, touched, touched1 } from './change'
 export { deepWatch } from './deep-watch'
-export { effectAggregator, getActiveEffect, link, unlink } from './effect-context'
+export {
+	type EffectContext,
+	effectAggregator,
+	effectContext,
+	getActiveEffect,
+	link,
+	unlink,
+	withEffectContext,
+} from './effect-context'
 export {
 	addBatchCleanup,
 	atom,

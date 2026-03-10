@@ -176,6 +176,7 @@ export function lift<Output extends any[] | object>(cb: (access: EffectAccess) =
 				))
 					res.splice(indexA, sliceA.length, ...sliceB)
 			} else {
+				const recordResult = rawResult as Record<string, unknown>
 				for (const key of Object.keys(source)) {
 					const had = key in rawResult
 					const newDesc = Object.getOwnPropertyDescriptor(source, key)!
@@ -185,7 +186,7 @@ export function lift<Output extends any[] | object>(cb: (access: EffectAccess) =
 						Object.defineProperty(rawResult, key, newDesc)
 						if (
 							!sameAccessor &&
-							rawResult[key] !==
+							recordResult[key] !==
 								(oldDesc ? (oldDesc.get ? oldDesc.get() : oldDesc.value) : undefined)
 						)
 							touched1(rawResult, { type: 'set', prop: key }, key)
@@ -196,7 +197,7 @@ export function lift<Output extends any[] | object>(cb: (access: EffectAccess) =
 				}
 				for (const key of Object.keys(rawResult))
 					if (!(key in source)) {
-						delete rawResult[key]
+						delete recordResult[key]
 						touched1(rawResult, { type: 'del', prop: key }, key)
 					}
 			}
@@ -268,7 +269,7 @@ export function morphArray<I, O>(
 					return (reason) => {
 						delete cache[indexRef.value]
 						touched1(cache, { type: 'invalidate', prop: 'morph' }, String(key))
-						stop?.({ type: 'invalidate', cause: reason })
+						stop?.({ type: 'invalidate', cause: reason ?? { type: 'stopped' } })
 					}
 				})
 			)
@@ -395,11 +396,13 @@ export function morphMap<K, V, O>(
 		} else {
 			const stop = track(() =>
 				effect.named(`morph:${fn.name}:${key}`).opaque((access) => {
-					cache.set(key, fn(source.get(key), key, access))
+					const next = source.get(key)
+					if (next === undefined && !source.has(key)) return
+					cache.set(key, fn(next as V, key, access))
 					return (reason) => {
 						cache.delete(key)
 						touched1(cache, { type: 'invalidate', prop: 'morph' }, String(key))
-						stop?.({ type: 'invalidate', cause: reason })
+						stop?.({ type: 'invalidate', cause: reason ?? { type: 'stopped' } })
 					}
 				})
 			)
@@ -514,7 +517,7 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 					return (reason) => {
 						delete cache[key]
 						touched1(cache, { type: 'invalidate', prop: 'morph' }, String(key))
-						stop?.({ type: 'invalidate', cause: reason })
+						stop?.({ type: 'invalidate', cause: reason ?? { type: 'stopped' } })
 					}
 				})
 			)
@@ -621,7 +624,7 @@ export const morph = flavored(
 	},
 	{
 		get pure() {
-			return (source: any, fn: any, _opt) => this(source, fn, { pure: true })
+			return (source: any, fn: any, _opt: unknown) => this(source, fn, { pure: true })
 		},
 	}
 ) as Morph

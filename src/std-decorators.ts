@@ -1,5 +1,4 @@
 import { decorator, type GenericClassDecorator } from './decorator'
-import { flavored } from './flavored'
 import { options } from './reactive/types'
 
 // In order to avoid async re-entrance, we could use zone.js or something like that.
@@ -53,69 +52,82 @@ export function cache(object: Object, propertyKey: PropertyKey, value: any) {
 	Object.defineProperty(object, propertyKey, { value })
 }
 
+type DescriptorShape = {
+	enumerable?: boolean
+	configurable?: boolean
+	writable?: boolean
+}
+
+type DescriptorDecorator = <T>(...properties: (keyof T)[]) => GenericClassDecorator<T>
+
+type DescriptorBuilder = ((descriptor: DescriptorShape) => DescriptorDecorator) & {
+	readonly enumerable: DescriptorDecorator
+	readonly hidden: DescriptorDecorator
+	readonly configurable: DescriptorDecorator
+	readonly frozen: DescriptorDecorator
+	readonly writable: DescriptorDecorator
+	readonly readonly: DescriptorDecorator
+}
+
+function descriptorBase(descriptor: DescriptorShape): DescriptorDecorator {
+	return function descriptorDecorator<T>(...properties: (keyof T)[]): GenericClassDecorator<T> {
+		return (Base) => {
+			return class extends Base {
+				constructor(...args: any[]) {
+					super(...args)
+					for (const key of properties) {
+						const existing = Object.getOwnPropertyDescriptor(this, key)
+						Object.defineProperty(this, key, Object.assign(existing || {}, descriptor))
+					}
+				}
+			}
+		}
+	}
+}
+
 /**
  * Creates a decorator that modifies property descriptors for specified properties
  * @param descriptor - The descriptor properties to apply
  * @returns A class decorator that applies the descriptor to specified properties
  */
-export const descriptor = flavored(
-	function descriptor(descriptor: {
-		enumerable?: boolean
-		configurable?: boolean // Not modifiable once the property has been defined
-		writable?: boolean
-	}) {
-		return <T>(...properties: (keyof T)[]): GenericClassDecorator<T> =>
-			(Base) => {
-				return class extends Base {
-					constructor(...args: any[]) {
-						super(...args)
-						for (const key of properties) {
-							const existing = Object.getOwnPropertyDescriptor(this, key)
-							Object.defineProperty(this, key, Object.assign(existing || {}, descriptor))
-						}
-					}
-				}
-			}
+export const descriptor: DescriptorBuilder = Object.assign(descriptorBase, {
+	/**
+	 * enumerable: true
+	 */
+	get enumerable(): DescriptorDecorator {
+		return descriptorBase({ enumerable: true })
 	},
-	{
-		/**
-		 * enumerable: true
-		 */
-		get enumerable() {
-			return descriptor({ enumerable: true })
-		},
-		/**
-		 * enumerable: false
-		 */
-		get hidden() {
-			return descriptor({ enumerable: false })
-		},
-		/**
-		 * configurable: true
-		 */
-		get configurable() {
-			return descriptor({ configurable: true })
-		},
-		/**
-		 * configurable: false
-		 */
-		get frozen() {
-			return descriptor({ configurable: false })
-		},
-		/**
-		 * writable: true
-		 */
-		get writable() {
-			return descriptor({ writable: true })
-		},
-		/**
-		 * writable: false
-		 */
-		get readonly() {
-			return descriptor({ writable: false })
-		},
-	}
-)
+	/**
+	 * enumerable: false
+	 */
+	get hidden(): DescriptorDecorator {
+		return descriptorBase({ enumerable: false })
+	},
+	/**
+	 * configurable: true
+	 */
+	get configurable(): DescriptorDecorator {
+		return descriptorBase({ configurable: true })
+	},
+	/**
+	 * configurable: false
+	 */
+	get frozen(): DescriptorDecorator {
+		return descriptorBase({ configurable: false })
+	},
+	/**
+	 * writable: true
+	 */
+	get writable(): DescriptorDecorator {
+		return descriptorBase({ writable: true })
+	},
+	/**
+	 * writable: false
+	 */
+	get readonly(): DescriptorDecorator {
+		return descriptorBase({ writable: false })
+	},
+})
 
 /**
  * Decorator that marks methods, properties, or classes as deprecated

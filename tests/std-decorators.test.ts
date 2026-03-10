@@ -269,6 +269,25 @@ describe('descriptor decorator', () => {
 		}).toThrow()
 	})
 
+	it('should support callable descriptor object syntax', () => {
+		@(descriptor({ writable: false, enumerable: false, configurable: false })('secret'))
+		class TestClass {
+			secret: string = 'value'
+			visible: string = 'shown'
+		}
+
+		const obj = new TestClass()
+		const secretDescriptor = Object.getOwnPropertyDescriptor(obj, 'secret')
+
+		expect(secretDescriptor?.writable).toBe(false)
+		expect(secretDescriptor?.enumerable).toBe(false)
+		expect(secretDescriptor?.configurable).toBe(false)
+		expect(Object.keys(obj)).toEqual(['visible'])
+		expect(() => {
+			obj.secret = 'changed'
+		}).toThrow()
+	})
+
 	/* Once a proper
 	it('should create reusable descriptor configurations', () => {
 		// Create reusable configurations

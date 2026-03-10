@@ -6,19 +6,34 @@ export type EventsBase = Record<string, (...args: any[]) => void>
 const events = Symbol('events')
 const hooks = Symbol('hooks')
 
+type EventfulStore = {
+	[events]: Map<PropertyKey, Set<(...args: any[]) => void>>
+	[hooks]: Set<(...args: any[]) => void>
+}
+
+function getEventMap(target: object): EventfulStore[typeof events] {
+	return (target as EventfulStore)[events]
+}
+
+function getHookSet(target: object): EventfulStore[typeof hooks] {
+	return (target as EventfulStore)[hooks]
+}
+
 const eventBehavior = {
 	on<EventType extends keyof EventsBase>(
 		eventOrEvents: EventType | Partial<EventsBase>,
 		cb?: EventsBase[EventType]
 	): (this: Eventful<any>) => void {
+		const self = this as Eventful<any>
+		const eventMap = getEventMap(self)
 		if (typeof eventOrEvents === 'object') {
 			for (const e of Object.keys(eventOrEvents) as (keyof EventsBase)[]) {
 				this.on(e, eventOrEvents[e]!)
 			}
 		} else if (cb !== undefined) {
-			const callbacks = this[events].get(eventOrEvents) ?? new Set<EventsBase[EventType]>()
+			const callbacks = eventMap.get(eventOrEvents) ?? new Set<EventsBase[EventType]>()
 			if (!callbacks.has(cb)) callbacks.add(cb)
-			this[events].set(eventOrEvents, callbacks)
+			eventMap.set(eventOrEvents, callbacks)
 		}
 		return () => this.off(eventOrEvents, cb)
 	},
@@ -26,28 +41,31 @@ const eventBehavior = {
 		eventOrEvents: EventType | Partial<EventsBase>,
 		cb?: EventsBase[EventType]
 	): void {
+		const self = this as Eventful<any>
+		const eventMap = getEventMap(self)
 		if (typeof eventOrEvents === 'object') {
 			for (const e of Object.keys(eventOrEvents) as (keyof EventsBase)[]) {
 				this.off(e, eventOrEvents[e])
 			}
 		} else if (cb !== null && cb !== undefined) {
-			const callbacks = this[events].get(eventOrEvents)
+			const callbacks = eventMap.get(eventOrEvents)
 			if (callbacks) {
 				callbacks.delete(cb)
-				if (!callbacks.size) this[events].delete(eventOrEvents)
+				if (!callbacks.size) eventMap.delete(eventOrEvents)
 			}
 		} else {
 			// Remove all listeners for this event
-			this[events].delete(eventOrEvents)
+			eventMap.delete(eventOrEvents)
 		}
 	},
 	emit<EventType extends keyof EventsBase>(
 		event: EventType,
 		...args: Parameters<EventsBase[EventType]>
 	) {
-		const callbacks = this[events].get(event)
+		const self = this as Eventful<any>
+		const callbacks = getEventMap(self).get(event)
 		if (callbacks) for (const cb of callbacks) cb.apply(this, args)
-		for (const cb of this[hooks]) cb.call(this, event, ...args)
+		for (const cb of getHookSet(self)) cb.call(this, event, ...args)
 	},
 }
 
@@ -59,8 +77,9 @@ function perEvent(
 	const cache = new Map<string, (...args: any[]) => any>()
 	return new Proxy(fct, {
 		get(target, prop: PropertyKey) {
-			if (typeof prop !== 'string') return target[prop]
-			if (use && !eventful[events].has(prop) && !eventful[hooks].size) return () => {}
+			if (typeof prop !== 'string')
+				return (target as typeof target & Record<PropertyKey, unknown>)[prop]
+			if (use && !getEventMap(eventful).has(prop) && !getHookSet(eventful).size) return () => {}
 
 			// Return cached function or create and cache
 			let cached = cache.get(prop)

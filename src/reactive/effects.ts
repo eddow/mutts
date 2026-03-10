@@ -1261,7 +1261,7 @@ export const effect: Effect = named(
 				} catch (error) {
 					debugHooks.decorateError(error, runEffect)
 					// catcher:self`
-					errorToThrow = error
+					errorToThrow = error instanceof Error ? error : new Error(String(error))
 				}
 
 				// Create cleanup function for next run
@@ -1390,7 +1390,7 @@ export const effect: Effect = named(
 				fr.unregister(stopEffect)
 			}
 			if (isRootEffect) {
-				const callIfCollected = (reason) => stopEffect(reason)
+				const callIfCollected = (reason?: CleanupReason) => stopEffect(reason)
 				fr.register(
 					callIfCollected,
 					() => {
@@ -1409,7 +1409,7 @@ export const effect: Effect = named(
 				}
 				const children = parentNode.children
 
-				const subEffectCleanup = (reason) => {
+				const subEffectCleanup = (reason?: CleanupReason) => {
 					children.delete(subEffectCleanup)
 					// Execute this child effect cleanup (which triggers its own mainCleanup)
 					stopEffect(reason)
