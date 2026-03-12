@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { effect, morph, reactive } from '../../src/reactive/index'
+import { getLineage } from '../../debug'
 
 describe('morph undefined value bug', () => {
 	it('should not expose undefined values during array diff processing', () => {
@@ -248,5 +249,17 @@ describe('morph undefined value bug', () => {
 		expect('a' in mapped).toBe(false)
 
 		stop()
+	})
+
+	it('accepts template-captioned mapper callbacks on the second argument', () => {
+		const source = reactive([{ id: 1 }])
+		let effectName = ''
+		const mapped = morph`items:${'mapper'}`(source, (item) => {
+			effectName = getLineage()[0]?.effectName ?? ''
+			return item.id
+		})
+
+		expect(mapped[0]).toBe(1)
+		expect(effectName).toBe('morph:items:mapper:0')
 	})
 })

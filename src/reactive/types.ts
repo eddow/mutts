@@ -529,6 +529,8 @@ export const options = {
 	asyncMode: 'cancel' as AsyncExecutionMode | false,
 	// biome-ignore lint/suspicious/noConsole: This is the whole point here
 	warn: (...args: any[]) => console.warn(...args),
+	// biome-ignore lint/suspicious/noConsole: This is the whole point here
+	error: (...args: any[]) => console.error(...args),
 
 	/**
 	 * Introspection and debug aids. Set to `null` to disable all debug overhead in production.

@@ -41,7 +41,7 @@ export function deepWatch<T extends object>(
 	registerDeepWatcher()
 
 	// Use the existing effect system to register dependencies
-	return effect.named('deepWatch')(() => {
+	return effect`deepWatch`(() => {
 		// Mark the target object as having deep watchers
 		objectsWithDeepWatchers.add(target)
 

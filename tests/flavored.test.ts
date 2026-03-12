@@ -1,7 +1,33 @@
-import { describe, expect, it } from 'vitest'
-import { createFlavor, flavorOptions, flavored } from '../src/flavored'
+import { describe, expect, it, vi } from 'vitest'
+import { captioned, createFlavor, flavorOptions, flavored } from '../src/flavored'
 
 describe('flavored', () => {
+	describe('captioned', () => {
+		it('can caption a callback that is not the first argument', () => {
+			const warn = vi.fn()
+			let callbackName = ''
+			const register = captioned(
+				(label: string, callback: () => string) => {
+					callbackName = callback.name
+					return `${label}:${callback()}`
+				},
+				{
+					name: 'register',
+					callbackIndex: 1,
+					warn,
+				}
+			)
+
+			expect(register`task:${1}`('job', () => 'done')).toBe('job:done')
+			expect(callbackName).toBe('task:1')
+
+			register('job', () => 'plain')
+			expect(warn).toHaveBeenCalledWith(
+				'register: anonymous callback; prefer a named function or template call syntax'
+			)
+		})
+	})
+
 	describe('basic flavored function', () => {
 		it('should call the base function', () => {
 			const greet = flavored(

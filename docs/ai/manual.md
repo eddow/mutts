@@ -310,6 +310,12 @@ const names = morph(users, (user) => user.name.toUpperCase())
 For arrays the callback is `(value, access?) => mapped`.
 For Maps and records it also receives the key.
 
+The mapper can also be captioned, even though it is the second argument:
+
+```ts
+const names = morph`user:names`(users, (user) => user.name.toUpperCase())
+```
+
 ### 5.2 attend() — Per-key lifecycle
 
 ```ts
@@ -317,8 +323,16 @@ attend(reactiveRecord, (key) => {
   console.log(`${key} = ${reactiveRecord[key]}`)
   return () => console.log(`cleanup: ${key}`) // disposed when key disappears
 })
-// Works with: arrays, Maps, Sets, or raw () => Iterable<Key>
 ```
+
+`attend` also supports callback captions on its second argument:
+
+```ts
+attend`record:entries`(reactiveRecord, (key) => {
+  console.log(`${key} = ${reactiveRecord[key]}`)
+})
+```
+Works with: arrays, Maps, Sets, or raw `() => Iterable<Key>`.
 
 ### 5.3 organized() — Per-key record transform
 

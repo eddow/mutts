@@ -9,6 +9,7 @@ The `attend` utility reactively iterates over the entries of a collection, runni
 - **Creates** an inner effect for each key, via `ascend`.
 - **Disposes** the inner effect when the key is removed from the collection.
 - Allows the callback to return a **cleanup function** (like a regular effect closer).
+- Supports tagged-template captions on its callback argument.
 
 This is the foundational lifecycle primitive that `organized` is built on.
 
@@ -32,6 +33,18 @@ function attend<S extends Record<PropertyKey, any>>(source: S, callback: (key: k
 
 - **`source`** or **`enumerate`**: Either a collection (array, record, Map, Set) or a callback returning an `Iterable<Key>`. The enumeration runs inside the outer effect, so reactive reads (e.g. `source.length`, `Object.keys(source)`) are tracked automatically.
 - **`callback`**: Called per key inside an inner effect. May return a cleanup function that runs when the key is removed or before the inner effect re-executes.
+
+### Captioned callback form
+
+Unlike `effect` or `lift`, `attend` receives its callback as the **second** argument. It still supports tagged-template captioning:
+
+```typescript
+attend`entries`(config, (key) => {
+    console.log(`${key} = ${config[key]}`)
+})
+```
+
+The caption is applied to the callback argument and contributes to the runtime names of the inner per-key effects.
 
 ### Returns
 
@@ -65,6 +78,14 @@ config.theme = 'light'
 
 stop()
 // Disposes everything
+```
+
+The same record form also works with a caption:
+
+```typescript
+const stop = attend`config:entries`(config, (key) => {
+    console.log(`${key} = ${config[key]}`)
+})
 ```
 
 ### Array
@@ -116,6 +137,17 @@ For custom iteration logic or non-standard collections:
 const source = reactive({ a: 1, b: 2 })
 
 attend(
+    () => Reflect.ownKeys(source),
+    (key) => {
+        console.log(key, source[key])
+    }
+)
+```
+
+And likewise with a caption:
+
+```typescript
+attend`ownKeys`(
     () => Reflect.ownKeys(source),
     (key) => {
         console.log(key, source[key])

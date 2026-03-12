@@ -40,6 +40,7 @@ Mutts is designed with a **Condensed Token Footprint**. It prioritizes high read
 > [!IMPORTANT]
 > **Are you an AI Agent?**
 > Read the **[AI Agent Manual](./docs/ai/manual.md)** for structured protocols, introspection APIs, and error definitions designed for your reasoning loop. A comprehensive **[API Reference](./docs/ai/api-reference.md)** is also available.
+> For documentation-aware MCP workflows, you can use **[`soup-chop`](https://www.npmjs.com/package/soup-chop)** as a documentation MCP for mutts.
 
 ---
 
@@ -240,18 +241,20 @@ A comprehensive resource management system that provides automatic cleanup for o
 
 ## [Flavored](./docs/flavored.md)
 
-A utility for creating extensible functions with chainable property modifiers. Enables fluent APIs where properties return specialized variants of the base function.
+A utility for creating extensible functions with chainable property modifiers. The same docs section also covers `captioned`, the sibling helper for callback-first tagged-template calls.
 
 **Key Features:**
 - **Property-based Modifiers**: Add chainable properties to functions via getters or methods
 - **Flavoring Robustness**: Automatic arity tracking and argument padding
 - **Options Merging**: `flavorOptions` helper for automatic options object merging
 - **Argument Transformation**: `createFlavor` helper for custom argument transformation
+- **Tagged Callback Captions**: `captioned` helper for call-site naming like `` effect`name`(fn) ``
 - **Hand-made Functions**: Return custom functions for complete control (the generic case)
 - **Full TypeScript Support**: Proper type inference for chained modifiers
 
 **Use Cases:**
-- Creating functions with preset configurations (e.g., `effect.opaque`, `effect.named()`)
+- Creating functions with preset configurations (e.g., `effect.opaque`)
+- Naming callback-oriented calls like `effect`, `lift`, `watch`, `attend`, or `morph` without a separate flavor
 - Fluent APIs for function variants
 - Partial application with named parameters
 - Building chainable configuration DSLs

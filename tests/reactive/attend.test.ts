@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { attend, effect, reactive } from '../../src/reactive'
+import { getLineage } from '../../debug'
 
 describe('attend (reactive forEach)', () => {
 	describe('raw callback form', () => {
@@ -258,6 +259,21 @@ describe('attend (reactive forEach)', () => {
 
 			source.delete('x')
 			expect(cleaned).toBe('x')
+		})
+	})
+
+	describe('captioned calls', () => {
+		it('accepts template-captioned callbacks on the second argument', () => {
+			const source = reactive({ a: 1 } as Record<string, number>)
+			const effectNames: string[] = []
+
+			const stop = attend`entry:${'watcher'}`(source, (key) => {
+				source[key]
+				effectNames.push(getLineage()[0]?.effectName ?? '')
+			})
+
+			expect(effectNames).toContain('attend:entry:watcher:a')
+			stop()
 		})
 	})
 })

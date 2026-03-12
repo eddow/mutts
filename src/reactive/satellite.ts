@@ -1,5 +1,5 @@
 import { decorator, type GenericClassDecorator } from '../decorator'
-import { flavored, flavorOptions } from '../flavored'
+import { captioned, flavored, flavorOptions } from '../flavored'
 import { deepWatch } from './deep-watch'
 import { effectHistory, link } from './effect-context'
 import { captured, effect, untracked } from './effects'
@@ -10,6 +10,7 @@ import { dependant } from './tracking'
 import {
 	type EffectAccess,
 	type EffectCleanup,
+	options,
 	type ScopedCallback,
 	unreactiveProperties,
 	unwrap,
@@ -53,6 +54,7 @@ export interface Watch {
 		changed: (value: T) => void,
 		options?: WatchOptions
 	): EffectCleanup
+	(strings: TemplateStringsArray, ...values: readonly unknown[]): Watch
 
 	/** Deep watch flavor */
 	get deep(): Watch
@@ -60,27 +62,33 @@ export interface Watch {
 	get immediate(): Watch
 }
 
-export const watch = flavored(
-	function watch(
-		value: any, //object | ((dep: DependencyAccess) => object),
-		changed: (value?: object, oldValue?: object) => void,
-		options: any = {}
-	) {
-		return typeof value === 'function'
-			? watchCallBack(value, changed, options)
-			: typeof value === 'object' && value !== null
-				? watchObject(value, changed, options)
-				: (() => {
-						throw new Error('watch: value must be a function or an object')
-					})()
-	},
+export const watch = captioned(
+	flavored(
+		function watch(
+			value: any, //object | ((dep: DependencyAccess) => object),
+			changed: (value?: object, oldValue?: object) => void,
+			options: any = {}
+		) {
+			return typeof value === 'function'
+				? watchCallBack(value, changed, options)
+				: typeof value === 'object' && value !== null
+					? watchObject(value, changed, options)
+					: (() => {
+							throw new Error('watch: value must be a function or an object')
+						})()
+		},
+		{
+			get deep() {
+				return flavorOptions(this, { deep: true })
+			},
+			get immediate() {
+				return flavorOptions(this, { immediate: true })
+			},
+		}
+	),
 	{
-		get deep() {
-			return flavorOptions(this, { deep: true })
-		},
-		get immediate() {
-			return flavorOptions(this, { immediate: true })
-		},
+		name: 'watch',
+		warn: (message) => options.warn(`[reactive] ${message}`),
 	}
 ) as Watch
 
@@ -90,7 +98,7 @@ function watchObject(
 	{ immediate = false, deep = false } = {}
 ): EffectCleanup {
 	if (deep) return deepWatch(value, changed, { immediate })!
-	return effect.named('watch:object')(() => {
+	return effect`watch:object`(() => {
 		dependant(value)
 		if (immediate) changed(value)
 		immediate = true
@@ -104,7 +112,7 @@ function watchCallBack<T>(
 ): EffectCleanup {
 	let oldValue: T | typeof unsetYet = unsetYet
 	let deepCleanup: EffectCleanup | undefined
-	const cbCleanup = effect.named('watch:callback')(
+	const cbCleanup = effect`watch:callback`(
 		markWithRoot((access) => {
 			const newValue = value(access)
 			if (oldValue !== newValue) {
@@ -140,7 +148,7 @@ function watchCallBack<T>(
 export function when<T>(predicate: (dep: EffectAccess) => T, timeout?: number): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
 		let timer: ReturnType<typeof setTimeout> | undefined
-		const stop = effect.named('watch:when')((access) => {
+		const stop = effect`watch:when`((access) => {
 			try {
 				const value = predicate(access)
 				if (value) {
@@ -271,7 +279,7 @@ export function resource<T>(
 	return lazyInit(resource as Resource<T>, () => {
 		link(
 			resource,
-			effect.named('watch:resource')((access) => {
+			effect`watch:resource`((access) => {
 				// Track reload signal to enable manual reloading
 				void reloadSignal.value
 

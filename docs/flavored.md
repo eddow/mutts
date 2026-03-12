@@ -1,6 +1,8 @@
-# Flavored Functions
+# Flavored and Captioned Functions
 
 The `flavored` utility creates extensible functions with chainable property modifiers. It enables a fluent API where properties return specialized variants of the base function.
+
+The `captioned` utility is a sibling concept for callback-oriented APIs. It adds a tagged-template call form that can attach a runtime caption to one callback argument before delegating to the base function.
 
 ## Overview
 
@@ -9,6 +11,13 @@ Flavored functions allow you to:
 - Chain multiple modifiers together
 - Use either automatic option merging (`flavorOptions`) or custom argument transformation (`createFlavor`)
 - Return hand-made functions for complete control (the generic case)
+
+Captioned functions allow you to:
+- Keep the normal callback-first call form
+- Add a tagged-template call form like `` effect`render:${id}`(fn) ``
+- Warn when a callback-first API receives an anonymous callback without a caption
+- Preserve captioning across flavored variants created with `createFlavor` or `flavorOptions`
+- Target callbacks that are not in argument position `0`
 
 ## Basic Usage
 
@@ -60,6 +69,57 @@ effect(fn)              // Basic usage
 effect.opaque(fn)       // With opaque option
 effect.named('myEffect')(fn)  // With name option
 effect.opaque.named('x')(fn)  // Chained
+```
+
+### `captioned(fn, options?)`
+
+Creates a callback-oriented function that also accepts a tagged-template call form. The caption is applied to the configured callback argument before the base function runs.
+
+**Use when:** Your API takes a callback argument and you want ergonomic call-site naming without turning naming itself into a flavor.
+
+**Parameters:**
+- `fn` - The callback-first base function
+- `options.callbackIndex` - Which argument should be treated as the callback to rename/warn about. Defaults to `0`
+- `options.name` - Human-readable label used in warning messages
+- `options.rename` - Optional function to customize how the caption is applied to the callback
+- `options.warn` - Optional warning sink for anonymous uncaptained callbacks
+- `options.shouldWarnAnonymous` - Optional predicate to suppress warnings for specific argument shapes
+
+**Example:**
+```typescript
+import { captioned } from 'mutts'
+
+const run = captioned(
+  (callback: () => void) => {
+    callback()
+  },
+  { name: 'run' }
+)
+
+run(function namedTask() {})
+run`task:${42}`(() => {})
+```
+
+The two call forms are:
+
+```typescript
+run(callback)
+run`caption`(callback)
+```
+
+If `run(callback)` receives an anonymous callback, `captioned` may warn depending on its `shouldWarnAnonymous` policy.
+
+You can also target callbacks that are not the first argument:
+
+```typescript
+const attendLike = captioned(
+  (source: string[], callback: (value: string) => void) => {
+    for (const value of source) callback(value)
+  },
+  { name: 'attendLike', callbackIndex: 1 }
+)
+
+attendLike`items`(['a', 'b'], () => {})
 ```
 
 ### `flavorOptions(fn, defaultOptions)`
@@ -190,6 +250,43 @@ const calculator = flavored(
 
 calculator.multiply(3, 4)     // 12
 calculator.double()(3, 4)     // 14 (6 + 8)
+```
+
+## Combining `flavored` and `captioned`
+
+They solve different problems:
+
+- `flavored` changes how a function is configured via chainable properties
+- `captioned` changes how a callback-first function can be called
+
+They compose naturally:
+
+```typescript
+const watch = captioned(
+  flavored(baseWatch, {
+    get immediate() {
+      return flavorOptions(this, { immediate: true })
+    }
+  }),
+  { name: 'watch' }
+)
+
+watch(() => state.count, changed)
+watch`counter:watch`(() => state.count, changed)
+watch.immediate`counter:watch`(() => state.count, changed)
+```
+
+For callback arguments in another position, use `callbackIndex`:
+
+```typescript
+const attend = captioned(baseAttend, {
+  name: 'attend',
+  callbackIndex: 1,
+})
+
+attend`entries`(source, (key) => {
+  console.log(key)
+})
 ```
 
 ## TypeScript Considerations

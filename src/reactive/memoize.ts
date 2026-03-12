@@ -75,7 +75,7 @@ function memoizeFunction<Result, Args extends MemoizableArgument[]>(
 		// Create memoize internal effect to track dependencies and invalidate cache
 		// Use untracked to prevent the effect creation from being affected by parent effects
 		node.cleanup = root(() =>
-			effect.named('memoize')(
+			effect`memoize`(
 				() => {
 					// Execute the function and track its dependencies
 					// The function execution will automatically track dependencies on reactive objects

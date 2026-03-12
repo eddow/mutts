@@ -242,6 +242,18 @@ function effect(
 
 **Returns:** A cleanup function to stop the effect
 
+**Captioned call form:**
+
+`effect` also supports a tagged-template naming form for callback-first calls:
+
+```typescript
+effect`counter:main`(() => {
+    console.log(state.count)
+})
+```
+
+This is the preferred way to attach a runtime/debug name to a new effect.
+
 **Example:**
 
 ```typescript
@@ -263,6 +275,8 @@ state.mood = 'surprised' // Does not trigger the effect
 // Later...
 cleanup() // Stops the effect
 ```
+
+If you use the plain `effect(fn)` form with an anonymous callback, `mutts` may warn and suggest either a named function or the tagged-template caption form.
 
 You can also branch on the `reaction` flag to separate initialisation logic from update logic:
 
@@ -739,6 +753,8 @@ item.data = { value: 30 } // Triggers BOTH effects
 
 #### `.named(name)`
 
+**Obsolete:** prefer `` effect`name`(fn) `` for new code.
+
 Creates a named effect for easier debugging and profiling. The name appears in DevTools and debug logs.
 
 ```typescript
@@ -748,18 +764,26 @@ const state = reactive({
     count: 0
 })
 
-// Create a named effect
+// Legacy named effect
 effect.named('counter-effect')(() => {
     console.log('Count:', state.count)
 })
 
-// Named effects can also be combined with other options
+// Legacy named effects can also be combined with other options
 effect.named('data-loader').opaque(() => {
     console.log('Loading data...')
 })
 ```
 
-**Benefits of named effects:**
+For new code, prefer:
+
+```typescript
+effect`counter-effect`(() => {
+    console.log('Count:', state.count)
+})
+```
+
+**Benefits of captioned/named effects:**
 - Easier identification in DevTools
 - Better stack traces during debugging
 - Helpful for performance profiling
@@ -769,7 +793,7 @@ effect.named('data-loader').opaque(() => {
 Modifiers can be chained in any order:
 
 ```typescript
-// Named opaque effect
+// Legacy named opaque effect
 effect.named('my-effect').opaque(() => {
     // Effect code
 })
@@ -783,7 +807,7 @@ effect.opaque.named('my-effect')(() => {
 Note: The modifiers return new effect functions with the options pre-applied, so they can be stored and reused:
 
 ```typescript
-// Create a reusable named effect factory
+// Create a reusable legacy named effect factory
 const createDataEffect = effect.named('data-layer')
 
 createDataEffect(() => {
@@ -792,6 +816,14 @@ createDataEffect(() => {
 
 createDataEffect(() => {
     console.log('Effect 2')
+})
+```
+
+For single call sites, the tagged-template form is usually shorter:
+
+```typescript
+effect`data-layer`(() => {
+    console.log('Effect 1')
 })
 ```
 

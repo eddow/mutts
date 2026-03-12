@@ -1,5 +1,5 @@
 import { arrayDiff } from '../diff'
-import { flavored } from '../flavored'
+import { captioned, flavored, type Captioned } from '../flavored'
 import type { GetterWrapper } from '../zone'
 import { getState, touched, touched1 } from './change'
 import { link } from './effect-context'
@@ -13,6 +13,7 @@ import {
 	type EffectCloser,
 	isReactive,
 	keysOf,
+	options,
 	type ScopedCallback,
 	type State,
 } from './types'
@@ -37,69 +38,83 @@ import {
  * attend(() => Object.keys(record), (key) => { ... })
  * ```
  */
-export function attend<T>(
-	source: readonly T[],
-	callback: (index: number, access: EffectAccess) => EffectCloser | void
-): ScopedCallback
-export function attend<K, V>(
-	source: Map<K, V>,
-	callback: (key: K, access: EffectAccess) => EffectCloser | void
-): ScopedCallback
-export function attend<T>(
-	source: Set<T>,
-	callback: (value: T, access: EffectAccess) => EffectCloser | void
-): ScopedCallback
-export function attend<S extends object>(
-	source: S,
-	callback: (key: keyof S & string, access: EffectAccess) => EffectCloser | void
-): ScopedCallback
-export function attend<Key>(
-	enumerate: () => Iterable<Key>,
-	callback: (key: Key, access: EffectAccess) => EffectCloser | void
-): ScopedCallback
-export function attend(
-	source: any,
-	callback: (key: any, access: EffectAccess) => EffectCloser | void
-): ScopedCallback {
-	const enumerate: () => Iterable<any> =
-		typeof source === 'function'
-			? source
-			: Array.isArray(source)
-				? () => Array.from({ length: source.length }, (_, i) => i)
-				: source instanceof Map
-					? () => source.keys()
-					: source instanceof Set
-						? () => source.values()
-						: () => Object.keys(source)
-
-	const keyEffects = new Map<any, ScopedCallback>()
-
-	const outer = effect.named('attend')(({ ascend }) => {
-		const keys = new Set<any>()
-		for (const key of enumerate()) keys.add(key)
-
-		for (const key of keys) {
-			if (keyEffects.has(key)) continue
-			keyEffects.set(
-				key,
-				ascend(() => effect.named(`attend:${key}`)((access) => callback(key, access)))
-			)
-		}
-
-		for (const key of Array.from(keyEffects.keys())) {
-			if (!keys.has(key)) {
-				keyEffects.get(key)!()
-				keyEffects.delete(key)
-			}
-		}
-	})
-
-	return (reason?: CleanupReason) => {
-		outer(reason)
-		for (const stop of keyEffects.values()) stop(reason)
-		keyEffects.clear()
-	}
+export interface Attend extends Captioned<(source: any, callback: (key: any, access: EffectAccess) => EffectCloser | void) => ScopedCallback> {
+	<T>(
+		source: readonly T[],
+		callback: (index: number, access: EffectAccess) => EffectCloser | void
+	): ScopedCallback
+	<K, V>(
+		source: Map<K, V>,
+		callback: (key: K, access: EffectAccess) => EffectCloser | void
+	): ScopedCallback
+	<T>(
+		source: Set<T>,
+		callback: (value: T, access: EffectAccess) => EffectCloser | void
+	): ScopedCallback
+	<S extends object>(
+		source: S,
+		callback: (key: keyof S & string, access: EffectAccess) => EffectCloser | void
+	): ScopedCallback
+	<Key>(
+		enumerate: () => Iterable<Key>,
+		callback: (key: Key, access: EffectAccess) => EffectCloser | void
+	): ScopedCallback
 }
+
+export const attend: Attend = captioned(
+	function attend(
+		source: any,
+		callback: (key: any, access: EffectAccess) => EffectCloser | void
+	): ScopedCallback {
+		const enumerate: () => Iterable<any> =
+			typeof source === 'function'
+				? source
+				: Array.isArray(source)
+					? () => Array.from({ length: source.length }, (_, i) => i)
+					: source instanceof Map
+						? () => source.keys()
+						: source instanceof Set
+							? () => source.values()
+							: () => Object.keys(source)
+
+		const keyEffects = new Map<any, ScopedCallback>()
+		const callbackLabel = callback.name ? `:${callback.name}` : ''
+
+		const outer = effect`attend`(({ ascend }) => {
+			const keys = new Set<any>()
+			for (const key of enumerate()) keys.add(key)
+
+			for (const key of keys) {
+				if (keyEffects.has(key)) continue
+				const indexRef = { value: key }
+				keyEffects.set(
+					key,
+					ascend(() =>
+						effect`attend${callbackLabel}:${key}`((access) => callback(indexRef.value, access))
+					)
+				)
+			}
+
+			for (const key of Array.from(keyEffects.keys())) {
+				if (!keys.has(key)) {
+					keyEffects.get(key)!()
+					keyEffects.delete(key)
+				}
+			}
+		})
+
+		return (reason?: CleanupReason) => {
+			outer(reason)
+			for (const stop of keyEffects.values()) stop(reason)
+			keyEffects.clear()
+		}
+	},
+	{
+		name: 'attend',
+		callbackIndex: 1,
+		warn: (message) => options.warn(`[reactive] ${message}`),
+	}
+) as Attend
 
 /**
  * Lifts a callback that returns an array into a reactive array that automatically
@@ -122,7 +137,11 @@ export function attend(
  * @param cb Callback function that returns an array
  * @returns A reactive array synchronized with the callback's result, with a [cleanup] property to stop tracking
  */
-export function lift<Output extends any[]>(cb: (access: EffectAccess) => Output): Output
+export interface Lift {
+	<Output extends any[]>(cb: (access: EffectAccess) => Output): Output
+	<Output extends object>(cb: (access: EffectAccess) => Output): Output
+	(strings: TemplateStringsArray, ...values: readonly unknown[]): Lift
+}
 
 /**
  * Lifts a callback that returns an object into a reactive object that automatically
@@ -152,59 +171,64 @@ export function lift<Output extends any[]>(cb: (access: EffectAccess) => Output)
  * @param cb Callback function that returns an object
  * @returns A reactive object synchronized with the callback's result, with a [cleanup] property to stop tracking
  */
-export function lift<Output extends object>(cb: (access: EffectAccess) => Output): Output
-export function lift<Output extends any[] | object>(cb: (access: EffectAccess) => Output): Output {
-	let result!: Output
-	let rawResult!: Output
-	const liftCleanup = effect.named(`lift:${cb.name}`)(
-		markWithRoot((access) => {
-			const source = cb(access)
-			if (!source || typeof source !== 'object')
-				throw new Error('lift callback must return an array or object')
-			const sourceProto = Object.getPrototypeOf(source)
-			if (!result) {
-				rawResult = Array.isArray(source) ? [] : Object.create(sourceProto)
-				result = reactive(rawResult)
-			}
-			if (sourceProto !== Object.getPrototypeOf(result))
-				throw new Error('lift callback must return the same type as the previous result')
-
-			if (Array.isArray(source)) {
-				const res = result as unknown[]
-				for (const { indexA, sliceA, sliceB } of arrayDiff(res, source).sort(
-					(a, b) => a.indexA - b.indexA
-				))
-					res.splice(indexA, sliceA.length, ...sliceB)
-			} else {
-				const recordResult = rawResult as Record<string, unknown>
-				for (const key of Object.keys(source)) {
-					const had = key in rawResult
-					const newDesc = Object.getOwnPropertyDescriptor(source, key)!
-					if (had) {
-						const oldDesc = Object.getOwnPropertyDescriptor(rawResult, key)
-						const sameAccessor = oldDesc && newDesc.get && oldDesc.get === newDesc.get
-						Object.defineProperty(rawResult, key, newDesc)
-						if (
-							!sameAccessor &&
-							recordResult[key] !==
-								(oldDesc ? (oldDesc.get ? oldDesc.get() : oldDesc.value) : undefined)
-						)
-							touched1(rawResult, { type: 'set', prop: key }, key)
-					} else {
-						Object.defineProperty(rawResult, key, newDesc)
-						touched1(rawResult, { type: 'add', prop: key }, key)
-					}
+export const lift: Lift = captioned(
+	function lift<Output extends any[] | object>(cb: (access: EffectAccess) => Output): Output {
+		let result!: Output
+		let rawResult!: Output
+		const liftCleanup = effect`lift:${cb.name}`(
+			markWithRoot((access) => {
+				const source = cb(access)
+				if (!source || typeof source !== 'object')
+					throw new Error('lift callback must return an array or object')
+				const sourceProto = Object.getPrototypeOf(source)
+				if (!result) {
+					rawResult = Array.isArray(source) ? [] : Object.create(sourceProto)
+					result = reactive(rawResult)
 				}
-				for (const key of Object.keys(rawResult))
-					if (!(key in source)) {
-						delete recordResult[key]
-						touched1(rawResult, { type: 'del', prop: key }, key)
+				if (sourceProto !== Object.getPrototypeOf(result))
+					throw new Error('lift callback must return the same type as the previous result')
+
+				if (Array.isArray(source)) {
+					const res = result as unknown[]
+					for (const { indexA, sliceA, sliceB } of arrayDiff(res, source).sort(
+						(a, b) => a.indexA - b.indexA
+					))
+						res.splice(indexA, sliceA.length, ...sliceB)
+				} else {
+					const recordResult = rawResult as Record<string, unknown>
+					for (const key of Object.keys(source)) {
+						const had = key in rawResult
+						const newDesc = Object.getOwnPropertyDescriptor(source, key)!
+						if (had) {
+							const oldDesc = Object.getOwnPropertyDescriptor(rawResult, key)
+							const sameAccessor = oldDesc && newDesc.get && oldDesc.get === newDesc.get
+							Object.defineProperty(rawResult, key, newDesc)
+							if (
+								!sameAccessor &&
+								recordResult[key] !==
+									(oldDesc ? (oldDesc.get ? oldDesc.get() : oldDesc.value) : undefined)
+							)
+								touched1(rawResult, { type: 'set', prop: key }, key)
+						} else {
+							Object.defineProperty(rawResult, key, newDesc)
+							touched1(rawResult, { type: 'add', prop: key }, key)
+						}
 					}
-			}
-		}, cb)
-	)
-	return link(result, liftCleanup)
-}
+					for (const key of Object.keys(rawResult))
+						if (!(key in source)) {
+							delete recordResult[key]
+							touched1(rawResult, { type: 'del', prop: key }, key)
+						}
+				}
+			}, cb)
+		)
+		return link(result, liftCleanup)
+	},
+	{
+		name: 'lift',
+		warn: (message) => options.warn(`[reactive] ${message}`),
+	}
+) as Lift
 
 /**
  * Options for `morph` and its variants.
@@ -264,7 +288,7 @@ export function morphArray<I, O>(
 		} else {
 			const indexRef = { value: key }
 			const stop = track(() =>
-				effect.named(`morph:${fn.name}:${key}`).opaque((access) => {
+				effect.opaque`morph:${fn.name}:${key}`((access) => {
 					cache[indexRef.value] = fn(input, access)
 					return (reason) => {
 						delete cache[indexRef.value]
@@ -289,7 +313,7 @@ export function morphArray<I, O>(
 		},
 	})
 
-	const stopMain = effect.named(`morph:${fn.name}`)(({ ascend }) => {
+	const stopMain = effect`morph:${fn.name}`(({ ascend }) => {
 		track = ascend
 		const newInput = [...(typeof source === 'function' ? source() : source)]
 		const diffs = arrayDiff(input, newInput).toSorted((a, b) => b.indexA - a.indexA)
@@ -395,7 +419,7 @@ export function morphMap<K, V, O>(
 			)
 		} else {
 			const stop = track(() =>
-				effect.named(`morph:${fn.name}:${key}`).opaque((access) => {
+				effect.opaque`morph:${fn.name}:${key}`((access) => {
 					const next = source.get(key)
 					if (next === undefined && !source.has(key)) return
 					cache.set(key, fn(next as V, key, access))
@@ -448,7 +472,7 @@ export function morphMap<K, V, O>(
 	}) as any
 
 	let stateSnapshot: State = getState(source)
-	const stopMain = effect.named(`morph:${fn.name}`)(({ ascend }) => {
+	const stopMain = effect`morph:${fn.name}`(({ ascend }) => {
 		track = ascend
 		dependant(source, keysOf)
 		while ('evolution' in stateSnapshot) {
@@ -512,7 +536,7 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 			cache[key] = track(() => fn(val, key))
 		} else {
 			const stop = track(() =>
-				effect.named(`morph:${fn.name}:${key}`).opaque((access) => {
+				effect.opaque`morph:${fn.name}:${key}`((access) => {
 					cache[key] = fn(source[key], key, access)
 					return (reason) => {
 						delete cache[key]
@@ -544,7 +568,7 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 	})
 
 	let stateSnapshot: State = getState(source)
-	const stopMain = effect.named(`morph:${fn.name}`)(({ ascend }) => {
+	const stopMain = effect`morph:${fn.name}`(({ ascend }) => {
 		track = ascend
 		// Track only structural changes on source
 		dependant(source, keysOf)
@@ -595,6 +619,7 @@ export type Morph = {
 		options?: MorphOptions<S[keyof S]>
 	): { [K in keyof S]: O }
 
+	(strings: TemplateStringsArray, ...values: readonly unknown[]): Morph
 	pure: Morph
 }
 
@@ -615,16 +640,23 @@ export type Morph = {
  * // Changing users[0].name only recomputes names[0]
  * ```
  */
-export const morph = flavored(
-	function morph(source: any, fn: any, options?: any): any {
-		if (Array.isArray(source) || typeof source === 'function')
-			return morphArray(source, fn, options)
-		if (source instanceof Map) return morphMap(source, fn, options)
-		return morphRecord(source, fn, options)
-	},
-	{
-		get pure() {
-			return (source: any, fn: any, _opt: unknown) => this(source, fn, { pure: true })
+export const morph = captioned(
+	flavored(
+		function morph(source: any, fn: any, options?: any): any {
+			if (Array.isArray(source) || typeof source === 'function')
+				return morphArray(source, fn, options)
+			if (source instanceof Map) return morphMap(source, fn, options)
+			return morphRecord(source, fn, options)
 		},
+		{
+			get pure() {
+				return (source: any, fn: any, _opt: unknown) => this(source, fn, { pure: true })
+			},
+		}
+	),
+	{
+		name: 'morph',
+		callbackIndex: 1,
+		warn: (message) => options.warn(`[reactive] ${message}`),
 	}
 ) as Morph

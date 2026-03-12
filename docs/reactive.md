@@ -5,6 +5,7 @@ The Mutts Reactive System documentation has been split into focused sections for
 ## [Core Concepts](./reactive/core.md)
 *   **[Core API](./reactive/core.md#core-api)**: `reactive`, `effect`, `unwrap`
 *   **[Effect System](./reactive/core.md#effect-system)**: Dependency tracking, cleanups, async effects
+*   **[Captioned Calls](./reactive/core.md#effect)**: tagged-template naming for callback-first APIs such as `effect`
 *   **[Class Reactivity](./reactive/core.md#class-reactivity)**: Decorators and functional syntax
 
 ## [Collections](./reactive/collections.md)
@@ -12,6 +13,7 @@ The Mutts Reactive System documentation has been split into focused sections for
 *   **[Reactive Arrays](./reactive/collections.md#reactivearray)**: Full array method support
 *   **[Morphing](./reactive/collections.md#morph)**: `morph`, `organized`
 *   **[Attend](./reactive/attend.md)**: Reactive enumeration (`attend`)
+*   **[Captioned Collection Callbacks](./reactive/attend.md#captioned-callback-form)**: tagged-template naming for second-argument callbacks like `attend`
 *   **[Resource](./reactive/resource.md)**: Async state tracking (`resource`)
 
 ## [Advanced Topics](./reactive/advanced.md)

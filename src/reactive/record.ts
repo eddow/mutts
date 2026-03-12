@@ -120,13 +120,13 @@ export function organized<
 	const observedSource = reactive(source) as Source
 	const target = reactive(baseTarget) as Target
 
-	const stop = attend(
-		() => {
+	const stop = attend`organized:entries`(
+		function enumerateObservedSourceKeys() {
 			const keys: PropertyKey[] = []
 			for (const key in observedSource) keys.push(key)
 			return keys
 		},
-		(key) => {
+		function applyObservedSourceKey(key) {
 			const sourceKey = key as keyof Source
 			const accessBase = {
 				key: sourceKey,

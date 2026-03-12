@@ -1,6 +1,7 @@
 # 1.0.13
 
 - reactive proxy `get` fast-path: when no effect is active, skip dependency-shape analysis and prototype ownership tracking while preserving metaProto, wrapProto, sub-proxy, and lazy nested reactivity semantics
+- captioned: use template-stringed version of cb-driven functions
 
 # 1.0.12
 

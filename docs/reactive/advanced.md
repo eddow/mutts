@@ -526,6 +526,13 @@ watch.immediate.deep(() => state.nested, (v) => {
 })
 ```
 
+As a callback-first API, `watch` also supports tagged-template captions:
+
+```typescript
+watch`count:watch`(() => state.count, (v) => console.log(v))
+watch.immediate`count:watch`(() => state.count, (v) => console.log(v))
+```
+
 These flavors are a shorthand for passing options:
 - `watch.immediate(...)` is equivalent to `watch(..., { immediate: true })`
 - `watch.deep(...)` is equivalent to `watch(..., { deep: true })`
@@ -1170,8 +1177,14 @@ effect(() => console.log(profile.displayName)) // tracks .displayName only
 
 **Derived filtered collection**:
 ```typescript
-const active = lift(() => items.filter(x => x.active))
-// active is a reactive array — morph() or effects on active[i] work fine
+const filtered = lift(() => items.filter(x => x.active))
+// Element-wise diff — only changed elements sync, not full rebuild
+```
+
+`lift` also supports the same tagged-template caption form:
+
+```ts
+const filtered = lift`active:items`(() => items.filter(x => x.active))
 ```
 
 **Per-element transform**:

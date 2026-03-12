@@ -5,11 +5,13 @@ import { ReactiveError, ReactiveErrorCode, options } from '../../src/reactive/ty
 
 const originalCycleHandling = options.cycleHandling
 const originalMaxEffectChain = options.maxEffectChain
+const originalError = options.error
 
 afterEach(() => {
 	reset()
 	options.cycleHandling = originalCycleHandling
 	options.maxEffectChain = originalMaxEffectChain
+	options.error = originalError
 })
 
 describe('broken state and reset', () => {
@@ -36,6 +38,27 @@ describe('broken state and reset', () => {
 			expect(e).toBeInstanceOf(ReactiveError)
 			expect((e as ReactiveError).code).toBe(ReactiveErrorCode.BrokenEffects)
 		}
+	})
+
+	it('should report unrecoverable root batch failures through options.error', () => {
+		const state = reactive({ value: 0 })
+		const reports: unknown[][] = []
+
+		options.error = (...args) => {
+			reports.push(args)
+		}
+
+		effect(() => {
+			if (state.value === 1) throw new Error('Unrecoverable')
+		})
+
+		expect(() => {
+			state.value = 1
+		}).toThrow('Unrecoverable')
+
+		expect(reports).toHaveLength(1)
+		expect(reports[0]?.[0]).toBe('[reactive] Root batch failure before broken state:')
+		expect((reports[0]?.[1] as Error).message).toBe('Unrecoverable')
 	})
 
 	it('should recover after reset()', () => {
