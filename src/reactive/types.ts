@@ -89,13 +89,14 @@ export type PropTrigger = {
  * Reason for an effect cleanup/reaction
  */
 export type CleanupReason =
-	| { type: 'propChange'; triggers: PropTrigger[] }
-	| { type: 'invalidate'; cause: CleanupReason }
-	| { type: 'stopped'; detail?: string } // explicit stop() call
-	| { type: 'gc' } // FinalizationRegistry collected the holder
-	| { type: 'lineage'; parent: CleanupReason } // parent effect cleaned up (recursive)
-	| { type: 'error'; error: unknown } // error handler chain (reactionCleanup called with error)
-	| { type: 'multiple'; reasons: CleanupReason[] }
+	| { type: 'propChange'; triggers: PropTrigger[]; chain?: CleanupReason }
+	| { type: 'invalidate'; cause: CleanupReason; chain?: CleanupReason }
+	| { type: 'external'; detail: string; chain?: CleanupReason }
+	| { type: 'stopped'; detail?: string; chain?: CleanupReason } // explicit stop() call
+	| { type: 'gc'; chain?: CleanupReason } // FinalizationRegistry collected the holder
+	| { type: 'lineage'; parent: CleanupReason; chain?: CleanupReason } // parent effect cleaned up (recursive)
+	| { type: 'error'; error: unknown; chain?: CleanupReason } // error handler chain (reactionCleanup called with error)
+	| { type: 'multiple'; reasons: CleanupReason[]; chain?: CleanupReason }
 
 function formatTrigger({ obj, evolution, dependency, touch }: PropTrigger): unknown[] {
 	const detail = evolution.type === 'bunch' ? evolution.method : String(evolution.prop)
@@ -135,23 +136,68 @@ export function formatCleanupReason(reason: CleanupReason, depth = 0): unknown[]
 				if (i > 0) parts.push(',')
 				parts.push(...formatTrigger(reason.triggers[i]))
 			}
+			if (reason.chain) {
+				parts.push('\n', ...formatCleanupReason(reason.chain, depth))
+			}
 			return parts
 		}
-		case 'stopped':
-			return [`${indent}stopped`]
-		case 'gc':
-			return [`${indent}gc`]
-		case 'error':
-			return [`${indent}error:`, reason.error]
-		case 'lineage':
-			return [`${indent}lineage ←\n`, ...formatCleanupReason(reason.parent, depth + 1)]
-		case 'invalidate':
-			return [`${indent}invalidate ←\n`, ...formatCleanupReason(reason.cause, depth + 1)]
+		case 'stopped': {
+			const parts: unknown[] = [`${indent}stopped`]
+			if (reason.detail) parts.push(`(${reason.detail})`)
+			if (reason.chain) {
+				parts.push('\n', ...formatCleanupReason(reason.chain, depth))
+			}
+			return parts
+		}
+		case 'external': {
+			const parts: unknown[] = [`${indent}external:`, reason.detail]
+			if (reason.chain) {
+				parts.push('\n', ...formatCleanupReason(reason.chain, depth))
+			}
+			return parts
+		}
+		case 'gc': {
+			const parts: unknown[] = [`${indent}gc`]
+			if (reason.chain) {
+				parts.push('\n', ...formatCleanupReason(reason.chain, depth))
+			}
+			return parts
+		}
+		case 'error': {
+			const parts: unknown[] = [`${indent}error:`, reason.error]
+			if (reason.chain) {
+				parts.push('\n', ...formatCleanupReason(reason.chain, depth))
+			}
+			return parts
+		}
+		case 'lineage': {
+			const parts: unknown[] = [
+				`${indent}lineage ←\n`,
+				...formatCleanupReason(reason.parent, depth + 1),
+			]
+			if (reason.chain) {
+				parts.push('\n', ...formatCleanupReason(reason.chain, depth))
+			}
+			return parts
+		}
+		case 'invalidate': {
+			const parts: unknown[] = [
+				`${indent}invalidate ←\n`,
+				...formatCleanupReason(reason.cause, depth + 1),
+			]
+			if (reason.chain) {
+				parts.push('\n', ...formatCleanupReason(reason.chain, depth))
+			}
+			return parts
+		}
 		case 'multiple': {
 			const parts: unknown[] = []
 			for (let i = 0; i < reason.reasons.length; i++) {
 				if (i > 0) parts.push('\n')
 				parts.push(...formatCleanupReason(reason.reasons[i], depth))
+			}
+			if (reason.chain) {
+				parts.push('\n', ...formatCleanupReason(reason.chain, depth))
 			}
 			return parts
 		}
@@ -176,6 +222,8 @@ export interface EffectNode {
 	stopped?: boolean
 	/** The reason why the effect is (re-)executing */
 	nextReason?: CleanupReason
+	/** The reason for the current execution (only available during effect run) */
+	currentReason?: CleanupReason
 
 	// Error handling
 	forwardThrow?: CatchFunction

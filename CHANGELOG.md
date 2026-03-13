@@ -2,6 +2,12 @@
 
 - reactive proxy `get` fast-path: when no effect is active, skip dependency-shape analysis and prototype ownership tracking while preserving metaProto, wrapProto, sub-proxy, and lazy nested reactivity semantics
 - captioned: use template-stringed version of cb-driven functions
+- lazy lineage digestion: lineage signatures now keep raw stack/effect data and digest only on human display, with cached digestion and a single `digestLineage` path
+- cleanup reason debugging: `logReason` and the DevTools formatter now render chained reasons as stack-like frames with concise one-line summaries and per-link lineage details
+- cleanup reason formatting: formatter bodies now use text previews for nested values instead of nested object renderers, avoiding DevTools/custom-formatter swallowing issues
+- DevTools formatter polish: `__MUTTS_DEBUG__.reason` and `__MUTTS_DEBUG__.lineage` are now live getter properties, `propChange` causes collapse by operation with expandable touch/dependency details, and lineage frames render as dedicated rows under expandable effect headers
+- `propChange` summaries: repeated property sets are grouped by target object and use compact target descriptions, including tagged lift/morph outputs when available
+- `CleanupReason.external`: `root` and `untracked` are captioned and now contribute an ambient `external` reason chained into downstream cleanup/reaction reasons
 
 # 1.0.12
 

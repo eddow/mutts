@@ -661,6 +661,8 @@ const stopOuter = effect(() => {
 
 The `untracked()` function allows you to run code without tracking dependencies, which can be useful for creating effects or performing operations that shouldn't be part of the current effect's dependency graph.
 
+`untracked` is captioned. When you use it as a reactive execution root, prefer the template form so debug output and chained `CleanupReason.external` frames stay descriptive.
+
 ```typescript
 import { effect, untracked, reactive } from 'mutts'
 
@@ -675,7 +677,7 @@ effect(() => {
     // Create an inner effect without tracking the creation under the outer effect
     let stopInner: (() => void) | undefined
     
-    untracked(() => {
+    untracked`outer:inner-effect`(() => {
         stopInner = effect(() => {
             state.b
         })

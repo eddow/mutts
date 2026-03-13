@@ -7,10 +7,12 @@
 
 import { effect } from '../src/reactive/effects'
 import { effectToReactiveObjects, getEffectNode, getRoot, markWithRoot } from '../src/reactive/registry'
-import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, options } from '../src/reactive/types'
-import { getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter, logLineage, isLineage } from './lineage'
+import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, type CleanupReason, options } from '../src/reactive/types'
+import { captureLineage, digestLineage, getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter, logLineage, isLineage } from './lineage'
+import { isCleanupReason, logReason, reasonFormatter } from './reason'
 import { showLineagePanel } from './lineage-panel'
 import { setDebugHooks } from '../src/reactive/debug-hooks'
+import { getActiveEffect } from '../src/reactive/effect-context'
 
 /**
  * Log an error with detailed context if error logging is enabled
@@ -426,7 +428,6 @@ export function buildReactivityGraph(): ReactivityGraph {
 		},
 	}
 }
-export const captureLineage = () => wrapLineageForDebug(getLineage())
 /**
  * Enables the DevTools bridge and exposes the debug API on window/global.
  * Call as early as possible in development builds.
@@ -454,24 +455,38 @@ export function enableDevTools() {
 			logLineage(getLineage())
 			return '🦴 Effect Lineage Trace' + (tag ? ` (${tag})` : '')
 		},
-		get browserLineage() {
-			return captureLineage()
+		logReason(reason?: CleanupReason, tag?: string) {
+			const reasonToLog = reason ?? globalScope.__MUTTS_DEBUG__.reason
+			if (!reasonToLog) return '🧹 Cleanup Reason'
+			return logReason(reasonToLog, tag)
 		},
-		getLineage,
-		captureLineage: getStackFrame,
-		formatLineage,
+		get lineage() {
+			return getLineage()
+		},
 		showLineagePanel,
 		setEffectName,
 		setObjectName,
 		registerEffect: registerEffectForDebug,
 		registerObject: registerObjectForDebug,
+		/**
+		 * Returns the reason why the current effect is being executed.
+		 * Returns undefined if not in an effect or if this is the first run.
+		 * @type {() => import('../src/reactive/types').CleanupReason | undefined}
+		 */
+		get reason() {
+			const activeEffect = getActiveEffect()
+			if (!activeEffect) return undefined
+			const node = getEffectNode(activeEffect)
+			return node?.currentReason
+		},
 	}
 
 	// @ts-ignore - devtoolsFormatters is a Chrome-specific array
 	if (globalScope.devtoolsFormatters) {
 		globalScope.devtoolsFormatters.push(lineageFormatter)
+		globalScope.devtoolsFormatters.push(reasonFormatter)
 	} else {
-		globalScope.devtoolsFormatters = [lineageFormatter]
+		globalScope.devtoolsFormatters = [lineageFormatter, reasonFormatter]
 	}
 
 	setDebugHooks({
@@ -481,6 +496,7 @@ export function enableDevTools() {
 		captureStack: getStackFrame,
 		captureLineage,
 		formatStack: (stack: any) => {
+			if (isCleanupReason(stack)) return [stack]
 			if (typeof stack === 'string') {
 				return [
 					`\n    ${stack
@@ -504,8 +520,7 @@ export function enableDevTools() {
 				'stack' in error &&
 				!('lineage' in error)
 			) {
-				const lineage = getLineage(trigger, getStackFrame(error as Error) as any)
-				;(error as any).lineage = wrapLineageForDebug(lineage)
+				;(error as any).lineage = wrapLineageForDebug(getLineage(trigger, error))
 			}
 		},
 	})

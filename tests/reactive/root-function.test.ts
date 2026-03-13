@@ -10,7 +10,7 @@ describe('untracked and root functions', () => {
 			effectRunCount++
 			
 			// Create child effect inside untracked - should maintain cleanup
-			const childCleanup = untracked(() => {
+			const childCleanup = untracked`test:child-untracked`(() => {
 				return effect(() => {
 					// This should track dependencies for the child effect
 					state.count
@@ -46,7 +46,7 @@ describe('untracked and root functions', () => {
 			parentRunCount++
 			
 			// Create detached child effect using root()
-			root(() => {
+			root`test:child-root`(() => {
 				effect(() => {
 					childRunCount++
 					state.count
@@ -75,7 +75,7 @@ describe('untracked and root functions', () => {
 		
 		const parentEffect = effect(() => {
 			runCount++
-			untracked(() => {
+			untracked`test:parent-untracked-read`(() => {
 				// Accessing state.count here should not create a dependency
 				state.count
 			})
@@ -97,7 +97,7 @@ describe('untracked and root functions', () => {
 		
 		const parentEffect = effect(() => {
 			runCount++
-			root(() => {
+			root`test:parent-root-read`(() => {
 				// Accessing state.count here should not create a dependency
 				state.count
 			})

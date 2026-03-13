@@ -212,6 +212,8 @@ import 'mutts/debug';
 
 When an effect or watcher re-runs, it receives a `reaction` property (in `EffectAccess`) that describes *why* it was triggered. This is also passed to the `cleanup` function.
 
+Reasons may be chained. For example, a `propChange` can carry an `external` chain entry when the reactive work ultimately originated from a captioned `root` or `untracked` call such as ``root`event:click`(...)``.
+
 ```typescript
 effect(({ reaction }) => {
     if (reaction && typeof reaction === 'object') {
@@ -246,10 +248,11 @@ effect(()=> {
 
 Lineage tracking allows you to see the "causal path" of an effect—not just the current stack trace, but the stack traces of all parent effects that created the current execution.
 
-When an effect is created, it is assigned a `lineage` property that contains the stack traces of all parent effects that lead to its creation.
+When an effect is created, it is assigned a lineage signature. The raw stack/effect data is captured up front, but digestion into human-readable segments is deferred until display.
 
 - **`logLineage()`**: Prints a formatted, interactive tree of the current effect's lineage to the console.
 - **`captureLineage()`**: Captures the current lineage as a structured object.
+- **`digestLineage()`**: Converts a captured lineage signature into display-ready segments on demand.
 
 #### Lineage Options
 
@@ -266,8 +269,28 @@ When `mutts/debug` is active (or after calling `enableDevTools()`), a global `__
 This object provides low-level access to the graph, lineage capture, and renaming utilities:
 - `__MUTTS_DEBUG__.getGraph()`: Returns the full reactivity graph.
 - `__MUTTS_DEBUG__.logLineage()`: logs the current lineage.
-- `__MUTTS_DEBUG__.browserLineage`: captures lineage for the DevTools panel.
+- `__MUTTS_DEBUG__.logReason()`: logs the current reasons chain.
+- `__MUTTS_DEBUG__.reason`: the current `CleanupReason` for the active effect re-run, if any.
+- `__MUTTS_DEBUG__.lineage`: the current execution lineage, already digested into user-facing segments.
 
 ### Custom DevTools Formatters
 
 `mutts/debug` automatically registers [Custom Formatters](https://bit.ly/chrome-extension-custom-formatters) in Chrome. This makes lineage objects and reactive proxies appear as clean, structured trees in the console instead of opaque Proxy objects.
+
+#### Debugger / DevTools how-to
+
+To inspect reactive debugging data directly in Chrome DevTools:
+
+1. Allow **Custom formatters** in DevTools settings.
+2. Import `mutts/debug` somewhere in your application source during development:
+
+```typescript
+import 'mutts/debug'
+```
+
+3. Open DevTools and inspect the global `__MUTTS_DEBUG__` helper.
+
+The most useful live entry points you can keep on watch are:
+
+- `__MUTTS_DEBUG__.lineage`: Gives you the static "call stack" that produced this effect (without the cuts of batching)
+- `__MUTTS_DEBUG__.reason`: Gives you the chain of reasons who lead the code who is run to be run - starting from initialization or events

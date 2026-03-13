@@ -1,17 +1,37 @@
 import { tag } from '../utils'
-import { asyncZone, ZoneAggregator, ZoneHistory } from '../zone'
+import { asyncZone, Zone, ZoneAggregator, ZoneHistory } from '../zone'
 import { getRoot } from './registry'
 import type { CleanupReason, EffectTrigger, ScopedCallback } from './types'
 
 export const effectHistory = tag('effectHistory', new ZoneHistory<EffectTrigger>())
 tag('effectHistory.present', effectHistory.present)
 asyncZone.add(effectHistory)
+export const externalReason = tag('externalReason', new Zone<CleanupReason>())
+asyncZone.add(externalReason)
 
 /**
  * Aggregator for zones that need to be tracked along effects.
  * ie. in each effect, the active zone of the given zoning will be the one active at effect's definition
  */
 export const effectAggregator = tag('effectAggregator', new ZoneAggregator(effectHistory.present))
+effectAggregator.add(externalReason)
+
+export function chainExternalReason(reason?: CleanupReason): CleanupReason | undefined {
+	const external = externalReason.active
+	if (!external) return reason
+	if (!reason) return external
+	let current: CleanupReason | undefined = reason
+	while (current) {
+		if (
+			current.type === 'external' &&
+			external.type === 'external' &&
+			current.detail === external.detail
+		)
+			return reason
+		current = current.chain
+	}
+	return { ...reason, chain: chainExternalReason(reason.chain) }
+}
 
 export function isRunning(effect: EffectTrigger): boolean {
 	const root = getRoot(effect)

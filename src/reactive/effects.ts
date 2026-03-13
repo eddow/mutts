@@ -1,10 +1,16 @@
 import { decorator } from '../decorator'
-import { captioned, type Captioned, flavored, flavorOptions } from '../flavored'
+import { type Captioned, captioned, flavored, flavorOptions } from '../flavored'
 import { IterableWeakSet } from '../iterableWeak'
 import { named } from '../utils'
 import type { HistoryValue } from '../zone'
 import { debugHooks } from './debug-hooks'
-import { effectAggregator, effectHistory, getActiveEffect } from './effect-context'
+import {
+	chainExternalReason,
+	effectAggregator,
+	effectHistory,
+	externalReason,
+	getActiveEffect,
+} from './effect-context'
 import {
 	effectToReactiveObjects,
 	getEffectNode,
@@ -58,6 +64,10 @@ function formatRoots(roots: Function[], limit = 20): string {
 	const start = names.slice(0, 5)
 	const end = names.slice(-10)
 	return `${start.join(' → ')} ... (${names.length - 15} more) ... ${end.join(' → ')}`
+}
+
+function externalReasonFrom(fn: Function): CleanupReason | undefined {
+	return fn.name ? { type: 'external', detail: fn.name } : undefined
 }
 
 export interface ActivationRecord {
@@ -577,6 +587,14 @@ function addToBatch(
 	// Build reason from pending triggers if not provided
 	if (!reason && node.pendingTriggers) {
 		reason = { type: 'propChange', triggers: node.pendingTriggers }
+		// Add chain: if this is being triggered from another effect, get its reason
+		if (caller) {
+			const callerNode = getEffectNode(caller)
+			if (callerNode.currentReason) {
+				reason.chain = callerNode.currentReason
+			}
+		}
+		reason = chainExternalReason(reason)
 	}
 	node.pendingTriggers = undefined
 
@@ -873,7 +891,11 @@ function executeNext(effectuatedRoots: Function[]): any {
 
 // Track which sub-effects have been executed to prevent infinite loops
 // These are all the effects triggered under `activeEffect` and all their sub-effects
-export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'immediate') {
+export function batch(
+	effect: EffectTrigger | EffectTrigger[],
+	immediate?: 'immediate',
+	caller?: EffectTrigger
+) {
 	if (broken) {
 		throw new ReactiveError(
 			'[reactive] Reactive system is broken after an unrecoverable error. Call reset() to recover.',
@@ -891,12 +913,13 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 	}
 
 	// TODO: Consider this has been produced but was useless - it might be more correct ?const caller = executingStack.length > 0 ? getActiveEffect() : undefined
-	const caller = getActiveEffect()
+	const activeCaller = getActiveEffect()
+	const callerToUse = caller || activeCaller
 
 	// Optimization: If nested and NOT immediate, just join the existing batch
 	if (!isNewBatch && !immediate) {
 		for (let i = 0; i < effect.length; i++) {
-			addToBatch(effect[i], caller, false)
+			addToBatch(effect[i], callerToUse, false)
 		}
 		return
 	}
@@ -935,7 +958,7 @@ export function batch(effect: EffectTrigger | EffectTrigger[], immediate?: 'imme
 		} else {
 			// Add initial effects to batch and compute dependencies
 			for (let i = 0; i < effect.length; i++) {
-				addToBatch(effect[i], caller, false)
+				addToBatch(effect[i], callerToUse, false)
 			}
 			computeAllInDegrees(currentBatch)
 		}
@@ -1111,16 +1134,11 @@ const fr = new FinalizationRegistry<() => void>((f) => f())
 /**
  * Reactive effect function with chainable flavor modifiers.
  */
-type EffectCallback = (
-	access: EffectAccess
-) => EffectCloser | undefined | void | Promise<any>
+type EffectCallback = (access: EffectAccess) => EffectCloser | undefined | void | Promise<any>
 type EffectApplication = (fn: EffectCallback, effectOptions?: EffectOptions) => EffectCleanup
 
 export interface Effect extends Captioned<EffectApplication> {
-	(
-		fn: EffectCallback,
-		effectOptions?: EffectOptions
-	): EffectCleanup
+	(fn: EffectCallback, effectOptions?: EffectOptions): EffectCleanup
 	/** Opaque flavor: bypasses deep-touch optimizations */
 	readonly opaque: Effect
 	/** @deprecated Use `effect\`name\`(fn)` instead. */
@@ -1137,10 +1155,7 @@ export const effect: Effect = captioned(
 	named(
 		effectMarker.leave,
 		flavored(
-			function effect(
-				fn: EffectCallback,
-				effectOptions: EffectOptions = {}
-			): EffectCleanup {
+			function effect(fn: EffectCallback, effectOptions: EffectOptions = {}): EffectCleanup {
 				if (effectOptions?.name) Object.defineProperty(fn, 'name', { value: effectOptions.name })
 				// Use per-effect asyncMode or fall back to global option
 				const asyncMode = effectOptions?.asyncMode ?? options.asyncMode ?? 'cancel'
@@ -1153,7 +1168,16 @@ export const effect: Effect = captioned(
 						const prevCleanup = node.cleanup
 						node.cleanup = undefined
 						try {
-							untracked(() => prevCleanup(node.nextReason || { type: 'stopped' }))
+							untracked`effect:cleanup`(() =>
+								prevCleanup(
+									chainExternalReason(
+										node.nextReason || {
+											type: 'stopped',
+											chain: node.currentReason,
+										}
+									)
+								)
+							)
 						} catch (error) {
 							// If we want to report them, we could use options.warn or similar
 							options.warn('Error during effect cleanup', error)
@@ -1186,6 +1210,9 @@ export const effect: Effect = captioned(
 					}
 					// Set reaction reason for the upcoming run
 					access.reaction = node.nextReason || access.reaction
+					node.currentReason =
+						node.nextReason ||
+						(access.reaction && access.reaction !== true ? access.reaction : undefined)
 					node.nextReason = undefined
 
 					optionCall('enter', getRoot(fn))
@@ -1255,15 +1282,20 @@ export const effect: Effect = captioned(
 							// This ensures that when we cancel, the original promise's .catch() handlers are triggered
 							// We do this by rejecting the race promise, which makes the original promise chain see the rejection
 							// through the zone-wrapped .then()/.catch() handlers
-							runningPromise = runningPromise.catch((error) => {
-								// Propagate async errors to the effect's error handler
-								// This ensures onEffectThrow handlers are triggered for async errors
-								if (error !== cancelError) {
-									thrower(error)
-								}
-								// If thrower didn't throw (handled), we absorb the error.
-								// If thrower threw (unhandled), it propagates as a new unhandled rejection, which is correct.
-							})
+							runningPromise = runningPromise
+								.catch((error) => {
+									// Propagate async errors to the effect's error handler
+									// This ensures onEffectThrow handlers are triggered for async errors
+									if (error !== cancelError) {
+										thrower(error)
+									}
+									// If thrower didn't throw (handled), we absorb the error.
+									// If thrower threw (unhandled), it propagates as a new unhandled rejection, which is correct.
+								})
+								.finally(() => {
+									// Clear currentReason when async effect completes
+									node.currentReason = undefined
+								})
 						} else {
 							// Synchronous result - treat as cleanup function
 							reactionCleanup = result as undefined | EffectCloser
@@ -1272,6 +1304,11 @@ export const effect: Effect = captioned(
 						debugHooks.decorateError(error, runEffect)
 						// catcher:self`
 						errorToThrow = error instanceof Error ? error : new Error(String(error))
+					} finally {
+						// Clear currentReason for synchronous effects
+						if (!runningPromise) {
+							node.currentReason = undefined
+						}
 					}
 
 					// Create cleanup function for next run
@@ -1301,8 +1338,11 @@ export const effect: Effect = captioned(
 							const childReason: CleanupReason = reason
 								? reason.type === 'lineage'
 									? reason
-									: { type: 'lineage', parent: reason }
-								: { type: 'stopped' }
+									: { type: 'lineage', parent: reason, chain: node.currentReason }
+								: (chainExternalReason({ type: 'stopped', chain: node.currentReason }) ?? {
+										type: 'stopped',
+										chain: node.currentReason,
+									})
 							for (const childCleanup of children) childCleanup(childReason)
 							delete node.children
 						}
@@ -1316,7 +1356,7 @@ export const effect: Effect = captioned(
 
 				if (debugHooks.isDevtoolsEnabled()) {
 					const stack = debugHooks.captureStack() // Robustly skips internal mutts frames
-					if (Array.isArray(stack) && stack.length > 0) {
+					if (stack) {
 						node.creationStack = stack
 					}
 				}
@@ -1389,7 +1429,9 @@ export const effect: Effect = captioned(
 						runningPromise = null
 					}
 					try {
-						node.cleanup?.(reason || { type: 'stopped' })
+						node.cleanup?.(
+							chainExternalReason(reason || { type: 'stopped', chain: node.currentReason })
+						)
 					} catch (error) {
 						// Cleanup errors should basically be ignored or at least not stop the world
 						// If we want to report them, we could use options.warn or similar
@@ -1443,7 +1485,8 @@ export const effect: Effect = captioned(
 	{
 		name: 'effect',
 		warn: (message) => options.warn(`[reactive] ${message}`),
-		shouldWarnAnonymous: (_callback, args) => !(args[1] && typeof args[1] === 'object' && 'name' in args[1]),
+		shouldWarnAnonymous: (_callback, args) =>
+			!(args[1] && typeof args[1] === 'object' && 'name' in args[1]),
 	}
 ) as Effect
 
@@ -1452,18 +1495,26 @@ export const effect: Effect = captioned(
  * Effects created inside will still be cleaned up when the parent effect is destroyed
  * @param fn - The function to execute
  */
-export function untracked<T>(fn: () => T): T {
-	return effectHistory.present.root(fn)
-}
+type RootRunner = <T>(fn: () => T) => T
+
+export const untracked: Captioned<RootRunner> = captioned(function untracked<T>(fn: () => T): T {
+	const external = externalReasonFrom(fn)
+	return external
+		? externalReason.with(external, () => effectHistory.present.root(fn))
+		: effectHistory.present.root(fn)
+})
 
 /**
  * Executes a function from a virgin/root context - no parent effect, no tracking
  * Creates completely independent effects that won't be cleaned up by any parent
  * @param fn - The function to execute
  */
-export function root<T>(fn: () => T): T {
-	return effectHistory.root(fn)
-}
+export const root: Captioned<RootRunner> = captioned(function root<T>(fn: () => T): T {
+	const external = externalReasonFrom(fn)
+	return external
+		? externalReason.with(external, () => effectHistory.root(fn))
+		: effectHistory.root(fn)
+})
 
 /**
  * Creates a bidirectional binding between a reactive value and a non-reactive external value

@@ -2,8 +2,15 @@ import { decorator } from '../decorator'
 import { flavored } from '../flavored'
 import { deepCompare, named } from '../utils'
 import { touched1 } from './change'
+import { chainExternalReason, getActiveEffect } from './effect-context'
 import { effect, root, untracked } from './effects'
-import { getRoot, markWithRoot, type RootMarkedFunction, rootFunctionSymbol } from './registry'
+import {
+	getEffectNode,
+	getRoot,
+	markWithRoot,
+	type RootMarkedFunction,
+	rootFunctionSymbol,
+} from './registry'
 import { dependant } from './tracking'
 import { type CleanupReason, optionCall, options, proxyToObject } from './types'
 
@@ -61,7 +68,7 @@ function memoizeFunction<Result, Args extends MemoizableArgument[]>(
 				const wasVerification = options.isVerificationRun
 				options.isVerificationRun = true
 				try {
-					const fresh = untracked(() => fn.apply(this, args))
+					const fresh = untracked`memoize:verify-calculation`(() => fn.apply(this, args))
 					if (!deepCompare(node.result, fresh)) {
 						optionCall('onMemoizationDiscrepancy', node.result, fresh, fn, args, 'calculation')
 					}
@@ -74,7 +81,7 @@ function memoizeFunction<Result, Args extends MemoizableArgument[]>(
 
 		// Create memoize internal effect to track dependencies and invalidate cache
 		// Use untracked to prevent the effect creation from being affected by parent effects
-		node.cleanup = root(() =>
+		node.cleanup = root`memoize:root`(() =>
 			effect`memoize`(
 				() => {
 					// Execute the function and track its dependencies
@@ -87,7 +94,17 @@ function memoizeFunction<Result, Args extends MemoizableArgument[]>(
 						// Lazy memoization: stop the effect so it doesn't re-run immediately.
 						// It will be re-created on next access.
 						if (node.cleanup) {
-							node.cleanup({ type: 'invalidate', cause: reason ?? { type: 'stopped' } })
+							const activeEffect = getActiveEffect()
+							let chain: CleanupReason | undefined
+							if (activeEffect) {
+								const effectNode = getEffectNode(activeEffect)
+								chain = effectNode.currentReason
+							}
+							node.cleanup({
+								type: 'invalidate',
+								cause: chainExternalReason(reason ?? { type: 'stopped', chain })!,
+								chain: chainExternalReason(chain),
+							})
 							node.cleanup = undefined
 						}
 					}
@@ -100,7 +117,7 @@ function memoizeFunction<Result, Args extends MemoizableArgument[]>(
 			const wasVerification = options.isVerificationRun
 			options.isVerificationRun = true
 			try {
-				const fresh = untracked(() => fn.apply(this, args))
+				const fresh = untracked`memoize:verify-comparison`(() => fn.apply(this, args))
 				if (!deepCompare(node.result, fresh)) {
 					optionCall('onMemoizationDiscrepancy', node.result, fresh, fn, args, 'comparison')
 				}

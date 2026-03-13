@@ -1,11 +1,12 @@
 import { arrayDiff } from '../diff'
-import { captioned, flavored, type Captioned } from '../flavored'
+import { type Captioned, captioned, flavored } from '../flavored'
+import { tag } from '../utils'
 import type { GetterWrapper } from '../zone'
 import { getState, touched, touched1 } from './change'
-import { link } from './effect-context'
+import { chainExternalReason, getActiveEffect, link } from './effect-context'
 import { effect } from './effects'
 import { reactive } from './proxy'
-import { markWithRoot } from './registry'
+import { getEffectNode, markWithRoot } from './registry'
 import { dependant } from './tracking'
 import {
 	type CleanupReason,
@@ -38,7 +39,13 @@ import {
  * attend(() => Object.keys(record), (key) => { ... })
  * ```
  */
-export interface Attend extends Captioned<(source: any, callback: (key: any, access: EffectAccess) => EffectCloser | void) => ScopedCallback> {
+export interface Attend
+	extends Captioned<
+		(
+			source: any,
+			callback: (key: any, access: EffectAccess) => EffectCloser | void
+		) => ScopedCallback
+	> {
 	<T>(
 		source: readonly T[],
 		callback: (index: number, access: EffectAccess) => EffectCloser | void
@@ -90,7 +97,7 @@ export const attend: Attend = captioned(
 				keyEffects.set(
 					key,
 					ascend(() =>
-						effect`attend${callbackLabel}:${key}`((access) => callback(indexRef.value, access))
+						effect`attend:${callbackLabel}:${key}`((access) => callback(indexRef.value, access))
 					)
 				)
 			}
@@ -175,6 +182,7 @@ export const lift: Lift = captioned(
 	function lift<Output extends any[] | object>(cb: (access: EffectAccess) => Output): Output {
 		let result!: Output
 		let rawResult!: Output
+		const resultName = `lift:${cb.name || 'anonymous'}`
 		const liftCleanup = effect`lift:${cb.name}`(
 			markWithRoot((access) => {
 				const source = cb(access)
@@ -182,7 +190,7 @@ export const lift: Lift = captioned(
 					throw new Error('lift callback must return an array or object')
 				const sourceProto = Object.getPrototypeOf(source)
 				if (!result) {
-					rawResult = Array.isArray(source) ? [] : Object.create(sourceProto)
+					rawResult = tag(resultName, Array.isArray(source) ? [] : Object.create(sourceProto))
 					result = reactive(rawResult)
 				}
 				if (sourceProto !== Object.getPrototypeOf(result))
@@ -267,13 +275,19 @@ export function morphArray<I, O>(
 
 	let track!: GetterWrapper
 	const itemEffects = new Map<any, { stop: ScopedCallback; index: { value: number } }>()
-	const cache = [] as O[]
+	const cache = tag(`morph:${fn.name || 'anonymous'}`, [] as O[])
 	let input: readonly I[] = []
 
 	function stopItem(key: any) {
 		const entry = itemEffects.get(key)
 		if (entry) {
-			entry.stop({ type: 'stopped' })
+			const activeEffect = getActiveEffect()
+			let chain: CleanupReason | undefined
+			if (activeEffect) {
+				const node = getEffectNode(activeEffect)
+				chain = node.currentReason
+			}
+			entry.stop(chainExternalReason({ type: 'stopped', chain }))
 			itemEffects.delete(key)
 		}
 	}
@@ -293,7 +307,17 @@ export function morphArray<I, O>(
 					return (reason) => {
 						delete cache[indexRef.value]
 						touched1(cache, { type: 'invalidate', prop: 'morph' }, String(key))
-						stop?.({ type: 'invalidate', cause: reason ?? { type: 'stopped' } })
+						const activeEffect = getActiveEffect()
+						let chain: CleanupReason | undefined
+						if (activeEffect) {
+							const node = getEffectNode(activeEffect)
+							chain = node.currentReason
+						}
+						stop?.({
+							type: 'invalidate',
+							cause: chainExternalReason(reason ?? { type: 'stopped', chain })!,
+							chain: chainExternalReason(chain),
+						})
 					}
 				})
 			)
@@ -398,13 +422,19 @@ export function morphMap<K, V, O>(
 
 	let track!: GetterWrapper
 	const itemEffects = new Map<any, ScopedCallback>()
-	const cache = new Map<K, O>()
+	const cache = tag(`morph:${fn.name || 'anonymous'}`, new Map<K, O>())
 	Object.defineProperty(cache, 'constructor', { value: Object, enumerable: false })
 
 	function stopItem(key: any) {
 		const stop = itemEffects.get(key)
 		if (stop) {
-			stop({ type: 'stopped' })
+			const activeEffect = getActiveEffect()
+			let chain: CleanupReason | undefined
+			if (activeEffect) {
+				const node = getEffectNode(activeEffect)
+				chain = node.currentReason
+			}
+			stop({ type: 'stopped', chain })
 			itemEffects.delete(key)
 		}
 	}
@@ -426,7 +456,17 @@ export function morphMap<K, V, O>(
 					return (reason) => {
 						cache.delete(key)
 						touched1(cache, { type: 'invalidate', prop: 'morph' }, String(key))
-						stop?.({ type: 'invalidate', cause: reason ?? { type: 'stopped' } })
+						const activeEffect = getActiveEffect()
+						let chain: CleanupReason | undefined
+						if (activeEffect) {
+							const node = getEffectNode(activeEffect)
+							chain = node.currentReason
+						}
+						stop?.({
+							type: 'invalidate',
+							cause: chainExternalReason(reason ?? { type: 'stopped', chain })!,
+							chain: chainExternalReason(chain),
+						})
 					}
 				})
 			)
@@ -524,7 +564,13 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 	function stopItem(key: any) {
 		const stop = itemEffects.get(key)
 		if (stop) {
-			stop({ type: 'stopped' })
+			const activeEffect = getActiveEffect()
+			let chain: CleanupReason | undefined
+			if (activeEffect) {
+				const node = getEffectNode(activeEffect)
+				chain = node.currentReason
+			}
+			stop({ type: 'stopped', chain })
 			itemEffects.delete(key)
 		}
 	}
@@ -541,7 +587,17 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 					return (reason) => {
 						delete cache[key]
 						touched1(cache, { type: 'invalidate', prop: 'morph' }, String(key))
-						stop?.({ type: 'invalidate', cause: reason ?? { type: 'stopped' } })
+						const activeEffect = getActiveEffect()
+						let chain: CleanupReason | undefined
+						if (activeEffect) {
+							const node = getEffectNode(activeEffect)
+							chain = node.currentReason
+						}
+						stop?.({
+							type: 'invalidate',
+							cause: chainExternalReason(reason ?? { type: 'stopped', chain })!,
+							chain: chainExternalReason(chain),
+						})
 					}
 				})
 			)

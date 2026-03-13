@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { effect, morph, reactive } from '../../src/reactive/index'
-import { getLineage } from '../../debug'
+import { digestLineage, getLineage } from '../../debug'
 
 describe('morph undefined value bug', () => {
 	it('should not expose undefined values during array diff processing', () => {
@@ -255,7 +255,7 @@ describe('morph undefined value bug', () => {
 		const source = reactive([{ id: 1 }])
 		let effectName = ''
 		const mapped = morph`items:${'mapper'}`(source, (item) => {
-			effectName = getLineage()[0]?.effectName ?? ''
+			effectName = digestLineage(getLineage())[0]?.effectName ?? ''
 			return item.id
 		})
 

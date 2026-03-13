@@ -118,8 +118,8 @@ function watchCallBack<T>(
 			if (oldValue !== newValue) {
 				const old = oldValue
 				if (old === unsetYet) {
-					if (immediate) untracked(() => changed(newValue))
-				} else untracked(() => changed(newValue, old as T))
+					if (immediate) untracked`watch:changed`(() => changed(newValue))
+				} else untracked`watch:changed`(() => changed(newValue, old as T))
 			}
 			oldValue = newValue
 			if (deep) {

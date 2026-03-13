@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { effect, lift, reactive, reactiveOptions } from '../../src/reactive'
-import { getLineage } from '../../debug'
+import { digestLineage, getLineage } from '../../debug'
 import { watch } from '../../src/reactive/satellite'
 
 describe('captioned callback calls', () => {
@@ -14,9 +14,7 @@ describe('captioned callback calls', () => {
 		} finally {
 			reactiveOptions.warn = previousWarn
 		}
-		expect(warn).toHaveBeenCalledWith(
-			'[reactive] effect: anonymous callback; prefer a named function or template call syntax'
-		)
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining('effect: anonymous callback'))
 	})
 
 	it('accepts template-captioned effect callbacks', () => {
@@ -24,7 +22,7 @@ describe('captioned callback calls', () => {
 		const seen: number[] = []
 		let effectName = ''
 		const stop = effect`counter:${'main'}`(() => {
-			effectName = getLineage()[0]?.effectName ?? ''
+			effectName = digestLineage(getLineage())[0]?.effectName ?? ''
 			seen.push(state.count)
 		})
 		expect(seen).toEqual([0])

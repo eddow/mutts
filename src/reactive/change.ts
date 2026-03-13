@@ -98,6 +98,7 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 		if (props) collectEffects(obj, evolution, effects, objectWatchers, broad, props)
 		else collectEffects(obj, evolution, effects, objectWatchers, objectWatchers.keys())
 		const triggers = Array.from(effects.keys())
+		const sourceEffect = getActiveEffect()
 		optionCall('touched', obj, evolution, props as any[] | undefined, triggers)
 		// Store pending triggers for CleanupReason before batching
 		if (options.introspection?.gatherReasons) {
@@ -120,7 +121,7 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 				})
 			}
 		}
-		batch(triggers)
+		batch(triggers, undefined, sourceEffect)
 	}
 
 	// Bubble up changes if this object has deep watchers
@@ -200,6 +201,6 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 
 	if (effects.size > 0) {
 		optionCall('touched', obj, evolution, [prop], Array.from(effects))
-		batch(Array.from(effects))
+		batch(Array.from(effects), undefined, sourceEffect)
 	}
 }

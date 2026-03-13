@@ -46,9 +46,8 @@ type ResolvedCaptionedOptions<T extends AnyFunction> = {
 
 const captionedOptionsSymbol = Symbol('mutts.captioned.options')
 
-export type Captioned<T extends AnyFunction> = T & {
-	(strings: TemplateStringsArray, ...values: readonly unknown[]): T
-}
+export type Captioned<T extends AnyFunction> = T &
+	((strings: TemplateStringsArray, ...values: readonly unknown[]) => T)
 
 function isTemplateStringsArray(value: unknown): value is TemplateStringsArray {
 	return (
@@ -104,6 +103,7 @@ export function captioned<T extends AnyFunction>(
 		callbackIndex: options.callbackIndex ?? 0,
 		name: options.name ?? (fn.name || 'callback'),
 		rename: options.rename ?? ((caption, callback) => renameCallback(caption, callback)),
+		// biome-ignore lint/suspicious/noConsole: This is the whole point here
 		warn: options.warn ?? ((message) => console.warn(message)),
 		shouldWarnAnonymous: options.shouldWarnAnonymous,
 	}
@@ -124,23 +124,22 @@ export function captioned<T extends AnyFunction>(
 							`${settings.name} template calls require a callback at argument index ${settings.callbackIndex}`
 						)
 					const nextArgs = [...callArgs] as Parameters<T>
-					nextArgs[settings.callbackIndex] = settings.rename(caption, callback) as Parameters<T>[number]
+					nextArgs[settings.callbackIndex] = settings.rename(
+						caption,
+						callback
+					) as Parameters<T>[number]
 					return Reflect.apply(target, this, nextArgs)
 				} as T
 			}
 			const callback = args[settings.callbackIndex]
 			if (typeof callback === 'function' && isAnonymousCallback(callback)) {
-				const shouldWarn =
-					settings.shouldWarnAnonymous?.(
-						callback,
-						args as Parameters<T>
-					) ?? true
+				const shouldWarn = settings.shouldWarnAnonymous?.(callback, args as Parameters<T>) ?? true
 				if (shouldWarn)
 					settings.warn(
 						`${settings.name}: anonymous callback detected. Use template syntax for automatic naming:\n` +
-						`  Current: ${settings.name}(() => { ... })\n` +
-						`  Fix:     ${settings.name}\`descriptive-name\`(() => { ... })\n` +
-						`The captioned system uses the template literal as the effect name for better debugging.`
+							`  Current: ${settings.name}(() => { ... })\n` +
+							`  Fix:     ${settings.name}\`descriptive-name\`(() => { ... })\n` +
+							`The captioned system uses the template literal as the effect name for better debugging.`
 					)
 			}
 			return Reflect.apply(target, thisArg, args)

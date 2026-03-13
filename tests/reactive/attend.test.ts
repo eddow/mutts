@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { attend, effect, reactive } from '../../src/reactive'
-import { getLineage } from '../../debug'
+import { digestLineage, getLineage } from '../../debug'
 
 describe('attend (reactive forEach)', () => {
 	describe('raw callback form', () => {
@@ -269,7 +269,7 @@ describe('attend (reactive forEach)', () => {
 
 			const stop = attend`entry:${'watcher'}`(source, (key) => {
 				source[key]
-				effectNames.push(getLineage()[0]?.effectName ?? '')
+				effectNames.push(digestLineage(getLineage())[0]?.effectName ?? '')
 			})
 
 			expect(effectNames).toContain('attend:entry:watcher:a')

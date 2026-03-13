@@ -87,7 +87,9 @@ export function notifyPropertyChange(
 		// Deep touch: only notify nested property changes with origin filtering
 		// Don't notify direct property change - the whole point is to avoid parent effects re-running
 
-		const changes = untracked(() => recursiveTouch(oldValue, newValue, new WeakMap(), [], origin))
+		const changes = untracked`deepTouch:recursive`(() =>
+			recursiveTouch(oldValue, newValue, new WeakMap(), [], origin)
+		)
 
 		// When deep touch found no child differences, the object identity still changed.
 		// Migrate watchers from old → new so the dependency chain is preserved.

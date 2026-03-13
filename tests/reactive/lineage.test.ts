@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { effect, reactiveOptions } from '../../src/reactive'
-import { getLineage } from '../../debug'
+import { digestLineage, getLineage, lineageFormatter } from '../../debug'
 
 describe('Effect Lineage', () => {
 	beforeEach(() => {
@@ -10,7 +10,7 @@ describe('Effect Lineage', () => {
 	it('should capture structured stack frames', () => {
 		let frames: any[] = []
 		effect(function testEffect() {
-			const lineage = getLineage()
+			const lineage = digestLineage(getLineage())
 			frames = lineage[0].stack
 		})
 
@@ -24,7 +24,7 @@ describe('Effect Lineage', () => {
 		
 		effect(function parentEffect() {
 			effect(function childEffect() {
-				lineageAtInner = getLineage()
+				lineageAtInner = digestLineage(getLineage())
 			})
 		})
 
@@ -45,7 +45,7 @@ describe('Effect Lineage', () => {
 		
 		function createEffect() {
 			effect.named('dynamicEffect')(()=> {
-				capturedLineage = getLineage()
+				capturedLineage = digestLineage(getLineage())
 			})
 		}
 
@@ -65,9 +65,33 @@ describe('Effect Lineage', () => {
 	})
 
 	it('should work when no effect is active', () => {
-		const lineage = getLineage()
+		const signature = getLineage()
+		expect(signature.digested).toBeUndefined()
+		const lineage = digestLineage(signature)
 		expect(lineage.length).toBe(1)
 		expect(lineage[0].effectName).toBe('root')
 		expect(lineage[0].stack.length).toBeGreaterThan(0)
+	})
+
+	it('caches digested lineage only after human-readable access', () => {
+		const signature = getLineage()
+		expect(signature.digested).toBeUndefined()
+		const first = digestLineage(signature)
+		expect(signature.digested).toBe(first)
+		const second = digestLineage(signature)
+		expect(second).toBe(first)
+	})
+
+	it('renders formatter body as collapsed per-segment stack groups', () => {
+		const signature = getLineage()
+		const body = lineageFormatter.body(signature) as unknown[]
+		const serialized = JSON.stringify(body)
+		expect(serialized).toContain('"object"')
+		expect(serialized).toContain('"segment"')
+		const segmentObject = ((((body[2] as unknown[])[2] as unknown[])[1] as { object: unknown }).object)
+		const segmentHeader = lineageFormatter.header(segmentObject) as unknown[]
+		expect(JSON.stringify(segmentHeader)).toMatch(/Effect:/)
+		const segmentBody = lineageFormatter.body(segmentObject) as unknown[]
+		expect(JSON.stringify(segmentBody)).toContain('"object"')
 	})
 })

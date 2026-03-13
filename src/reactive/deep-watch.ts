@@ -116,7 +116,7 @@ export function deepWatch<T extends object>(
 
 		// Only call the callback if immediate is true or if it's not the first run
 		if (immediate) {
-			untracked(() => callback(target))
+			untracked`deepWatch:callback`(() => callback(target))
 		}
 		immediate = true
 
