@@ -22,8 +22,13 @@ describe('flavored', () => {
 			expect(callbackName).toBe('task:1')
 
 			register('job', () => 'plain')
-			expect(warn).toHaveBeenCalledWith(
-				'register: anonymous callback; prefer a named function or template call syntax'
+			expect(warn).toHaveBeenCalledTimes(1)
+			expect(warn.mock.calls[0]?.[0]).toContain(
+				'register: anonymous callback detected. Use template syntax for automatic naming:'
+			)
+			expect(warn.mock.calls[0]?.[0]).toContain('Current: register(() => { ... })')
+			expect(warn.mock.calls[0]?.[0]).toContain(
+				'Fix:     register`descriptive-name`(() => { ... })'
 			)
 		})
 	})

@@ -85,7 +85,7 @@ export const attend: Attend = captioned(
 							: () => Object.keys(source)
 
 		const keyEffects = new Map<any, ScopedCallback>()
-		const callbackLabel = callback.name ? `:${callback.name}` : ''
+		const callbackLabel = callback.name ? callback.name : ''
 
 		const outer = effect`attend`(({ ascend }) => {
 			const keys = new Set<any>()
@@ -97,7 +97,9 @@ export const attend: Attend = captioned(
 				keyEffects.set(
 					key,
 					ascend(() =>
-						effect`attend:${callbackLabel}:${key}`((access) => callback(indexRef.value, access))
+						effect`attend${callbackLabel ? `:${callbackLabel}` : ''}:${key}`(
+							(access) => callback(indexRef.value, access)
+						)
 					)
 				)
 			}

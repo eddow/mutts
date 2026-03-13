@@ -1,7 +1,7 @@
 {
   "name": "mutts",
   "description": "Modern UTility TS: A collection of TypeScript utilities",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "main": "dist/browser.cjs",
   "module": "dist/browser.esm.js",
   "exports": {
