@@ -87,7 +87,7 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 
 		// For accessor properties, check the unwrapped object to see if it's an accessor
 		// This ensures ignoreAccessors works correctly even after operations like Object.setPrototypeOf
-		// Skip for null-proto objects (pounce scopes) — they never have accessors
+		// Skip for null-proto objects (sursaut scopes) — they never have accessors
 		const shouldIgnoreAccessor =
 			options.ignoreAccessors &&
 			isOwnProp &&

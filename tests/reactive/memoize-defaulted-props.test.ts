@@ -12,7 +12,7 @@
 
 import { reactive, memoize, effect, unwrap } from 'mutts'
 
-// Simulate the defaulted function from pounce-ts
+// Simulate the defaulted function from sursaut-ts
 function defaulted<T extends Record<PropertyKey, any>, D extends Record<PropertyKey, any>>(
 	value: T,
 	defaultValue: D
@@ -20,7 +20,7 @@ function defaulted<T extends Record<PropertyKey, any>, D extends Record<Property
 	return Object.setPrototypeOf(value, defaultValue) as T & D
 }
 
-// Simulate the propsInto function from pounce-ts
+// Simulate the propsInto function from sursaut-ts
 function propsInto<P extends Record<string, any>>(props: P): any {
 	const result: any = {}
 

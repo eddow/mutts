@@ -144,7 +144,7 @@ effect(({ reaction }) => {
 
 ## Reactivity: Prototype Chains & Scope Objects (Structural Stability Contract)
 
-Some consumers (notably Pounce) model scopes using `Object.create(parent)` chains. Property reads then follow the JavaScript prototype lookup rules: a `get` may resolve to the first ancestor that *owns* the property.
+Some consumers (notably Sursaut) model scopes using `Object.create(parent)` chains. Property reads then follow the JavaScript prototype lookup rules: a `get` may resolve to the first ancestor that *owns* the property.
 
 To keep inherited reads performant, `mutts` tracks dependencies for inherited properties using **two-point tracking**:
 
@@ -240,7 +240,7 @@ To break these cycles, use a **Hook Interface** pattern.
 
 ## Proxy Performance — Trap Cascade Prevention
 
-When reactive proxies form prototype chains (e.g. pounce scope objects via `Object.create(base)`), any operation that walks the prototype chain through proxies triggers trap cascades. Key patterns to avoid:
+When reactive proxies form prototype chains (e.g. sursaut scope objects via `Object.create(base)`), any operation that walks the prototype chain through proxies triggers trap cascades. Key patterns to avoid:
 
 1. **Never use `in` or `Reflect.has` on a proxy** when checking metadata — use `Object.hasOwn` + `Object.getPrototypeOf` walk on raw targets instead.
 2. **Never store metadata as symbol properties on reactive objects** — use external `WeakMap`/`WeakSet` keyed by the raw target. Symbol property access (`obj[sym]`) triggers the `get` trap and cascades through proxy prototype chains.
@@ -252,7 +252,7 @@ When reactive proxies form prototype chains (e.g. pounce scope objects via `Obje
 
 ## Presets
 
-Three presets are available for `reactiveOptions`, mirroring Pounce's preset pattern:
+Three presets are available for `reactiveOptions`, mirroring Sursaut's preset pattern:
 
 *   **`prodPreset`**: Zero introspection (`introspection: null`), `cycleHandling: 'production'`, `maxEffectReaction: 'throw'`. Minimal overhead for production.
 *   **`devPreset`**: Introspection enabled with touch lineages, `cycleHandling: 'development'`, `maxEffectReaction: 'warn'`. Good balance for development.

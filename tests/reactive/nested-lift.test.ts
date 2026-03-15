@@ -179,13 +179,13 @@ describe('nested lift propagation', () => {
 	})
 
 	it('full reconciler chain: render-effect > project > scan > project > lift', () => {
-		// Simulates: PounceElement.render effect creates processChildren pipeline
+		// Simulates: SursautElement.render effect creates processChildren pipeline
 		// Inner condition (if={}) toggles, inner lift updates, outer lift must see it
 		const condition = reactive({ value: false })
 
 		let innerFlattened!: ReturnType<typeof lift<number[]>>
 
-		// Simulate PounceElement.render effect
+		// Simulate SursautElement.render effect
 		const stopRender = effect(() => {
 			// Inner processChildren: produces nodes based on condition
 			innerFlattened = lift(() => {
@@ -239,7 +239,7 @@ describe('nested lift propagation', () => {
 		const source = reactive([1, 2, 3])
 		let lifted!: ReturnType<typeof lift<number[]>>
 
-		// Parent effect (like PounceElement.render) creates the lift as a child
+		// Parent effect (like SursautElement.render) creates the lift as a child
 		const stopParent = effect(() => {
 			lifted = lift(() => {
 				const result: number[] = []
