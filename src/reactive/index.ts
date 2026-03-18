@@ -1,4 +1,4 @@
-export { attend, lift, morph, type MorphPosition } from './buffer'
+export { attend, lift, type MorphPosition, morph } from './buffer'
 export { getState, touched, touched1 } from './change'
 export { deepWatch } from './deep-watch'
 export {

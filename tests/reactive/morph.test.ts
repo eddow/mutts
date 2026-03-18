@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { effect, morph, reactive } from '../../src/reactive/index'
+import { effect, lift, morph, reactive } from '../../src/reactive/index'
 import { digestLineage, getLineage } from '../../debug'
 
 describe('morph undefined value bug', () => {
@@ -261,6 +261,51 @@ describe('morph undefined value bug', () => {
 
 		expect(mapped[0]).toBe(1)
 		expect(effectName).toBe('morph:items:mapper:0')
+	})
+
+	it('keeps surviving item projections reactive after filtered removals', () => {
+		const filters = reactive({ only: 'all' as 'all' | 'b' })
+		const items = reactive([
+			{ id: 'a', selected: false },
+			{ id: 'b', selected: false },
+			{ id: 'c', selected: false },
+		])
+
+		const projected = morph`filtered-projected`(
+			() => items.filter((item) => filters.only === 'all' || item.id === filters.only),
+			(item) =>
+			lift(() => ({
+				id: item.id,
+				className: item.selected ? 'palette-demo-command-result is-selected' : 'palette-demo-command-result',
+			}))
+		)
+
+		const snapshots: string[][] = []
+		const stop = effect(() => {
+			snapshots.push(
+				Array.from(projected, (entry) => `${entry.id}:${entry.className}`)
+			)
+		})
+
+		expect(snapshots).toEqual([
+			[
+				'a:palette-demo-command-result',
+				'b:palette-demo-command-result',
+				'c:palette-demo-command-result',
+			],
+		])
+
+		filters.only = 'b'
+
+		expect(snapshots[snapshots.length - 1]).toEqual(['b:palette-demo-command-result'])
+
+		items[1].selected = true
+
+		expect(snapshots[snapshots.length - 1]).toEqual([
+			'b:palette-demo-command-result is-selected',
+		])
+
+		stop()
 	})
 
 	describe('array morph position.index', () => {

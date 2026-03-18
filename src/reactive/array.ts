@@ -160,7 +160,7 @@ export abstract class ReactiveArrayWrapper extends Array {
 		if (start < 0) start = Math.max(length + start, 0)
 		for (let i = start; i < length; i++) {
 			const value = unwrap(this[i])
-			if (value === target || (value !== value && target !== target)) return true
+			if (value === target) return true
 		}
 		return false
 	}
@@ -186,7 +186,7 @@ export abstract class ReactiveArrayWrapper extends Array {
 	lastIndexOf(searchElement: any, fromIndex?: number): number {
 		const target = unwrap(searchElement)
 		const length = this.length
-		let start = fromIndex ?? (length - 1)
+		let start = fromIndex ?? length - 1
 		if (start < 0) start = length + start
 		if (start >= length) start = length - 1
 		for (let i = start; i >= 0; i--) if (unwrap(this[i]) === target) return i

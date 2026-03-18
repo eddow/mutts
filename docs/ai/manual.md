@@ -202,12 +202,24 @@ const updateBoth = atomic((a, b) => { state.a = a; state.b = b }) // effects fir
 // Decorator: @atomic on methods
 ```
 
+`atomic()` wraps for later invocation but still executes synchronously when called. Internally it behaves like `batch(fn, { immediate: true })`, so nested atomic calls join the active batch by default instead of creating an implicit child batch.
+
 ### 3.7 atom() — Immediate atomic execution
 
 ```ts
 atom(() => { state.a = 1; state.b = 2 }) // runs now, effects fire once
 // Unlike atomic() which wraps for later, atom() executes immediately
 ```
+
+The explicit batching API is now:
+
+```ts
+batch(fnOrEffects, { immediate?: boolean, contained?: boolean, caller?: EffectTrigger })
+```
+
+- `batch(fn)` joins the current batch when nested
+- `batch(fn, { immediate: true })` runs `fn` now and queues its consequences into the active batch
+- `batch(fn, { contained: true })` creates an isolated nested batch that flushes before returning
 
 ### 3.8 defer() — Avoid cycles
 

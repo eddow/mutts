@@ -891,11 +891,14 @@ function executeNext(effectuatedRoots: Function[]): any {
 
 // Track which sub-effects have been executed to prevent infinite loops
 // These are all the effects triggered under `activeEffect` and all their sub-effects
-export function batch(
-	effect: EffectTrigger | EffectTrigger[],
-	immediate?: 'immediate',
+
+export type BatchOptions = {
+	immediate?: boolean
+	contained?: boolean
 	caller?: EffectTrigger
-) {
+}
+
+export function batch(effect: EffectTrigger | EffectTrigger[], batchOptions?: BatchOptions) {
 	if (broken) {
 		throw new ReactiveError(
 			'[reactive] Reactive system is broken after an unrecoverable error. Call reset() to recover.',
@@ -912,16 +915,37 @@ export function batch(
 		optionCall('beginChain', roots)
 	}
 
-	// TODO: Consider this has been produced but was useless - it might be more correct ?const caller = executingStack.length > 0 ? getActiveEffect() : undefined
-	const activeCaller = getActiveEffect()
-	const callerToUse = caller || activeCaller
+	const immediate = batchOptions?.immediate === true
+	const contained = batchOptions?.contained === true
+	const callerToUse = batchOptions?.caller || getActiveEffect()
 
 	// Optimization: If nested and NOT immediate, just join the existing batch
-	if (!isNewBatch && !immediate) {
+	if (!isNewBatch && !contained && !immediate) {
 		for (let i = 0; i < effect.length; i++) {
 			addToBatch(effect[i], callerToUse, false)
 		}
 		return
+	}
+
+	if (!isNewBatch && !contained && immediate) {
+		const firstReturn: { value?: any } = {}
+		for (let i = 0; i < effect.length; i++) {
+			executingStack.push(effect[i])
+			try {
+				const node = getEffectNode(effect[i])
+				const reason = node.nextReason
+				if (node.cleanup) {
+					const cleanup = node.cleanup
+					node.cleanup = undefined
+					cleanup(reason)
+				}
+				const rv = effect[i]()
+				if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
+			} finally {
+				executingStack.pop()
+			}
+		}
+		return firstReturn.value
 	}
 
 	const currentBatch: BatchQueue = {
@@ -1068,7 +1092,7 @@ export const atomic = decorator({
 			const atomicEffect = () => original.apply(this, args)
 			// Debug: helpful to have a name
 			Object.defineProperty(atomicEffect, 'name', { value: `atomic(${original.name})` })
-			return batch(atomicEffect as EffectTrigger, 'immediate')
+			return batch(atomicEffect as EffectTrigger, { immediate: true })
 		}
 	},
 	default<Args extends any[], Return>(
@@ -1078,7 +1102,7 @@ export const atomic = decorator({
 			const atomicEffect = () => original.apply(this, args)
 			// Debug: helpful to have a name
 			Object.defineProperty(atomicEffect, 'name', { value: `atomic(${original.name})` })
-			return batch(atomicEffect as EffectTrigger, 'immediate')
+			return batch(atomicEffect as EffectTrigger, { immediate: true })
 		}
 	},
 })
@@ -1122,7 +1146,7 @@ export function captured<Args extends any[], Return>(
  * ```
  */
 export function atom<T>(fn: () => T) {
-	return batch(fn, 'immediate')
+	return batch(fn, { immediate: true })
 }
 
 const fr = new FinalizationRegistry<() => void>((f) => f())
@@ -1413,7 +1437,7 @@ export const effect: Effect = captioned(
 					}
 				}
 
-				batch(runEffect, 'immediate')
+				batch(runEffect, { immediate: true })
 				// Only ROOT effects are registered for GC cleanup and zone tracking
 				const isRootEffect = !parent
 
@@ -1510,6 +1534,7 @@ export const untracked: Captioned<RootRunner> = captioned(function untracked<T>(
  * @param fn - The function to execute
  */
 export const root: Captioned<RootRunner> = captioned(function root<T>(fn: () => T): T {
+	fn = atomic(fn)
 	const external = externalReasonFrom(fn)
 	return external
 		? externalReason.with(external, () => effectHistory.root(fn))

@@ -602,12 +602,14 @@ export const options = {
 		logErrors: true,
 		enableHistory: true,
 		historySize: 50,
-	} as {
-		gatherReasons: { lineages: 'none' | 'touch' | 'dependency' | 'both' }
-		logErrors: boolean
-		enableHistory: boolean
-		historySize: number
-	} | null,
+	} as
+		| {
+				gatherReasons: { lineages: 'none' | 'touch' | 'dependency' | 'both' }
+				logErrors: boolean
+				enableHistory: boolean
+				historySize: number
+		  }
+		| undefined,
 }
 // biome-ignore-end lint/correctness/noUnusedFunctionParameters: Interface declaration with empty defaults
 

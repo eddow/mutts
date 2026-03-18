@@ -16,7 +16,7 @@ describe('Atomic Decorator Nested', () => {
 		let result: any
 		batch(() => {
 			result = instance.method()
-		}, 'immediate')
+		}, { immediate: true })
 
 		expect(result).toBe(42)
 	})

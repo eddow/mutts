@@ -121,7 +121,7 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 				})
 			}
 		}
-		batch(triggers, undefined, sourceEffect)
+		batch(triggers, { caller: sourceEffect })
 	}
 
 	// Bubble up changes if this object has deep watchers
@@ -201,6 +201,6 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 
 	if (effects.size > 0) {
 		optionCall('touched', obj, evolution, [prop], Array.from(effects))
-		batch(Array.from(effects), undefined, sourceEffect)
+		batch(Array.from(effects), { caller: sourceEffect })
 	}
 }

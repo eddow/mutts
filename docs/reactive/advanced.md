@@ -45,7 +45,7 @@ The wrapped function preserves its signature (parameters and return value), and 
 
 ### `atom()` - Immediate Atomic Execution
 
-While `atomic()` **wraps** a function for later calls, `atom()` **runs** a function immediately and atomically. It always executes right away, even inside a nested batch.
+While `atomic()` **wraps** a function for later calls, `atom()` **runs** a function immediately and atomically. It uses `batch(fn, { immediate: true })`, so it executes right away even inside an existing batch while still contributing its triggered effects to the active transaction.
 
 ```typescript
 import { atom, reactive, effect } from 'mutts'
@@ -79,6 +79,58 @@ atom(() => { state.a = 1; state.b = 2 })
 const update = atomic((a, b) => { state.a = a; state.b = b })
 update(1, 2)  // runs when called
 ```
+
+### `batch()` - Explicit Batch Control
+
+`batch()` now uses an options object:
+
+```typescript
+batch(effectOrEffects, {
+  immediate?: boolean,
+  contained?: boolean,
+  caller?: EffectTrigger,
+})
+```
+
+The main modes are:
+
+- default nested behavior: if a batch is already active, `batch(fn)` joins that existing batch instead of creating an implicit child batch
+- `immediate: true`: execute the provided function now, but keep all triggered effects inside the current batch
+- `contained: true`: force a fresh local batch that drains before returning, even when called from inside another batch
+- `caller`: advanced internal override for causal chaining; most user code should omit it
+
+```typescript
+import { batch, effect, reactive } from 'mutts'
+
+const state = reactive({ a: 0, b: 0 })
+
+effect(() => {
+  console.log(state.a, state.b)
+})
+
+batch(() => {
+  state.a = 1
+  state.b = 2
+})
+
+batch(() => {
+  state.a = 3
+}, { immediate: true })
+
+batch(() => {
+  state.b = 4
+}, { immediate: true, contained: true })
+```
+
+#### Nested semantics
+
+Nested batching is no longer implicitly contained.
+
+- `batch(fn)` inside another batch joins the parent batch
+- `batch(fn, { immediate: true })` runs `fn` now and queues its consequences into the parent batch
+- `batch(fn, { contained: true })` creates an isolated sub-batch and flushes it before returning
+
+Use `contained: true` only when you explicitly need sub-transaction behavior.
 
 ### `addBatchCleanup()` / `defer()` - Deferring Work to Avoid Cycles
 
@@ -238,7 +290,7 @@ addBatchCleanup(() => {
 
 **Nested Batches:**
 
-Callbacks added in nested batches are collected and run when the **outermost batch** completes:
+Callbacks added in inherited nested batches are collected and run when the **outermost batch** completes:
 
 ```typescript
 effect(() => {
@@ -252,7 +304,15 @@ effect(() => {
 // Output:
 // Outer deferred
 // Inner deferred
-// (Both run after outer batch completes)
+// (Both run after outer batch completes because `atomic()` joins the active batch)
+```
+
+If you need deferred callbacks to flush within an isolated nested batch, use an explicitly contained batch:
+
+```typescript
+batch(() => {
+  addBatchCleanup(() => console.log('Contained deferred'))
+}, { contained: true })
 ```
 
 **Error Handling:**

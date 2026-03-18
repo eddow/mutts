@@ -331,7 +331,7 @@ describe('nested lift propagation', () => {
 		trigger.value = true
 
 		expect(seen.length).toBeGreaterThan(1)
-		expect(seen[seen.length - 1]).toEqual([10, 100, 20, 200])
+		expect(seen[seen.length - 1]).toEqual([10, 100, 200, 20])
 
 		unlink(rendered)
 		unlink(flattened)

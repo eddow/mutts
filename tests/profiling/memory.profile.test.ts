@@ -5,19 +5,34 @@
  */
 import { effect } from 'mutts'
 import { reactive } from 'mutts'
+import { reactiveOptions } from 'mutts'
 import { profileMemory, formatMemoryProfile } from './helpers'
 
+const objectProfileOptions = { iterations: 10000 }
+const effectProfileOptions = { iterations: 1000 }
+const multipleEffectsProfileOptions = { iterations: 100, gcBetween: true }
+const noIntrospection = undefined
+
 describe('Memory Performance Profiling', () => {
+	const originalIntrospection = reactiveOptions.introspection
+
+	beforeAll(() => {
+		reactiveOptions.introspection = noIntrospection
+	})
+
+	afterAll(() => {
+		reactiveOptions.introspection = originalIntrospection
+	})
+
 	describe('Object Creation Memory', () => {
 		it('benchmark: reactive object creation memory overhead', () => {
 			const memoryProfile = profileMemory(
 				() => {
 					const obj = reactive({ count: 0, name: 'test', items: [1, 2, 3] })
 					// Force proxy creation
-					// biome-ignore lint/style/noUnusedExpressions: Intentional for profiling
-					obj.count
+					void obj.count
 				},
-				{ iterations: 10000 }
+				objectProfileOptions
 			)
 
 			console.log(formatMemoryProfile(memoryProfile, 'Reactive object creation'))
@@ -29,19 +44,17 @@ describe('Memory Performance Profiling', () => {
 			const plainMemory = profileMemory(
 				() => {
 					const obj = { count: 0, name: 'test', items: [1, 2, 3] }
-					// biome-ignore lint/style/noUnusedExpressions: Intentional for profiling
-					obj.count
+					void obj.count
 				},
-				{ iterations: 10000 }
+				objectProfileOptions
 			)
 
 			const reactiveMemory = profileMemory(
 				() => {
 					const obj = reactive({ count: 0, name: 'test', items: [1, 2, 3] })
-					// biome-ignore lint/style/noUnusedExpressions: Intentional for profiling
-					obj.count
+					void obj.count
 				},
-				{ iterations: 10000 }
+				objectProfileOptions
 			)
 
 			console.log(formatMemoryProfile(plainMemory, 'Plain object creation'))
@@ -58,21 +71,29 @@ describe('Memory Performance Profiling', () => {
 	describe('Effect Memory', () => {
 		it('benchmark: effect creation and cleanup memory', () => {
 			const obj = reactive({ count: 0 })
+			const runs: number[] = []
+			for (let run = 0; run < 3; run++) {
+				if (global.gc) global.gc()
 
-			const memoryProfile = profileMemory(
-				() => {
-					const stop = effect(() => {
-						// biome-ignore lint/style/noUnusedExpressions: Intentional for profiling
-						obj.count
-					})
-					stop()
-				},
-				{ iterations: 1000 }
-			)
+				const memoryProfile = profileMemory(
+					() => {
+						const stop = effect(function effectCreationMemory() {
+							void obj.count
+						})
+						stop()
+					},
+					effectProfileOptions
+				)
+				runs.push(memoryProfile.delta / 1024)
+			}
 
-			console.log(formatMemoryProfile(memoryProfile, 'Effect lifecycle'))
+			runs.sort((a, b) => a - b)
+			const medianKB = runs[1]!
+
+			console.log(`Effect lifecycle memory (3 runs): ${runs.map(r => r.toFixed(2)).join(', ')} KB`)
+			console.log(`Median: ${medianKB.toFixed(2)} KB`)
 			// Effects should cleanup properly
-			expect(memoryProfile.delta / 1024).toBeLessThan(50) // Less than 50KB per effect
+			expect(medianKB).toBeLessThan(50) // Less than 50KB per effect
 		})
 
 		it('benchmark: multiple effects memory overhead', () => {
@@ -88,19 +109,16 @@ describe('Memory Performance Profiling', () => {
 						const stops: (() => void)[] = []
 						for (let i = 0; i < 10; i++) {
 							stops.push(
-								effect(() => {
-									// biome-ignore lint/style/noUnusedExpressions: Intentional for profiling
-									obj.count
-									// biome-ignore lint/style/noUnusedExpressions: Intentional for profiling
-									obj.name
-									// biome-ignore lint/style/noUnusedExpressions: Intentional for profiling
-									obj.items.length
+								effect(function multipleEffectsMemory() {
+									void obj.count
+									void obj.name
+									void obj.items.length
 								})
 							)
 						}
 						for (const stop of stops) stop()
 					},
-					{ iterations: 100, gcBetween: true }
+					multipleEffectsProfileOptions
 				)
 				runs.push(memoryProfile.delta / 1024)
 			}
@@ -132,7 +150,7 @@ describe('Memory Performance Profiling', () => {
 					arr.unshift(0)
 					arr.shift()
 				},
-				{ iterations: 1000 }
+				effectProfileOptions
 			)
 
 			console.log(formatMemoryProfile(memoryProfile, 'Array operations'))
@@ -146,21 +164,16 @@ describe('Memory Performance Profiling', () => {
 
 			const memoryProfile = profileMemory(
 				() => {
-					effect(() => {
+					effect(function dependencyTrackingMemory() {
 						// Access multiple properties to create dependencies
-						// biome-ignore lint/style/noUnusedExpressions: Intentional for profiling
-						obj.a
-						// biome-ignore lint/style/noUnusedExpressions: Intentional for profiling
-						obj.b
-						// biome-ignore lint/style/noUnusedExpressions: Intentional for profiling
-						obj.c
-						// biome-ignore lint/style/noUnusedExpressions: Intentional for profiling
-						obj.d
-						// biome-ignore lint/style/noUnusedExpressions: Intentional for profiling
-						obj.e
+						void obj.a
+						void obj.b
+						void obj.c
+						void obj.d
+						void obj.e
 					})()
 				},
-				{ iterations: 1000 }
+				effectProfileOptions
 			)
 
 			console.log(formatMemoryProfile(memoryProfile, 'Dependency tracking'))

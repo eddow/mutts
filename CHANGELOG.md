@@ -1,3 +1,8 @@
+# Next: 1.0.14
+
+- **Array morph position.index**: Added `position` parameter to array `morph` callbacks with live reactive index tracking. Signature now `(item, position, access?) => O` where `position.index` updates reactively during reorders. Consistent with Map/Record signatures that already expose key as second argument.
+- **Refactored Batching System**: `batch()` now uses an options object API: `batch(fnOrEffects, { immediate?, contained?, caller? })`. Nested batches are inherited by default, so `batch(fn)` joins the active batch and `batch(fn, { immediate: true })` runs immediately inside it. Use `contained: true` to force an isolated sub-batch that drains before returning.
+
 # 1.0.13
 
 - reactive proxy `get` fast-path: when no effect is active, skip dependency-shape analysis and prototype ownership tracking while preserving metaProto, wrapProto, sub-proxy, and lazy nested reactivity semantics
@@ -8,7 +13,7 @@
 - DevTools formatter polish: `__MUTTS_DEBUG__.reason` and `__MUTTS_DEBUG__.lineage` are now live getter properties, `propChange` causes collapse by operation with expandable touch/dependency details, and lineage frames render as dedicated rows under expandable effect headers
 - `propChange` summaries: repeated property sets are grouped by target object and use compact target descriptions, including tagged lift/morph outputs when available
 - `CleanupReason.external`: `root` and `untracked` are captioned and now contribute an ambient `external` reason chained into downstream cleanup/reaction reasons
-- **Array morph position.index**: Added `position` parameter to array `morph` callbacks with live reactive index tracking. Signature now `(item, position, access?) => O` where `position.index` updates reactively during reorders. Consistent with Map/Record signatures that already expose key as second argument.
+
 
 # 1.0.12
 
