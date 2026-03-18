@@ -154,15 +154,24 @@ export abstract class ReactiveArrayWrapper extends Array {
 	}
 
 	includes(searchElement: any, fromIndex?: number): boolean {
-		return arguments.length > 1
-			? super.includes(unwrap(searchElement), fromIndex)
-			: super.includes(unwrap(searchElement))
+		const target = unwrap(searchElement)
+		const length = this.length
+		let start = fromIndex ?? 0
+		if (start < 0) start = Math.max(length + start, 0)
+		for (let i = start; i < length; i++) {
+			const value = unwrap(this[i])
+			if (value === target || (value !== value && target !== target)) return true
+		}
+		return false
 	}
 
 	indexOf(searchElement: any, fromIndex?: number): number {
-		return arguments.length > 1
-			? super.indexOf(unwrap(searchElement), fromIndex)
-			: super.indexOf(unwrap(searchElement))
+		const target = unwrap(searchElement)
+		const length = this.length
+		let start = fromIndex ?? 0
+		if (start < 0) start = Math.max(length + start, 0)
+		for (let i = start; i < length; i++) if (unwrap(this[i]) === target) return i
+		return -1
 	}
 
 	join(separator?: string): string {
@@ -175,9 +184,13 @@ export abstract class ReactiveArrayWrapper extends Array {
 	}
 
 	lastIndexOf(searchElement: any, fromIndex?: number): number {
-		return arguments.length > 1
-			? super.lastIndexOf(unwrap(searchElement), fromIndex)
-			: super.lastIndexOf(unwrap(searchElement))
+		const target = unwrap(searchElement)
+		const length = this.length
+		let start = fromIndex ?? (length - 1)
+		if (start < 0) start = length + start
+		if (start >= length) start = length - 1
+		for (let i = start; i >= 0; i--) if (unwrap(this[i]) === target) return i
+		return -1
 	}
 
 	map<U>(callbackfn: (value: any, index: number, array: any[]) => U, thisArg?: any): U[] {

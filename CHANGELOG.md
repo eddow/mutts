@@ -8,6 +8,7 @@
 - DevTools formatter polish: `__MUTTS_DEBUG__.reason` and `__MUTTS_DEBUG__.lineage` are now live getter properties, `propChange` causes collapse by operation with expandable touch/dependency details, and lineage frames render as dedicated rows under expandable effect headers
 - `propChange` summaries: repeated property sets are grouped by target object and use compact target descriptions, including tagged lift/morph outputs when available
 - `CleanupReason.external`: `root` and `untracked` are captioned and now contribute an ambient `external` reason chained into downstream cleanup/reaction reasons
+- **Array morph position.index**: Added `position` parameter to array `morph` callbacks with live reactive index tracking. Signature now `(item, position, access?) => O` where `position.index` updates reactively during reorders. Consistent with Map/Record signatures that already expose key as second argument.
 
 # 1.0.12
 
@@ -58,7 +59,7 @@
 - **formatCleanupReason**: New debug utility for human-readable reason formatting.
 - **Removed `describe`**: niche API replaced by `lift` with descriptor-aware diffing.
 
-## Optimisations
+## Optimizations
 
 - reactive - overall
 - **`keysOf` tracking**: `Object.keys()`, `for..in`, `Map.keys()` now only re-run on structural changes (key add/delete), not value changes. `Object.entries()`, `Object.values()`, `Map.entries()` still track values.

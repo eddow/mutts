@@ -13,6 +13,7 @@ import { isCleanupReason, logReason, reasonFormatter } from './reason'
 import { showLineagePanel } from './lineage-panel'
 import { setDebugHooks } from '../src/reactive/debug-hooks'
 import { getActiveEffect } from '../src/reactive/effect-context'
+import { reactiveFormatter } from './reactive'
 
 /**
  * Log an error with detailed context if error logging is enabled
@@ -482,12 +483,10 @@ export function enableDevTools() {
 	}
 
 	// @ts-ignore - devtoolsFormatters is a Chrome-specific array
-	if (globalScope.devtoolsFormatters) {
-		globalScope.devtoolsFormatters.push(lineageFormatter)
-		globalScope.devtoolsFormatters.push(reasonFormatter)
-	} else {
-		globalScope.devtoolsFormatters = [lineageFormatter, reasonFormatter]
-	}
+	if (globalScope.devtoolsFormatters)
+		globalScope.devtoolsFormatters.push(lineageFormatter, reasonFormatter, reactiveFormatter)
+	else
+		globalScope.devtoolsFormatters = [lineageFormatter, reasonFormatter, reactiveFormatter]
 
 	setDebugHooks({
 		isDevtoolsEnabled: () => devtoolsEnabled,

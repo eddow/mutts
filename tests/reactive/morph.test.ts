@@ -262,4 +262,140 @@ describe('morph undefined value bug', () => {
 		expect(mapped[0]).toBe(1)
 		expect(effectName).toBe('morph:items:mapper:0')
 	})
+
+	describe('array morph position.index', () => {
+		it('provides position.index in array morph callback', () => {
+			const source = reactive(['a', 'b', 'c'])
+			const indices: number[] = []
+			const mapped = morph(source, (item, position) => {
+				indices.push(position.index)
+				return `${item}@${position.index}`
+			})
+
+			// Trigger computation
+			expect(mapped[0]).toBe('a@0')
+			expect(mapped[1]).toBe('b@1')
+			expect(mapped[2]).toBe('c@2')
+			expect(indices).toEqual([0, 1, 2])
+		})
+
+		it('provides stable position objects per item', () => {
+			const source = reactive(['a', 'b'])
+			const positions: any[] = []
+			const mapped = morph(source, (item, position) => {
+				positions.push(position)
+				return item
+			})
+
+			// Compute items
+			expect(mapped[0]).toBe('a')
+			expect(mapped[1]).toBe('b')
+
+			// Position objects should be stable
+			expect(positions[0]).toBe(positions[0])
+			expect(positions[1]).toBe(positions[1])
+			expect(positions[0]).not.toBe(positions[1])
+		})
+
+		it('updates position.index when items are shifted', () => {
+			const source = reactive(['a', 'b', 'c'])
+			const latestIndices: number[] = []
+			const mapped = morph(source, (item, position) => {
+				latestIndices.push(position.index)
+				return `${item}@${position.index}`
+			})
+
+			// Initial computation
+			expect(mapped[0]).toBe('a@0')
+			expect(mapped[1]).toBe('b@1')
+			expect(mapped[2]).toBe('c@2')
+			latestIndices.length = 0
+
+			// Insert at beginning
+			source.unshift('x')
+
+			// Trigger recomputation
+			expect(mapped[0]).toBe('x@0')
+			expect(mapped[1]).toBe('a@1')
+			expect(mapped[2]).toBe('b@2')
+			expect(mapped[3]).toBe('c@3')
+
+			// Should have recomputed shifted items with new indices
+			expect(latestIndices).toEqual([0, 1, 2, 3])
+		})
+
+		it('updates position.index when item moves due to splice', () => {
+			const source = reactive(['a', 'b', 'c', 'd'])
+			const positionByItem = new Map<string, number>()
+			const mapped = morph(source, (item, position) => {
+				positionByItem.set(item, position.index)
+				return item
+			})
+
+			// Initial positions
+			expect(mapped[0]).toBe('a')
+			expect(mapped[1]).toBe('b')
+			expect(mapped[2]).toBe('c')
+			expect(mapped[3]).toBe('d')
+			expect(positionByItem.get('a')).toBe(0)
+			expect(positionByItem.get('b')).toBe(1)
+			expect(positionByItem.get('c')).toBe(2)
+			expect(positionByItem.get('d')).toBe(3)
+
+			// Move 'c' to front
+			source.splice(2, 1)
+			source.unshift('c')
+
+			// Trigger recomputation
+			expect(mapped[0]).toBe('c')
+			expect(mapped[1]).toBe('a')
+			expect(mapped[2]).toBe('b')
+			expect(mapped[3]).toBe('d')
+
+			// Positions should be updated
+			expect(positionByItem.get('c')).toBe(0)
+			expect(positionByItem.get('a')).toBe(1)
+			expect(positionByItem.get('b')).toBe(2)
+			expect(positionByItem.get('d')).toBe(3)
+		})
+
+		it('reactively recomputes when position.index changes', () => {
+			const source = reactive(['a', 'b'])
+			const recomputeLog: string[] = []
+			const mapped = morph(source, (item, position) => {
+				recomputeLog.push(`${item}@${position.index}`)
+				return `${item}@${position.index}`
+			})
+
+			// Initial computation
+			expect(mapped[0]).toBe('a@0')
+			expect(mapped[1]).toBe('b@1')
+			recomputeLog.length = 0
+
+			// Insert at beginning - should recompute all items
+			source.unshift('x')
+
+			// Access to trigger recomputation
+			expect(mapped[0]).toBe('x@0')
+			expect(mapped[1]).toBe('a@1')
+			expect(mapped[2]).toBe('b@2')
+
+			// All items should have recomputed due to index changes
+			expect(recomputeLog).toEqual(['x@0', 'a@1', 'b@2'])
+		})
+
+		it('works with pure option', () => {
+			const source = reactive(['a', 'b'])
+			const indices: number[] = []
+			const mapped = morph(source, (item, position) => {
+				indices.push(position.index)
+				return `${item}@${position.index}`
+			}, { pure: true })
+
+			// Trigger computation
+			expect(mapped[0]).toBe('a@0')
+			expect(mapped[1]).toBe('b@1')
+			expect(indices).toEqual([0, 1])
+		})
+	})
 })

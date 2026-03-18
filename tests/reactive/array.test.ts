@@ -757,6 +757,33 @@ describe('ReactiveArray', () => {
 				expect(found).toBe(3)
 			})
 
+			it('should find object items with both raw and reactive arguments in indexOf()', () => {
+				const a = { id: 'a' }
+				const b = { id: 'b' }
+				const ra = reactive([reactive(a), b])
+
+				expect(ra.indexOf(a)).toBe(0)
+				expect(ra.indexOf(reactive(a))).toBe(0)
+				expect(ra.indexOf(b)).toBe(1)
+				expect(ra.indexOf(reactive(b))).toBe(1)
+			})
+
+			it('should find items inserted as reactive values via raw and reactive arguments in indexOf()', () => {
+				const a = { id: 'a' }
+				const b = { id: 'b' }
+				const ra = reactive<any[]>([])
+
+				ra.push(reactive(a))
+				ra.push(b)
+
+				expect(unwrap(ra[0])).toBe(a)
+				expect(unwrap(ra[1])).toBe(b)
+				expect(ra.indexOf(a)).toBe(0)
+				expect(ra.indexOf(reactive(a))).toBe(0)
+				expect(ra.indexOf(b)).toBe(1)
+				expect(ra.indexOf(reactive(b))).toBe(1)
+			})
+
 			it('should track anyProps for find()', () => {
 				const array = [1, 2, 3]
 				const ra = reactive(array)

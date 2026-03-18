@@ -97,8 +97,8 @@ export const attend: Attend = captioned(
 				keyEffects.set(
 					key,
 					ascend(() =>
-						effect`attend${callbackLabel ? `:${callbackLabel}` : ''}:${key}`(
-							(access) => callback(indexRef.value, access)
+						effect`attend${callbackLabel ? `:${callbackLabel}` : ''}:${key}`((access) =>
+							callback(indexRef.value, access)
 						)
 					)
 				)
@@ -241,6 +241,16 @@ export const lift: Lift = captioned(
 ) as Lift
 
 /**
+ * Position object provided to array morph callbacks.
+ *
+ * @property index - Current index of the item in the source array. The object is stable
+ *   per item and its `index` updates reactively when the item moves due to shifts/reorders.
+ */
+export type MorphPosition = {
+	index: number
+}
+
+/**
  * Options for `morph` and its variants.
  *
  * @property pure - When `true`, the mapping function is assumed pure (no reactive reads inside `fn`).
@@ -268,15 +278,15 @@ export type MorphOptions<I> = { pure?: boolean | ((i: I) => boolean) }
  */
 export function morphArray<I, O>(
 	source: readonly I[] | (() => readonly I[]),
-	fn: (arg: I, access?: EffectAccess) => O,
+	fn: (arg: I, position: MorphPosition, access?: EffectAccess) => O,
 	options?: MorphOptions<I>
 ): readonly O[] {
 	if (typeof source !== 'function' && !isReactive(source) && options?.pure === true) {
-		return source.map((i) => fn(i)) as any
+		return source.map((i) => fn(i, { index: 0 })) as any
 	}
 
 	let track!: GetterWrapper
-	const itemEffects = new Map<any, { stop: ScopedCallback; index: { value: number } }>()
+	const itemEffects = new Map<any, { stop: ScopedCallback; position: MorphPosition }>()
 	const cache = tag(`morph:${fn.name || 'anonymous'}`, [] as O[])
 	let input: readonly I[] = []
 
@@ -299,15 +309,15 @@ export function morphArray<I, O>(
 			options?.pure === true || (typeof options?.pure === 'function' && options.pure(input))
 		if (isPure) {
 			track(() => {
-				cache[key] = fn(input)
+				cache[key] = fn(input, { index: key })
 			})
 		} else {
-			const indexRef = { value: key }
+			const position = reactive({ index: key } as MorphPosition)
 			const stop = track(() =>
 				effect.opaque`morph:${fn.name}:${key}`((access) => {
-					cache[indexRef.value] = fn(input, access)
+					cache[position.index] = fn(input, position, access)
 					return (reason) => {
-						delete cache[indexRef.value]
+						delete cache[position.index]
 						touched1(cache, { type: 'invalidate', prop: 'morph' }, String(key))
 						const activeEffect = getActiveEffect()
 						let chain: CleanupReason | undefined
@@ -323,7 +333,7 @@ export function morphArray<I, O>(
 					}
 				})
 			)
-			itemEffects.set(key, { stop, index: indexRef })
+			itemEffects.set(key, { stop, position })
 		}
 	}
 
@@ -364,7 +374,7 @@ export function morphArray<I, O>(
 					for (const [idx, entry] of entries) {
 						if (idx >= diff.indexA + diff.sliceA.length) {
 							const newIdx = idx + shift
-							entry.index.value = newIdx
+							entry.position.index = newIdx
 							itemEffects.set(newIdx, entry)
 						}
 					}
@@ -661,7 +671,7 @@ export function morphRecord<S extends Record<PropertyKey, any>, O>(
 export type Morph = {
 	<I, O>(
 		source: readonly I[] | (() => readonly I[]),
-		fn: (arg: I, access?: EffectAccess) => O,
+		fn: (arg: I, position: MorphPosition, access?: EffectAccess) => O,
 		options?: MorphOptions<I>
 	): readonly O[]
 

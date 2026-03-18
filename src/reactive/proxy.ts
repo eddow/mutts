@@ -207,7 +207,7 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 		return rv
 	},
 	deleteProperty(obj, prop) {
-		if (!Object.hasOwn(obj, prop)) return false
+		if (!Object.hasOwn(obj, prop)) return true
 
 		const oldVal = (obj as any)[prop]
 

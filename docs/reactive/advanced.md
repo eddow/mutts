@@ -935,7 +935,7 @@ When you replace a reactive object with another object that shares the same prot
 
 - Watchers attached to the container are *not* re-fired if the container's prototype did not change (this avoids unnecessary parent effect re-runs).
 - Watchers attached to nested properties are re-evaluated only for keys that actually changed (added, removed, or whose values differ).
-- For arrays, the behaviour stays index-oriented: replacing an element at index `i` fires a touch for that index (and `length` if needed) rather than diffing the element recursively. This preserves reorder detection.
+- For arrays, the behavior stays index-oriented: replacing an element at index `i` fires a touch for that index (and `length` if needed) rather than diffing the element recursively. This preserves reorder detection.
 - Prototype chain properties are compared when both objects have prototype chains, ensuring changes to prototype-level properties are detected.
 
 **Integration with Prototype Chains:**
@@ -981,7 +981,7 @@ expect(titleWatcher).toHaveBeenCalledTimes(2)
 expect(viewsWatcher).toHaveBeenCalledTimes(2)
 ```
 
-This behaviour keeps container-level watchers stable while still delivering fine-grained updates to nested effects—ideal when you replace data structures with freshly fetched objects that share the same prototype.
+This behavior keeps container-level watchers stable while still delivering fine-grained updates to nested effects—ideal when you replace data structures with freshly fetched objects that share the same prototype.
 
 ### Origin Filtering
 
@@ -1243,17 +1243,36 @@ state.items = fetchedItems // deep touch diffs old vs new per-index — no lift 
 ```typescript
 import { morph } from 'mutts'
 
+// Arrays: (item, position, access?) => O
 function morph<I, O>(
   source: readonly I[] | (() => readonly I[]),
-  fn: (arg: I) => O,
+  fn: (arg: I, position: { index: number }, access?: EffectAccess) => O,
   options?: { pure?: boolean | ((i: I) => boolean) }
 ): O[]
+
+// Maps: (value, key, access?) => O  
+function morph<K, V, O>(
+  source: Map<K, V>,
+  fn: (arg: V, key: K, access?: EffectAccess) => O,
+  options?: { pure?: boolean | ((i: V) => boolean) }
+): Map<K, O>
+
+// Records: (value, key, access?) => O
+function morph<S extends Record<PropertyKey, any>, O>(
+  source: S,
+  fn: (arg: S[keyof S], key: keyof S, access?: EffectAccess) => O,
+  options?: { pure?: boolean | ((i: S[keyof S]) => boolean) }
+): { [K in keyof S]: O }
 ```
 
 **Parameters**
 
-- `source`: a reactive array or a function returning one. Array mutations are tracked via `arrayDiff`.
-- `fn`: mapping callback. In the default (non-pure) mode, each element's computation runs inside its own effect, so reactive reads inside `fn` are tracked and will invalidate that element's cache when they change.
+- `source`: a reactive array, Map, or record, or a function returning one. Array mutations are tracked via `arrayDiff`.
+- `fn`: mapping callback. Signature varies by source type:
+  - Arrays: `(item, position, access?) => O` where `position.index` is the current index
+  - Maps: `(value, key, access?) => O` 
+  - Records: `(value, key, access?) => O`
+  In the default (non-pure) mode, each element's computation runs inside its own effect, so reactive reads inside `fn` are tracked and will invalidate that element's cache when they change.
 - `options.pure`: controls per-item effect creation. `true` skips effects for all items (same as `morph.pure`). A **predicate function** `(i: I) => boolean` decides per-item: return `true` to skip the effect (pure), `false` to create one (reactive). The predicate receives the input item and is evaluated once per cache slot on first access.
 
 **Behaviour**
@@ -1261,6 +1280,7 @@ function morph<I, O>(
 - **Lazy**: elements are only computed when accessed (e.g. `result[0]`). Unaccessed indices remain `undefined` in the cache.
 - **Identity stable**: the returned reactive array proxy is the same object across source mutations. Only affected indices are invalidated.
 - **Per-item effects** (default): each accessed element gets its own effect. If `fn` reads reactive values beyond its argument, changes to those values invalidate and recompute only the affected elements.
+- **Reactive position**: For arrays, the `position` object is stable per item and its `index` updates reactively when items move due to shifts/reorders.
 - **Cleanup**: the returned array is `cleanedBy` the internal morph effect. When the parent effect is disposed, the morph effect and all per-item effects are cleaned up.
 
 **Basic usage**
@@ -1279,6 +1299,21 @@ items.push('dave')
 console.log(upper[3]) // "DAVE"
 
 items.splice(1, 1) // Remove 'bob' — indices shift, cache invalidated for affected positions
+```
+
+**Using position.index**
+
+```typescript
+const items = reactive(['a', 'b', 'c'])
+const indexed = morph(items, (item, position) => `${item}@${position.index}`)
+
+console.log(indexed[0]) // "a@0"
+console.log(indexed[1]) // "b@1"
+
+items.unshift('x') // Insert at beginning
+console.log(indexed[0]) // "x@0"  
+console.log(indexed[1]) // "a@1" — position.index updated reactively
+console.log(indexed[2]) // "b@2"
 ```
 
 **With reactive callback dependencies**
