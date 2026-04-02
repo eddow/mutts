@@ -3,7 +3,7 @@ import { flavored } from '../flavored'
 import { deepCompare, named } from '../utils'
 import { touched1 } from './change'
 import { chainExternalReason, getActiveEffect } from './effect-context'
-import { effect, root, untracked } from './effects'
+import { effect, inertDepth, root, untracked } from './effects'
 import {
 	getEffectNode,
 	getRoot,
@@ -60,6 +60,10 @@ function memoizeFunction<Result, Args extends MemoizableArgument[]>(
 		// Note: decorators add `this` as first argument
 		for (const arg of args) {
 			node = getBranch(node, arg)
+		}
+
+		if (inertDepth > 0) {
+			return fn.apply(this, args)
 		}
 
 		dependant(node, 'memoize')

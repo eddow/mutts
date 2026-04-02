@@ -40,6 +40,9 @@ import {
 	unwrap,
 } from './types'
 
+// Simple module to manage inert state without circular dependencies
+export let inertDepth = 0
+
 /**
  * Finds a cycle in a sequence of functions by looking for the first repetition
  */
@@ -1527,6 +1530,23 @@ export const untracked: Captioned<RootRunner> = captioned(function untracked<T>(
 		? externalReason.with(external, () => effectHistory.present.root(fn))
 		: effectHistory.present.root(fn)
 })
+
+/**
+ * Executes a function with fast-path reads that bypass proxy overhead and dependency tracking.
+ * Writes remain fully reactive. Uses a counter for safe nesting.
+ * @param fn - The function to execute
+ */
+export const inert = <T>(fn: () => T): T => {
+	// Increment the counter
+	const originalDepth = inertDepth
+	inertDepth = originalDepth + 1
+	
+	try {
+		return fn()
+	} finally {
+		inertDepth = originalDepth
+	}
+}
 
 /**
  * Executes a function from a virgin/root context - no parent effect, no tracking

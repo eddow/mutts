@@ -169,10 +169,16 @@ export class IterableWeakSet<K extends WeakKey> implements Set<K> {
 	}
 	readonly [Symbol.toStringTag]: string = 'IterableWeakSet'
 
-	union<U>(other: ReadonlySetLike<U>): Set<K | U> {
+	union<U>(other: ReadonlySetLike<U>): Set<K | U>
+	union(...sets: Set<K>[]): this
+	union<U>(other: ReadonlySetLike<U> | Set<K>, ...sets: Set<K>[]): Set<K | U> | this {
+		if (sets.length > 0) {
+			for (const set of [other as Set<K>, ...sets]) for (const value of set) this.add(value)
+			return this
+		}
 		const others = {
 			[Symbol.iterator]() {
-				return other.keys()
+				return (other as ReadonlySetLike<U>).keys()
 			},
 		}
 		const that = this

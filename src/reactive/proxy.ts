@@ -24,6 +24,8 @@ import {
 	storeProxyRelationship,
 	unwrap,
 } from './types'
+
+import { inertDepth } from './effects'
 export const metaProtos = new WeakMap()
 export const wrapProtos = new WeakMap()
 const arrayLengths = new WeakMap<unknown[], number>()
@@ -41,6 +43,10 @@ const subsRegister = new WeakMap<any, SubProxy>()
 let internalUntracked = false
 
 function wrapReactiveValue(obj: any, prop: PropertyKey, value: any) {
+	// Optional fast-path for inert reads - skips reactive wrapping
+	// Disabled by default for safety, can be enabled for performance-critical read-only contexts
+	if (inertDepth > 0) return value
+
 	if (!isReactive(value) && typeof value === 'object' && value !== null) {
 		const reactiveValue = reactiveObject(value)
 
@@ -75,6 +81,11 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 		// Symbols: fast-path — no reactivity tracking
 		if (typeof prop === 'symbol' || prop === 'constructor' || isUnreactiveProp(obj, prop))
 			return FoolProof.get(obj, prop, receiver)
+
+		if (inertDepth > 0) {
+			const value = (subsRegister.get(obj)?.get || FoolProof.get)(obj, prop, receiver)
+			return wrapReactiveValue(obj, prop, value)
+		}
 
 		if (!getActiveEffect()) {
 			const value = (subsRegister.get(obj)?.get || FoolProof.get)(obj, prop, receiver)
@@ -201,6 +212,11 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 				}
 			)
 		hasReentry.add(obj)
+		if (inertDepth > 0) {
+			const rv = (subsRegister.get(obj)?.has || Reflect.has)(obj, prop)
+			hasReentry.delete(obj)
+			return rv
+		}
 		if (!internalUntracked && !isUnreactiveProp(obj, prop)) dependant(obj, prop)
 		const rv = (subsRegister.get(obj)?.has || Reflect.has)(obj, prop)
 		hasReentry.delete(obj)
@@ -227,6 +243,9 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 		return true
 	},
 	ownKeys(obj) {
+		if (inertDepth > 0) {
+			return subsRegister.get(obj)?.ownKeys?.(obj) || Reflect.ownKeys(obj)
+		}
 		dependant(obj, keysOf)
 		return subsRegister.get(obj)?.ownKeys?.(obj) || Reflect.ownKeys(obj)
 	},

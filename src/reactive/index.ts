@@ -21,6 +21,7 @@ export {
 	defer,
 	effect,
 	getActivationLog,
+	inert,
 	onEffectThrow,
 	reset,
 	root,

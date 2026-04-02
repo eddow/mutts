@@ -35,6 +35,8 @@ Each entry point has a `.dev` variant (`entry-browser.dev.ts`, `entry-node.dev.t
     *   `effect(() => { ... })`: Runs side effects when dependencies change.
     *   `memoize(() => ...)`: Computed values.
     *   `morph(source, fn)`: Efficient, lazy collection mapping with identity tracking.
+    *   `untracked(() => { ... })`: Executes code without registering dependencies.
+    *   `inert(() => { ... })`: Fast-path reads that bypass proxy overhead and dependency tracking while allowing writes to remain fully reactive.
     *   `reset()`: Restores the system to a clean state. Clears diagnostic lineage tracking data and active dependency stacks.
     *   **Opaque Effects**: `effect(fn, { opaque: true })` bypasses deep-touch optimizations to strict identity tracking.
     *   **`keysOf` tracking**: `Object.keys()`, `for..in`, `Map.keys()` only depend on structure (add/delete), not value changes. `Object.entries()`, `Object.values()`, `Map.entries()` still track values via `get`.
@@ -122,6 +124,16 @@ When a reactive bunch (`attend`, `morph`, …) is **cleaned up**, all its inner 
 - `unlink(obj, reason?)`: disposes an object's cleanup deps. Safe to call twice (second is a no-op).
 - `attend(enumerate, callback)` returns a cleanup. Each per-key callback can return a cleanup too. All are called when the attend is disposed.
 - `morph(source, callback)` disposes per-item effects when items are removed or the result itself is cleaned up.
+
+### Root effect retention
+
+Top-level `effect(...)` returns its cleanup function as the **only strong handle** keeping that root effect alive. If you call `effect(...)` and do not retain the returned cleanup (or attach it to some retained owner), the effect may later be cleaned up by GC with `reason.type === 'gc'`. The symptom is typically: the effect runs once, then silently stops reacting.
+
+Recommended patterns:
+
+- Keep the returned cleanup in a retained variable when the effect's lifetime is module/app scoped.
+- Or attach it to an owner object with `link(owner, effect(...))` so the effect lives as long as the owner and is disposed together with it.
+- Returning a cleanup callback that inspects `reason?.type` is a good debugging trick: seeing `'gc'` means the effect itself was collected, not that dependency tracking failed.
 
 **CleanupReason**: Cleanup functions and inner effects receive a `CleanupReason` object:
 - `{ type: 'propChange', triggers: PropTrigger[] }`: triggered by reactive property change.

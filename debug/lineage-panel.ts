@@ -110,14 +110,14 @@ export function showLineagePanel() {
 	document.body.appendChild(panel)
 
 	// Reactivity: Update Visibility
-	effect(() => {
+	effect`lineage-panel:visibility`(() => {
 		panel.style.opacity = state.isVisible ? '1' : '0'
 		panel.style.pointerEvents = state.isVisible ? 'all' : 'none'
 		panel.style.transform = state.isVisible ? 'translateY(0)' : 'translateY(20px)'
 	})
 
 	// Reactivity: Update Content
-	effect(() => {
+	effect`lineage-panel:content`(() => {
 		if (state.activeLineage.length === 0) {
 			content.innerHTML = `<div style="color: ${colors.placeholderText}; font-style: italic; text-align: center; margin-top: 20px;">No effect triggered yet...</div>`
 			return

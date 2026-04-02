@@ -1,4 +1,4 @@
-import { effect, reactive } from 'mutts'
+import { effect, link, reactive, unlink } from 'mutts'
 
 describe('effect reaction result', () => {
 	it('should support recording the computed result each run (via effect return cleanup)', () => {
@@ -192,6 +192,35 @@ describe('automatic effect cleanup', () => {
 			// Force garbage collection
 			await collectGarbages()
 			expect(cleanupCalled).toBe(true)
+		})
+
+		itGarbageCollection('should keep a root effect alive while it is linked to a retained owner', async () => {
+			const state = reactive({ value: 1 })
+			const owner = {}
+			const calls: number[] = []
+			const cleanupReasons: string[] = []
+
+			link(
+				owner,
+				effect`linked-root-effect`(() => {
+					calls.push(state.value)
+					return (reason) => {
+						cleanupReasons.push(reason?.type ?? 'unknown')
+					}
+				})
+			)
+
+			expect(calls).toEqual([1])
+
+			await collectGarbages()
+			expect(cleanupReasons).toEqual([])
+
+			state.value = 2
+			expect(calls).toEqual([1, 2])
+			expect(cleanupReasons).toEqual(['propChange'])
+
+			unlink(owner)
+			expect(cleanupReasons).toEqual(['propChange', 'stopped'])
 		})
 
 		itGarbageCollection('should clean up parent and child effects when both are unreferenced', async () => {
