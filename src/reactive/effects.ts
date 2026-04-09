@@ -1540,7 +1540,7 @@ export const inert = <T>(fn: () => T): T => {
 	// Increment the counter
 	const originalDepth = inertDepth
 	inertDepth = originalDepth + 1
-	
+
 	try {
 		return fn()
 	} finally {

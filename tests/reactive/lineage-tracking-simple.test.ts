@@ -95,4 +95,25 @@ describe('lineage tracking simple', () => {
 		expect(capturedReason.triggers[0].dependency).toBeUndefined()
 		expect(capturedReason.triggers[0].touch).toBeUndefined()
 	})
+
+	it('stores touch as lazy lineage data that renders with the source effect', () => {
+		const state = reactive({ source: 0, derived: 0 })
+		let capturedReason: any
+
+		effect(function producer({ reaction }) {
+			state.source
+			if (reaction && reaction !== true) state.derived = state.source
+		})
+
+		effect(function consumer({ reaction }) {
+			if (reaction !== true && reaction !== false) capturedReason = reaction
+			state.derived
+		})
+
+		state.source = 1
+
+		expect(typeof capturedReason.triggers[0].touch).toBe('object')
+		expect(String(capturedReason.triggers[0].touch)).toContain('producer:')
+		expect(String(capturedReason.triggers[0].touch)).not.toContain('Object.captureLineage')
+	})
 })
