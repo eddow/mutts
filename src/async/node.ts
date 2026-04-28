@@ -1,4 +1,5 @@
 import { createHook } from 'node:async_hooks'
+import { onReactiveBroken, onReactiveReset } from '../reactive/effects'
 import { hooks, type Restorer } from '.'
 
 // 1. Generic async_hooks implementation for Hooks
@@ -79,7 +80,117 @@ const originalMethods = {
 	resolve: OriginalPromise.resolve,
 	reject: OriginalPromise.reject,
 	all: OriginalPromise.all,
+	setTimeout: globalThis.setTimeout,
+	clearTimeout: globalThis.clearTimeout,
+	setInterval: globalThis.setInterval,
+	clearInterval: globalThis.clearInterval,
+	setImmediate: globalThis.setImmediate,
+	clearImmediate: globalThis.clearImmediate,
 }
+
+const pendingTimeouts = new Set<unknown>()
+const pendingIntervals = new Set<unknown>()
+const pendingImmediates = new Set<unknown>()
+let asyncSchedulersFrozen = false
+
+function clearPendingSchedulers() {
+	for (const handle of Array.from(pendingTimeouts))
+		originalMethods.clearTimeout.call(globalThis, handle)
+	for (const handle of Array.from(pendingIntervals))
+		originalMethods.clearInterval.call(globalThis, handle)
+	for (const handle of Array.from(pendingImmediates))
+		originalMethods.clearImmediate.call(globalThis, handle)
+	pendingTimeouts.clear()
+	pendingIntervals.clear()
+	pendingImmediates.clear()
+}
+
+function freezeAsyncSchedulers() {
+	if (asyncSchedulersFrozen) return
+	asyncSchedulersFrozen = true
+	clearPendingSchedulers()
+}
+
+function resumeAsyncSchedulers() {
+	asyncSchedulersFrozen = false
+}
+
+function canceledTimeoutHandle() {
+	const handle = originalMethods.setTimeout.call(globalThis, () => {}, 0)
+	originalMethods.clearTimeout.call(globalThis, handle)
+	return handle
+}
+
+function canceledIntervalHandle() {
+	const handle = originalMethods.setInterval.call(globalThis, () => {}, 0)
+	originalMethods.clearInterval.call(globalThis, handle)
+	return handle
+}
+
+function canceledImmediateHandle() {
+	const handle = originalMethods.setImmediate.call(globalThis, () => {})
+	originalMethods.clearImmediate.call(globalThis, handle)
+	return handle
+}
+
+onReactiveBroken(freezeAsyncSchedulers)
+onReactiveReset(resumeAsyncSchedulers)
+
+globalThis.setTimeout = ((callback: Function, ...args: any[]) => {
+	if (asyncSchedulersFrozen) return canceledTimeoutHandle()
+	const handle = originalMethods.setTimeout.call(
+		globalThis,
+		(...callbackArgs: any[]) => {
+			pendingTimeouts.delete(handle)
+			callback(...callbackArgs)
+		},
+		...args
+	)
+	pendingTimeouts.add(handle)
+	return handle
+}) as typeof globalThis.setTimeout
+
+globalThis.clearTimeout = ((handle?: unknown) => {
+	pendingTimeouts.delete(handle)
+	return originalMethods.clearTimeout.call(globalThis, handle)
+}) as typeof globalThis.clearTimeout
+
+globalThis.setInterval = ((callback: Function, ...args: any[]) => {
+	if (asyncSchedulersFrozen) return canceledIntervalHandle()
+	const handle = originalMethods.setInterval.call(
+		globalThis,
+		(...callbackArgs: any[]) => {
+			callback(...callbackArgs)
+		},
+		...args
+	)
+	pendingIntervals.add(handle)
+	return handle
+}) as typeof globalThis.setInterval
+
+globalThis.clearInterval = ((handle?: unknown) => {
+	pendingIntervals.delete(handle)
+	return originalMethods.clearInterval.call(globalThis, handle)
+}) as typeof globalThis.clearInterval
+
+globalThis.setImmediate = ((callback: Function, ...args: any[]) => {
+	if (asyncSchedulersFrozen) return canceledImmediateHandle()
+	const handle = originalMethods.setImmediate.call(
+		globalThis,
+		(...callbackArgs: any[]) => {
+			pendingImmediates.delete(handle)
+			callback(...callbackArgs)
+		},
+		...args
+	)
+	pendingImmediates.add(handle)
+	return handle
+}) as typeof globalThis.setImmediate
+
+globalThis.clearImmediate = ((handle?: unknown) => {
+	pendingImmediates.delete(handle)
+	return originalMethods.clearImmediate.call(globalThis, handle)
+}) as typeof globalThis.clearImmediate
 
 // Patch prototype
 // biome-ignore lint/suspicious/noThenProperty: Intentional Promise.prototype patching

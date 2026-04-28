@@ -135,6 +135,14 @@ Recommended patterns:
 - Or attach it to an owner object with `link(owner, effect(...))` so the effect lives as long as the owner and is disposed together with it.
 - Returning a cleanup callback that inspects `reason?.type` is a good debugging trick: seeing `'gc'` means the effect itself was collected, not that dependency tracking failed.
 
+### Broken-state async freeze
+
+`onReactiveBroken()` and `onReactiveReset()` are lifecycle hooks for the unrecoverable broken-state latch. The browser and node async entry points use them to cancel pending `setTimeout`, `setInterval`, `setImmediate`, and browser `requestAnimationFrame` work, then reject future scheduler callbacks until `reset()` resumes scheduling. This is intentionally a freeze-until-reload/recover behavior: DOM/user events can still be inspected, but simulation clocks stop advancing.
+
+`isReactiveBroken()` exposes the latch for app code.
+
+While broken, `root()` skips the `atomic`/`batch` wrapper so listeners wrapped as `root\`event:…\`` (Sursaut) do not throw on every DOM event; reactive writes still fail via `touched` → `batch` as intended.
+
 **CleanupReason**: Cleanup functions and inner effects receive a `CleanupReason` object:
 - `{ type: 'propChange', triggers: PropTrigger[] }`: triggered by reactive property change.
 - `{ type: 'stopped' }`: manually stopped or parent effect disposed.

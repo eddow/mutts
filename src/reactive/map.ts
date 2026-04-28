@@ -1,7 +1,6 @@
 import { contentRef } from '../utils'
 import { touched, touched1 } from './change'
 import { notifyPropertyChange } from './deep-touch'
-import { batch } from './effects'
 import { makeReactiveEntriesIterator, makeReactiveIterator } from './iterator-helpers'
 import { reactive } from './proxy'
 import { dependant } from './tracking'
@@ -64,10 +63,8 @@ export abstract class ReactiveMap<K, V> extends Map<K, V> {
 		if (hadEntries) {
 			const evolution = { type: 'bunch', method: 'clear' } as const
 			// Clear triggers all effects since all keys are affected
-			batch(() => {
-				touched1(this, evolution, 'size')
-				touched(contentRef(this), evolution)
-			})
+			touched1(this, evolution, 'size')
+			touched(contentRef(this), evolution)
 		}
 	}
 
@@ -111,10 +108,8 @@ export abstract class ReactiveMap<K, V> extends Map<K, V> {
 
 		if (hadKey) {
 			const evolution = { type: 'del', prop: key } as const
-			batch(() => {
-				touched1(contentRef(this), evolution, key)
-				touched1(this, evolution, 'size')
-			})
+			touched1(contentRef(this), evolution, key)
+			touched1(this, evolution, 'size')
 		}
 
 		return result
@@ -137,12 +132,10 @@ export abstract class ReactiveMap<K, V> extends Map<K, V> {
 		super.set(key, reactiveValue)
 
 		if (!hadKey || oldValue !== reactiveValue) {
-			batch(() => {
-				notifyPropertyChange(contentRef(this), key, oldValue, reactiveValue, hadKey)
-				// Also notify size change for Map (WeakMap doesn't track size)
-				const evolution = { type: hadKey ? 'set' : 'add', prop: key } as const
-				touched1(this, evolution, 'size')
-			})
+			notifyPropertyChange(contentRef(this), key, oldValue, reactiveValue, hadKey)
+			// Also notify size change for Map (WeakMap doesn't track size)
+			const evolution = { type: hadKey ? 'set' : 'add', prop: key } as const
+			touched1(this, evolution, 'size')
 		}
 
 		return this

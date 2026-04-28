@@ -1,3 +1,4 @@
+import { onReactiveBroken, onReactiveReset } from '../reactive/effects'
 import { asyncHooks, hooks, type Restorer } from '.'
 
 const promiseContexts = new WeakMap<Promise<any>, Set<Restorer>>()
@@ -63,6 +64,15 @@ function wrap<Args extends any[], R>(
 const GLOBAL_ORIGINALS = Symbol.for('mutts.originals')
 const GLOBAL_PROMISE = Symbol.for('mutts.OriginalPromise')
 
+type SchedulerGlobal = typeof globalThis & {
+	setImmediate?: typeof setImmediate
+	clearImmediate?: typeof clearImmediate
+	requestAnimationFrame?: typeof requestAnimationFrame
+	cancelAnimationFrame?: typeof cancelAnimationFrame
+}
+
+const schedulerGlobal = globalThis as SchedulerGlobal
+
 let originals: any
 let OriginalPromise: any
 
@@ -83,9 +93,13 @@ if ((globalThis as any)[GLOBAL_ORIGINALS]) {
 		race: OriginalPromise.race,
 		any: (OriginalPromise as any).any,
 		setTimeout: globalThis.setTimeout,
+		clearTimeout: globalThis.clearTimeout,
 		setInterval: globalThis.setInterval,
-		setImmediate: (globalThis as any).setImmediate,
-		requestAnimationFrame: (globalThis as any).requestAnimationFrame,
+		clearInterval: globalThis.clearInterval,
+		setImmediate: schedulerGlobal.setImmediate,
+		clearImmediate: schedulerGlobal.clearImmediate,
+		requestAnimationFrame: schedulerGlobal.requestAnimationFrame,
+		cancelAnimationFrame: schedulerGlobal.cancelAnimationFrame,
 		queueMicrotask: globalThis.queueMicrotask,
 	}
 	;(globalThis as any)[GLOBAL_ORIGINALS] = originals
@@ -96,6 +110,76 @@ if ((globalThis as any)[GLOBAL_ORIGINALS]) {
 if (!originals.allSettled) originals.allSettled = (OriginalPromise as any).allSettled
 if (!originals.any) originals.any = (OriginalPromise as any).any
 if (!originals.race) originals.race = OriginalPromise.race
+if (!originals.clearTimeout) originals.clearTimeout = globalThis.clearTimeout
+if (!originals.clearInterval) originals.clearInterval = globalThis.clearInterval
+if (!originals.clearImmediate) originals.clearImmediate = schedulerGlobal.clearImmediate
+if (!originals.cancelAnimationFrame)
+	originals.cancelAnimationFrame = schedulerGlobal.cancelAnimationFrame
+
+const pendingTimeouts = new Set<unknown>()
+const pendingIntervals = new Set<unknown>()
+const pendingImmediates = new Set<unknown>()
+const pendingAnimationFrames = new Set<unknown>()
+let asyncSchedulersFrozen = false
+
+function clearPendingSchedulers() {
+	for (const handle of Array.from(pendingTimeouts)) originals.clearTimeout.call(globalThis, handle)
+	for (const handle of Array.from(pendingIntervals))
+		originals.clearInterval.call(globalThis, handle)
+	if (originals.clearImmediate) {
+		for (const handle of Array.from(pendingImmediates)) {
+			originals.clearImmediate.call(globalThis, handle)
+		}
+	}
+	if (originals.cancelAnimationFrame) {
+		for (const handle of Array.from(pendingAnimationFrames)) {
+			originals.cancelAnimationFrame.call(globalThis, handle)
+		}
+	}
+	pendingTimeouts.clear()
+	pendingIntervals.clear()
+	pendingImmediates.clear()
+	pendingAnimationFrames.clear()
+}
+
+function freezeAsyncSchedulers() {
+	if (asyncSchedulersFrozen) return
+	asyncSchedulersFrozen = true
+	clearPendingSchedulers()
+}
+
+function resumeAsyncSchedulers() {
+	asyncSchedulersFrozen = false
+}
+
+function canceledTimeoutHandle() {
+	const handle = originals.setTimeout.call(globalThis, () => {}, 0)
+	originals.clearTimeout.call(globalThis, handle)
+	return handle
+}
+
+function canceledIntervalHandle() {
+	const handle = originals.setInterval.call(globalThis, () => {}, 0)
+	originals.clearInterval.call(globalThis, handle)
+	return handle
+}
+
+function canceledImmediateHandle() {
+	if (!originals.setImmediate || !originals.clearImmediate) return undefined
+	const handle = originals.setImmediate.call(globalThis, () => {})
+	originals.clearImmediate.call(globalThis, handle)
+	return handle
+}
+
+function canceledAnimationFrameHandle() {
+	if (!originals.requestAnimationFrame || !originals.cancelAnimationFrame) return 0
+	const handle = originals.requestAnimationFrame.call(globalThis, () => {})
+	originals.cancelAnimationFrame.call(globalThis, handle)
+	return handle
+}
+
+onReactiveBroken(freezeAsyncSchedulers)
+onReactiveReset(resumeAsyncSchedulers)
 
 function patchedThen(this: any, onFulfilled: any, onRejected: any) {
 	const context = promiseContexts.get(this) || captureRestorers()
@@ -210,22 +294,85 @@ try {
 ;(globalThis as any).Promise = PatchedPromise
 
 globalThis.setTimeout = ((callback: Function, ...args: any[]) => {
-	return originals.setTimeout.call(globalThis, wrap(callback as any), ...args)
-}) as any
+	if (asyncSchedulersFrozen) return canceledTimeoutHandle()
+	const wrapped = wrap(callback as any)
+	const handle = originals.setTimeout.call(
+		globalThis,
+		(...callbackArgs: any[]) => {
+			pendingTimeouts.delete(handle)
+			wrapped(...callbackArgs)
+		},
+		...args
+	)
+	pendingTimeouts.add(handle)
+	return handle
+}) as typeof globalThis.setTimeout
+
+globalThis.clearTimeout = ((handle?: unknown) => {
+	pendingTimeouts.delete(handle)
+	return originals.clearTimeout.call(globalThis, handle)
+}) as typeof globalThis.clearTimeout
 
 globalThis.setInterval = ((callback: Function, ...args: any[]) => {
-	return originals.setInterval.call(globalThis, wrap(callback as any), ...args)
-}) as any
+	if (asyncSchedulersFrozen) return canceledIntervalHandle()
+	const wrapped = wrap(callback as any)
+	const handle = originals.setInterval.call(
+		globalThis,
+		(...callbackArgs: any[]) => {
+			wrapped(...callbackArgs)
+		},
+		...args
+	)
+	pendingIntervals.add(handle)
+	return handle
+}) as typeof globalThis.setInterval
+
+globalThis.clearInterval = ((handle?: unknown) => {
+	pendingIntervals.delete(handle)
+	return originals.clearInterval.call(globalThis, handle)
+}) as typeof globalThis.clearInterval
 
 if (originals.setImmediate) {
-	;(globalThis as any).setImmediate = ((callback: Function, ...args: any[]) => {
-		return originals.setImmediate.call(globalThis, wrap(callback as any), ...args)
-	}) as any
+	schedulerGlobal.setImmediate = ((callback: Function, ...args: any[]) => {
+		if (asyncSchedulersFrozen) return canceledImmediateHandle()
+		const wrapped = wrap(callback as any)
+		const handle = originals.setImmediate.call(
+			globalThis,
+			(...callbackArgs: any[]) => {
+				pendingImmediates.delete(handle)
+				wrapped(...callbackArgs)
+			},
+			...args
+		)
+		pendingImmediates.add(handle)
+		return handle
+	}) as typeof setImmediate
+}
+
+if (originals.clearImmediate) {
+	schedulerGlobal.clearImmediate = ((handle?: unknown) => {
+		pendingImmediates.delete(handle)
+		return originals.clearImmediate.call(globalThis, handle)
+	}) as typeof clearImmediate
 }
 
 if (originals.requestAnimationFrame) {
 	globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
-		return originals.requestAnimationFrame.call(globalThis, wrap(callback))
+		if (asyncSchedulersFrozen) return canceledAnimationFrameHandle()
+		const wrapped = wrap(callback)
+		const handle = originals.requestAnimationFrame.call(globalThis, (time: DOMHighResTimeStamp) => {
+			pendingAnimationFrames.delete(handle)
+			wrapped(time)
+		})
+		pendingAnimationFrames.add(handle)
+		return handle
+	}
+}
+
+if (originals.cancelAnimationFrame) {
+	globalThis.cancelAnimationFrame = (handle: number) => {
+		pendingAnimationFrames.delete(handle)
+		return originals.cancelAnimationFrame.call(globalThis, handle)
 	}
 }
 

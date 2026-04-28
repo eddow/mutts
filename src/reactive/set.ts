@@ -1,6 +1,5 @@
 import { contentRef } from '../utils'
 import { touched, touched1 } from './change'
-import { batch } from './effects'
 import { makeReactiveEntriesIterator, makeReactiveIterator } from './iterator-helpers'
 import { reactive } from './proxy'
 import { dependant } from './tracking'
@@ -52,10 +51,8 @@ export abstract class ReactiveSet<T> extends Set<T> {
 		if (!had) {
 			const evolution = { type: 'add', prop: reactiveValue } as const
 			// touch for value-specific and aggregate dependencies
-			batch(() => {
-				touched1(contentRef(this), evolution, reactiveValue)
-				touched1(this, evolution, 'size')
-			})
+			touched1(contentRef(this), evolution, reactiveValue)
+			touched1(this, evolution, 'size')
 		}
 		return this
 	}
@@ -65,10 +62,8 @@ export abstract class ReactiveSet<T> extends Set<T> {
 		super.clear()
 		if (hadEntries) {
 			const evolution = { type: 'bunch', method: 'clear' } as const
-			batch(() => {
-				touched1(this, evolution, 'size')
-				touched(contentRef(this), evolution)
-			})
+			touched1(this, evolution, 'size')
+			touched(contentRef(this), evolution)
 		}
 	}
 
@@ -77,10 +72,8 @@ export abstract class ReactiveSet<T> extends Set<T> {
 		const res = super.delete(value)
 		if (had) {
 			const evolution = { type: 'del', prop: value } as const
-			batch(() => {
-				touched1(contentRef(this), evolution, value)
-				touched1(this, evolution, 'size')
-			})
+			touched1(contentRef(this), evolution, value)
+			touched1(this, evolution, 'size')
 		}
 		return res
 	}

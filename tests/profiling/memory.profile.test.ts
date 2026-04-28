@@ -77,7 +77,7 @@ describe('Memory Performance Profiling', () => {
 
 				const memoryProfile = profileMemory(
 					() => {
-						const stop = effect(function effectCreationMemory() {
+						const stop = effect`effectCreationMemory`(() => {
 							void obj.count
 						})
 						stop()
@@ -109,7 +109,7 @@ describe('Memory Performance Profiling', () => {
 						const stops: (() => void)[] = []
 						for (let i = 0; i < 10; i++) {
 							stops.push(
-								effect(function multipleEffectsMemory() {
+								effect`multipleEffectsMemory`(() => {
 									void obj.count
 									void obj.name
 									void obj.items.length
@@ -164,7 +164,7 @@ describe('Memory Performance Profiling', () => {
 
 			const memoryProfile = profileMemory(
 				() => {
-					effect(function dependencyTrackingMemory() {
+					effect`dependencyTrackingMemory`(() => {
 						// Access multiple properties to create dependencies
 						void obj.a
 						void obj.b
@@ -181,4 +181,3 @@ describe('Memory Performance Profiling', () => {
 		})
 	})
 })
-

@@ -100,12 +100,12 @@ describe('lineage tracking simple', () => {
 		const state = reactive({ source: 0, derived: 0 })
 		let capturedReason: any
 
-		effect(function producer({ reaction }) {
+		effect`producer`(({ reaction }) => {
 			state.source
 			if (reaction && reaction !== true) state.derived = state.source
 		})
 
-		effect(function consumer({ reaction }) {
+		effect`consumer`(({ reaction }) => {
 			if (reaction !== true && reaction !== false) capturedReason = reaction
 			state.derived
 		})

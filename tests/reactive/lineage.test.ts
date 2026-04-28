@@ -9,7 +9,7 @@ describe('Effect Lineage', () => {
 
 	it('should capture structured stack frames', () => {
 		let frames: any[] = []
-		effect(function testEffect() {
+		effect`testEffect`(() => {
 			const lineage = digestLineage(getLineage())
 			frames = lineage[0].stack
 		})
@@ -22,8 +22,8 @@ describe('Effect Lineage', () => {
 	it('should track lineage across nested effects', () => {
 		let lineageAtInner: any[] = []
 		
-		effect(function parentEffect() {
-			effect(function childEffect() {
+		effect`parentEffect`(() => {
+			effect`childEffect`(() => {
 				lineageAtInner = digestLineage(getLineage())
 			})
 		})

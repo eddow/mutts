@@ -11,6 +11,7 @@ import {
 	removeBackReference,
 } from './deep-watch-state'
 import { getActiveEffect } from './effect-context'
+import { inertDepth } from './effects'
 import { absent, isNonReactive, isUnreactiveProp } from './non-reactive'
 import { dependant } from './tracking'
 import {
@@ -24,8 +25,6 @@ import {
 	storeProxyRelationship,
 	unwrap,
 } from './types'
-
-import { inertDepth } from './effects'
 export const metaProtos = new WeakMap()
 export const wrapProtos = new WeakMap()
 const arrayLengths = new WeakMap<unknown[], number>()

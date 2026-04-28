@@ -161,6 +161,47 @@ let consequencesClosure = new WeakMap<Function, IterableWeakSet<Function>>()
 // Batch re-entrance depth and broken state
 let broken = false
 
+/** True after an unrecoverable reactive failure until `reset()`. */
+export function isReactiveBroken(): boolean {
+	return broken
+}
+
+export type ReactiveBrokenHandler = (error: unknown) => void
+export type ReactiveResetHandler = () => void
+
+const reactiveBrokenHandlers = new Set<ReactiveBrokenHandler>()
+const reactiveResetHandlers = new Set<ReactiveResetHandler>()
+
+export function onReactiveBroken(handler: ReactiveBrokenHandler): () => void {
+	reactiveBrokenHandlers.add(handler)
+	return () => reactiveBrokenHandlers.delete(handler)
+}
+
+export function onReactiveReset(handler: ReactiveResetHandler): () => void {
+	reactiveResetHandlers.add(handler)
+	return () => reactiveResetHandlers.delete(handler)
+}
+
+function notifyReactiveBroken(error: unknown) {
+	for (const handler of Array.from(reactiveBrokenHandlers)) {
+		try {
+			handler(error)
+		} catch (handlerError) {
+			options.warn('[reactive] onReactiveBroken handler threw', handlerError)
+		}
+	}
+}
+
+function notifyReactiveReset() {
+	for (const handler of Array.from(reactiveResetHandlers)) {
+		try {
+			handler()
+		} catch (handlerError) {
+			options.warn('[reactive] onReactiveReset handler threw', handlerError)
+		}
+	}
+}
+
 // Debug: Capture where an effect was created
 export const effectCreationStacks = new WeakMap<Function, unknown[]>()
 
@@ -959,6 +1000,7 @@ export function batch(effect: EffectTrigger | EffectTrigger[], batchOptions?: Ba
 	batchStack.push(currentBatch)
 
 	let success = false
+	let failure: unknown
 	try {
 		const effectuatedRoots: Function[] = []
 		const firstReturn: { value?: any } = {}
@@ -1043,12 +1085,15 @@ export function batch(effect: EffectTrigger | EffectTrigger[], batchOptions?: Ba
 		success = true
 		return firstReturn.value
 	} catch (error) {
+		failure = error
 		if (batchStack.length === 1)
 			optionCall('error', '[reactive] Root batch failure before broken state:', error)
 		throw error
 	} finally {
 		if (!success && batchStack.length === 1) {
+			const wasBroken = broken
 			broken = true
+			if (!wasBroken) notifyReactiveBroken(failure)
 		}
 		batchStack.pop()
 		if (batchStack.length === 0) {
@@ -1065,6 +1110,7 @@ export function batch(effect: EffectTrigger | EffectTrigger[], batchOptions?: Ba
  * All existing effects become orphaned and must be recreated.
  */
 export function reset() {
+	const wasBroken = broken
 	broken = false
 	activationRegistry = undefined
 	batchStack.length = 0
@@ -1075,6 +1121,7 @@ export function reset() {
 	resetRegistry()
 	resetTracking()
 	effectHistory.present.active = undefined
+	if (wasBroken) notifyReactiveReset()
 }
 
 export { reset as resetBatchQueueForTest }
@@ -1531,12 +1578,7 @@ export const untracked: Captioned<RootRunner> = captioned(function untracked<T>(
 		: effectHistory.present.root(fn)
 })
 
-/**
- * Executes a function with fast-path reads that bypass proxy overhead and dependency tracking.
- * Writes remain fully reactive. Uses a counter for safe nesting.
- * @param fn - The function to execute
- */
-export const inert = <T>(fn: () => T): T => {
+function runInert<T>(fn: () => T): T {
 	// Increment the counter
 	const originalDepth = inertDepth
 	inertDepth = originalDepth + 1
@@ -1548,17 +1590,49 @@ export const inert = <T>(fn: () => T): T => {
 	}
 }
 
+type AnyFunction = (this: any, ...args: any[]) => any
+
+export function wrapInert<Fn extends AnyFunction>(fn: Fn): Fn {
+	function inertEffect(this: ThisParameterType<Fn>, ...args: Parameters<Fn>): ReturnType<Fn> {
+		return runInert(() => fn.apply(this, args))
+	}
+	Object.defineProperty(inertEffect, 'name', { value: `inert(${fn.name})` })
+	return inertEffect as Fn
+}
+
+export type Inert = (<T>(fn: () => T) => T) &
+	MethodDecorator &
+	((target: any, context: ClassMethodDecoratorContext) => any)
+
+/**
+ * Executes a function with fast-path reads that bypass proxy overhead and dependency tracking.
+ * Writes remain fully reactive. Uses a counter for safe nesting.
+ * Can also decorate methods so the whole method body runs inertly.
+ * @param fn - The function to execute
+ */
+export const inert = decorator({
+	method(original) {
+		return wrapInert(original)
+	},
+	default<T>(fn: () => T): T {
+		if (typeof fn !== 'function') throw new Error('inert() expects a function')
+		return runInert(fn)
+	},
+}) as Inert
+
 /**
  * Executes a function from a virgin/root context - no parent effect, no tracking
  * Creates completely independent effects that won't be cleaned up by any parent
  * @param fn - The function to execute
  */
 export const root: Captioned<RootRunner> = captioned(function root<T>(fn: () => T): T {
-	fn = atomic(fn)
+	// When broken, `atomic`/`batch` throws immediately. DOM wrappers (e.g. Sursaut
+	// `root\`event:…\``) still need to run listener code for inspection UI; skip batching.
+	const runner: () => T = broken ? fn : atomic(fn)
 	const external = externalReasonFrom(fn)
 	return external
-		? externalReason.with(external, () => effectHistory.root(fn))
-		: effectHistory.root(fn)
+		? externalReason.with(external, () => effectHistory.root(runner))
+		: effectHistory.root(runner)
 })
 
 /**

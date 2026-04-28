@@ -315,7 +315,7 @@ export function morphArray<I, O>(
 			const position = reactive({ index: key } as MorphPosition)
 			const stop = track(() =>
 				effect.opaque`morph:${fn.name}:${key}`((access) => {
-					if(access.reaction) {
+					if (access.reaction) {
 						delete cache[position.index]
 						touched1(cache, { type: 'invalidate', prop: 'morph' }, String(key))
 						const activeEffect = getActiveEffect()
@@ -326,11 +326,14 @@ export function morphArray<I, O>(
 						}
 						stop?.({
 							type: 'invalidate',
-							cause: chainExternalReason(!access.reaction || access.reaction == true ? { type: 'stopped', chain }: access.reaction)!,
+							cause: chainExternalReason(
+								!access.reaction || access.reaction == true
+									? { type: 'stopped', chain }
+									: access.reaction
+							)!,
 							chain: chainExternalReason(chain),
 						})
-					} else
-						cache[position.index] = fn(input, position, access)
+					} else cache[position.index] = fn(input, position, access)
 				})
 			)
 			itemEffects.set(key, { stop, position })

@@ -22,10 +22,14 @@ export {
 	effect,
 	getActivationLog,
 	inert,
+	isReactiveBroken,
 	onEffectThrow,
+	onReactiveBroken,
+	onReactiveReset,
 	reset,
 	root,
 	untracked,
+	wrapInert,
 } from './effects'
 export { type Memoizable, type MemoizableArgument, memoize } from './memoize'
 export { addUnreactiveProps, isNonReactive } from './non-reactive'

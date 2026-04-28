@@ -1,6 +1,86 @@
-import { effect, reactive, root, untracked } from 'mutts'
+import { afterEach } from 'vitest'
+import { effect, inert, reactive, reset, root, untracked, wrapInert } from 'mutts'
+
+afterEach(() => {
+	reset()
+})
 
 describe('untracked and root functions', () => {
+	it('inert should execute immediately and avoid dependency tracking', () => {
+		const state = reactive({ count: 0 })
+		let runCount = 0
+		const values: number[] = []
+
+		const stop = effect(() => {
+			runCount++
+			values.push(inert(() => state.count))
+		})
+
+		expect(runCount).toBe(1)
+		expect(values).toEqual([0])
+
+		state.count = 1
+		expect(runCount).toBe(1)
+		expect(values).toEqual([0])
+
+		stop()
+	})
+
+	it('wrapInert should return an argument-forwarding wrapper', () => {
+		const state = reactive({ count: 0 })
+		let runCount = 0
+		const values: number[] = []
+
+		const add = wrapInert(function add(this: { offset: number }, a: number, b: number) {
+			values.push(state.count)
+			return this.offset + a + b + state.count
+		})
+
+		const stop = effect(() => {
+			runCount++
+			add.call({ offset: 10 }, 2, 3)
+		})
+
+		expect(runCount).toBe(1)
+		expect(values).toEqual([0])
+		expect(add.call({ offset: 20 }, 4, 5)).toBe(29)
+
+		state.count = 1
+		expect(runCount).toBe(1)
+		expect(values).toEqual([0, 0])
+
+		stop()
+	})
+
+	it('inert method decorator should forward arguments and return values', () => {
+		const state = reactive({ count: 0 })
+		let runCount = 0
+
+		class TestClass {
+			offset = 7
+
+			@inert
+			compute(a: number, b: number) {
+				return this.offset + a + b + state.count
+			}
+		}
+
+		const instance = new TestClass()
+		const stop = effect(() => {
+			runCount++
+			instance.compute(2, 3)
+		})
+
+		expect(runCount).toBe(1)
+		expect(instance.compute(4, 5)).toBe(16)
+
+		state.count = 1
+		expect(runCount).toBe(1)
+		expect(instance.compute(4, 5)).toBe(17)
+
+		stop()
+	})
+
 	it('untracked should maintain parent cleanup relationship', () => {
 		const state = reactive({ count: 0 })
 		let cleanupCount = 0

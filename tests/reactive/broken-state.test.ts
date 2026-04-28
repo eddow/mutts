@@ -1,5 +1,13 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { effect, caught, reset } from '../../src/reactive/effects'
+import {
+	caught,
+	effect,
+	isReactiveBroken,
+	onReactiveBroken,
+	onReactiveReset,
+	reset,
+	root,
+} from '../../src/reactive/effects'
 import { reactive } from '../../src/reactive/proxy'
 import { ReactiveError, ReactiveErrorCode, options } from '../../src/reactive/types'
 
@@ -15,6 +23,60 @@ afterEach(() => {
 })
 
 describe('broken state and reset', () => {
+	it('should notify broken and reset handlers once per unrecoverable failure', () => {
+		const state = reactive({ value: 0 })
+		const brokenReports: unknown[] = []
+		let resetReports = 0
+		const removeBrokenHandler = onReactiveBroken((error) => {
+			brokenReports.push(error)
+		})
+		const removeResetHandler = onReactiveReset(() => {
+			resetReports++
+		})
+
+		try {
+			effect(() => {
+				if (state.value === 1) throw new Error('Unrecoverable')
+			})
+
+			expect(() => {
+				state.value = 1
+			}).toThrow('Unrecoverable')
+
+			expect(() => {
+				state.value = 2
+			}).toThrow(ReactiveError)
+
+			expect(brokenReports).toHaveLength(1)
+			expect((brokenReports[0] as Error).message).toBe('Unrecoverable')
+
+			reset()
+			expect(resetReports).toBe(1)
+		} finally {
+			removeBrokenHandler()
+			removeResetHandler()
+		}
+	})
+
+	it('should allow root() to run without batching when broken (e.g. DOM event wrappers)', () => {
+		const state = reactive({ value: 0 })
+
+		effect(() => {
+			if (state.value === 1) throw new Error('Unrecoverable')
+		})
+
+		expect(() => {
+			state.value = 1
+		}).toThrow('Unrecoverable')
+
+		expect(isReactiveBroken()).toBe(true)
+		expect(root`test:root`(() => 'still')).toBe('still')
+
+		expect(() => {
+			state.value = 2
+		}).toThrow(ReactiveError)
+	})
+
 	it('should enter broken state when an unrecoverable error escapes a batch', () => {
 		const state = reactive({ value: 0 })
 

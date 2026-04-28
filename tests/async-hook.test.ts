@@ -1,4 +1,4 @@
-import { asyncHook, asyncHooks, asyncZone, Zone } from 'mutts';
+import { asyncHook, asyncHooks, asyncZone, effect, reactive, reset, Zone } from 'mutts';
 
 describe('Async Hook Direct Tests', () => {
     let callStack: string[] = [];
@@ -64,6 +64,41 @@ describe('Async Hook Direct Tests', () => {
         const cbIdx = callStack.indexOf('callback');
         expect(callStack.indexOf('H1:restore')).toBeLessThan(cbIdx);
         expect(callStack.indexOf('H1:undo')).toBeGreaterThan(cbIdx);
+    });
+
+    test('Schedulers freeze when reactivity breaks', async () => {
+        const state = reactive({ broken: false });
+        const calls: string[] = [];
+        let interval: ReturnType<typeof setInterval> | undefined;
+        let immediate: ReturnType<typeof setImmediate> | undefined;
+
+        try {
+            effect(() => {
+                if (state.broken) throw new Error('break schedulers');
+            });
+
+            setTimeout(() => calls.push('timeout'), 20);
+            interval = setInterval(() => calls.push('interval'), 5);
+            if (typeof setImmediate === 'function') {
+                immediate = setImmediate(() => calls.push('immediate'));
+            }
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(() => calls.push('raf'));
+            }
+
+            expect(() => {
+                state.broken = true;
+            }).toThrow('break schedulers');
+
+            reset();
+            await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+            expect(calls).toEqual([]);
+        } finally {
+            if (interval) clearInterval(interval);
+            if (immediate) clearImmediate(immediate);
+            reset();
+        }
     });
 
     test('Nested setTimeout', async () => {
