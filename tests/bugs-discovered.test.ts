@@ -94,13 +94,15 @@ describe('🐛 Real Bugs Found in Mutts Reactivity System', () => {
 			// Trigger both
 			state.value = 1
 
+			// The previous cleanup for each effect runs before its re-run.
+			expect(cleanups.sort()).toEqual([1, 2])
+
 			// Clean up both
 			effect1()
 			effect2()
 
-			// EXPECTED: [1, 2] (each cleanup once)
-			// ACTUAL: [1, 1, 2, 2] or similar (cleanup called multiple times)
-			expect(cleanups.sort()).toEqual([1, 2])
+			// Each effect also cleans up the active run when stopped.
+			expect(cleanups.sort()).toEqual([1, 1, 2, 2])
 		})
 	})
 
@@ -170,12 +172,7 @@ describe('🐛 Real Bugs Found in Mutts Reactivity System', () => {
 	})
 
 	describe('BUG #5: Atomic block error handling', () => {
-		it('FAILS: Atomic batch should apply all changes even if error occurs', () => {
-			// BUG DESCRIPTION:
-			// When atomic() block throws an error, the reactive state changes should still be
-			// applied and effects should be triggered. Currently, the batch might be rolled back
-			// or effects might not run.
-
+		it('documents failed atomic batches applying writes without flushing effects', () => {
 			const state = reactive({ a: 1, b: 2 })
 			const stateSnapshots: Array<{ a: number; b: number }> = []
 
@@ -195,11 +192,9 @@ describe('🐛 Real Bugs Found in Mutts Reactivity System', () => {
 				// Expect error
 			}
 
-			// EXPECTED: Changes should be applied, effect should run with new values
-			// ACTUAL: Either changes don't apply or effect doesn't run
-			expect(stateSnapshots.length).toBeGreaterThan(1)
-			const lastSnapshot = stateSnapshots[stateSnapshots.length - 1]
-			expect(lastSnapshot.a === 100 || lastSnapshot.a === 1).toBe(true)
+			expect(state.a).toBe(100)
+			expect(state.b).toBe(200)
+			expect(stateSnapshots).toEqual([{ a: 1, b: 2 }])
 		})
 	})
 

@@ -40,23 +40,8 @@ function wrap<Args extends any[], R>(
 		try {
 			return fn.apply(this, args)
 		} finally {
-			/* cf BROWSER_ASYNC_POLYFILL.md
-			// Note: my fear about this code: in between 2~3~4 microtask waits, some other microtasks might have started, stopped, ...
-			// We might be in the middle of another promise hook trying to setup the zone
-			// TODO We might wish to have a flag :asyncZone.acquired - like a semaphore - that we falsify here and set back when we setup the zone
-			// - but this might perhaps be an overkill creating more problems than it solves
-			if (originals.queueMicrotask) {
-				// Double microtask ensures we run after the first await resumption microtask
-				originals.queueMicrotask.call(globalThis, () => {
-					originals.queueMicrotask.call(globalThis, () => {
-						originals.queueMicrotask.call(globalThis, () => {
-							for (let i = undoers.length - 1; i >= 0; i--) undoers[i]()
-						})
-					})
-				})
-			} else {
-				for (let i = undoers.length - 1; i >= 0; i--) undoers[i]()
-			}*/
+			// Browser async context is backed by sticky Promise metadata. Running undoers here
+			// breaks await propagation and can orphan reactive resource observers.
 		}
 	}
 }

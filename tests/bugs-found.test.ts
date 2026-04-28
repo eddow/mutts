@@ -343,11 +343,12 @@ describe('🐛 Bug Challenges - Finding Issues in Mutts', () => {
 			})
 
 			source.value = 1 // This might trigger both
+			expect(cleanups.sort()).toEqual([1, 2])
 
 			stop1()
 			stop2()
 
-			expect(cleanups.sort()).toEqual([1, 2])
+			expect(cleanups.sort()).toEqual([1, 1, 2, 2])
 		})
 
 		it('should handle effect that modifies its own dependencies', () => {

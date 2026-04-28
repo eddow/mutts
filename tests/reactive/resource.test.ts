@@ -1,8 +1,16 @@
-import { describe, expect, it, vi } from 'vitest'
-import { resource, reactive, effect, unwrap } from '../../src/entry-browser'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { resource, reactive, effect, unwrap, reset } from '../../src/entry-browser'
 import { watchers } from '../../src/reactive/registry'
 
 describe('resource', () => {
+	beforeEach(() => {
+		reset()
+	})
+
+	afterEach(() => {
+		reset()
+	})
+
 	it('should load initial value (async)', () => {
 		const r = resource(async () => 'hello', { initialValue: 'init' })
 		// Async fetcher returns a Promise, so initial value is preserved synchronously
@@ -99,6 +107,7 @@ describe('resource', () => {
 		state.id = 4
 		await new Promise(resolve => setTimeout(resolve, 20))
 		expect(r.value).toBe('page-4')
+		await new Promise(resolve => setTimeout(resolve, 0))
 
 		expect(log).toEqual(['page-1', 'page-2', 'page-3', 'page-4'])
 	})
@@ -167,6 +176,7 @@ describe('resource', () => {
 		state.id = 4
 		await new Promise(resolve => setTimeout(resolve, 20))
 		expect(r.value).toBe('page-4')
+		await new Promise(resolve => setTimeout(resolve, 0))
 
 		expect(log).toEqual(['page-1', 'page-2', 'page-3', 'page-4'])
 	})

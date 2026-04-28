@@ -202,6 +202,7 @@ describe('broken state and reset', () => {
 	})
 
 	it('should enter broken state on cycle detection (unrecoverable)', () => {
+		options.cycleHandling = 'development'
 		const state = reactive({ a: 0, b: 0 })
 
 		effect(() => {

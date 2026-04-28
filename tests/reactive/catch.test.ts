@@ -1,6 +1,14 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { effect, memoize, caught, reactive, reset } from 'mutts'
-import { ReactiveError, ReactiveErrorCode } from '../../src/reactive/types'
+import {
+	effect,
+	memoize,
+	caught,
+	reactive,
+	reset,
+	reactiveOptions,
+	ReactiveError,
+	ReactiveErrorCode,
+} from 'mutts'
 
 afterEach(() => {
 	reset()
@@ -547,6 +555,7 @@ describe('Error Propagation - Additional Tests', () => {
 
 	describe('Structured Error Codes', () => {
 		it('should provide ReactiveError with proper error codes', () => {
+			reactiveOptions.cycleHandling = 'development'
 			const state = reactive({ a: 0, b: 0 })
 			let caughtError: any = null
 
@@ -573,6 +582,7 @@ describe('Error Propagation - Additional Tests', () => {
 
 			// Reset broken state, recreate the cycle, then verify error codes
 			reset()
+			reactiveOptions.cycleHandling = 'development'
 
 			const state2 = reactive({ a: 0, b: 0 })
 			effect(() => {
