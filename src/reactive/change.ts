@@ -45,6 +45,7 @@ export function collectEffects(
 	evolution: Evolution,
 	effects: Map<EffectTrigger, unknown>,
 	objectWatchers: Map<any, Set<EffectTrigger>>,
+	collectDependencyStack: boolean,
 	...keyChains: Iterable<any>[]
 ) {
 	const sourceEffect = getActiveEffect()
@@ -61,7 +62,10 @@ export function collectEffects(
 						continue
 					}
 					if (!effects.has(effect)) {
-						effects.set(effect, getDependencyStack(effect, obj, key))
+						effects.set(
+							effect,
+							collectDependencyStack ? getDependencyStack(effect, obj, key) : undefined
+						)
 						if (!hasBatched(effect)) recordActivation(effect, obj, evolution, key)
 					}
 					debugHooks.recordTriggerLink(sourceEffect, effect, obj, key, evolution)
@@ -95,16 +99,25 @@ export function touched(obj: any, evolution: Evolution, props?: Iterable<any>) {
 		const effects = new Map<EffectTrigger, unknown>()
 		const structural = !['set', 'invalidate'].includes(evolution.type)
 		const broad = structural ? [allProps, keysOf] : [allProps]
-		if (props) collectEffects(obj, evolution, effects, objectWatchers, broad, props)
-		else collectEffects(obj, evolution, effects, objectWatchers, objectWatchers.keys())
+		const gatherReasons = options.introspection?.gatherReasons
+		const lineageConfig = gatherReasons?.lineages
+		const collectDependencyStack = lineageConfig === 'dependency' || lineageConfig === 'both'
+		if (props)
+			collectEffects(obj, evolution, effects, objectWatchers, collectDependencyStack, broad, props)
+		else
+			collectEffects(
+				obj,
+				evolution,
+				effects,
+				objectWatchers,
+				collectDependencyStack,
+				objectWatchers.keys()
+			)
 		const triggers = Array.from(effects.keys())
 		const sourceEffect = getActiveEffect()
 		optionCall('touched', obj, evolution, props as any[] | undefined, triggers)
 		// Store pending triggers for CleanupReason before batching
-		if (options.introspection?.gatherReasons) {
-			const gatherReasons = options.introspection.gatherReasons
-			const lineageConfig = gatherReasons.lineages
-
+		if (gatherReasons && effects.size > 0) {
 			let touchLineage: unknown | undefined
 			if (lineageConfig === 'touch' || lineageConfig === 'both') {
 				touchLineage = debugHooks.captureLineage()
@@ -149,6 +162,7 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 
 	if (gather) {
 		const lineageConfig = gather.lineages
+		let touchLineage: unknown | undefined
 
 		for (const effect of deps) {
 			const node = getEffectNode(effect)
@@ -161,11 +175,10 @@ export function touchedOpaque(obj: any, evolution: Evolution, prop: any) {
 			}
 			effects.add(effect)
 			if (gather) {
-				let touchLineage: unknown | undefined
 				let dependencyStack: unknown | undefined
 
 				if (lineageConfig === 'touch' || lineageConfig === 'both') {
-					touchLineage = debugHooks.captureLineage()
+					touchLineage ??= debugHooks.captureLineage()
 				}
 				if (lineageConfig === 'dependency' || lineageConfig === 'both') {
 					dependencyStack = getDependencyStack(effect, obj, prop)

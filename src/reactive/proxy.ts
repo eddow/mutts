@@ -29,6 +29,32 @@ export const metaProtos = new WeakMap()
 export const wrapProtos = new WeakMap()
 const arrayLengths = new WeakMap<unknown[], number>()
 const hasReentry = new Set<PropertyKey>()
+type AccessAnalysis = {
+	hasProp: boolean
+	owner: any
+	isInheritedAccess: boolean
+	shouldIgnoreAccessor: boolean
+	ignoreAccessors: boolean
+	instanceMembers: boolean
+}
+const accessAnalysisCache = new WeakMap<object, Map<PropertyKey, AccessAnalysis>>()
+const readonlyObjectToProxy = new WeakMap<object, object>()
+const shallowObjectToProxy = new WeakMap<object, object>()
+const readonlyMutators = new Set<PropertyKey>([
+	'copyWithin',
+	'fill',
+	'pop',
+	'push',
+	'reverse',
+	'shift',
+	'sort',
+	'splice',
+	'unshift',
+	'add',
+	'clear',
+	'delete',
+	'set',
+])
 export type SubProxy = {
 	get?(obj: any, prop: PropertyKey, receiver: any): any
 	has?(obj: any, prop: PropertyKey): boolean
@@ -59,6 +85,62 @@ function wrapReactiveValue(obj: any, prop: PropertyKey, value: any) {
 	return value
 }
 
+function computeAccessAnalysis(obj: object, prop: PropertyKey, receiver: any): AccessAnalysis {
+	const proto = Object.getPrototypeOf(obj)
+	const isOwnProp = Object.hasOwn(obj, prop)
+	const shouldIgnoreAccessor =
+		options.ignoreAccessors &&
+		isOwnProp &&
+		proto !== null &&
+		(isOwnAccessor(receiver, prop) || isOwnAccessor(obj, prop))
+
+	let hasProp = isOwnProp
+	let owner: any = isOwnProp ? obj : undefined
+	if (!isOwnProp) {
+		let raw = proto
+		while (raw && raw !== Object.prototype) {
+			if (Object.hasOwn(raw, prop)) {
+				hasProp = true
+				owner = raw
+				break
+			}
+			raw = Object.getPrototypeOf(raw)
+		}
+	}
+
+	return {
+		hasProp,
+		owner,
+		isInheritedAccess: hasProp && !isOwnProp,
+		shouldIgnoreAccessor,
+		ignoreAccessors: options.ignoreAccessors,
+		instanceMembers: options.instanceMembers,
+	}
+}
+
+function analyzeAccess(obj: object, prop: PropertyKey, receiver: any): AccessAnalysis {
+	const proto = Object.getPrototypeOf(obj)
+	if (Object.hasOwn(obj, prop)) return computeAccessAnalysis(obj, prop, receiver)
+	if (proto === null || Array.isArray(obj)) return computeAccessAnalysis(obj, prop, receiver)
+
+	let propCache = accessAnalysisCache.get(proto)
+	if (!propCache) {
+		propCache = new Map()
+		accessAnalysisCache.set(proto, propCache)
+	}
+	const cached = propCache.get(prop)
+	if (
+		cached &&
+		cached.ignoreAccessors === options.ignoreAccessors &&
+		cached.instanceMembers === options.instanceMembers
+	)
+		return cached
+
+	const analysis = computeAccessAnalysis(obj, prop, receiver)
+	if (analysis.hasProp) propCache.set(prop, analysis)
+	return analysis
+}
+
 const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 	[Symbol.toStringTag]: 'MutTs Reactive',
 	get(obj, prop, receiver) {
@@ -81,45 +163,37 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 		if (typeof prop === 'symbol' || prop === 'constructor' || isUnreactiveProp(obj, prop))
 			return FoolProof.get(obj, prop, receiver)
 
+		const subProxy = subsRegister.get(obj)
+
 		if (inertDepth > 0) {
-			const value = (subsRegister.get(obj)?.get || FoolProof.get)(obj, prop, receiver)
+			const value = (subProxy?.get || FoolProof.get)(obj, prop, receiver)
 			return wrapReactiveValue(obj, prop, value)
 		}
 
-		if (!getActiveEffect()) {
-			const value = (subsRegister.get(obj)?.get || FoolProof.get)(obj, prop, receiver)
+		const activeEffect = getActiveEffect()
+		if (!activeEffect) {
+			const value = (subProxy?.get || FoolProof.get)(obj, prop, receiver)
 			return wrapReactiveValue(obj, prop, value)
 		}
 
-		// Check if property exists using a trap-free walk to avoid triggering
-		// the has-trap cascade on prototype chains of reactive proxies.
-		const isOwnProp = Object.hasOwn(obj, prop)
-
-		// For accessor properties, check the unwrapped object to see if it's an accessor
-		// This ensures ignoreAccessors works correctly even after operations like Object.setPrototypeOf
-		// Skip for null-proto objects (sursaut scopes) — they never have accessors
-		const shouldIgnoreAccessor =
-			options.ignoreAccessors &&
-			isOwnProp &&
-			Object.getPrototypeOf(obj) !== null &&
-			(isOwnAccessor(receiver, prop) || isOwnAccessor(obj, prop))
-
-		// Check if property exists using a trap-free walk to avoid triggering
-		// the has-trap cascade on prototype chains of reactive proxies.
-		let hasProp = isOwnProp
-		let owner: any = isOwnProp ? obj : undefined
-		if (!isOwnProp) {
-			let raw = Object.getPrototypeOf(obj)
-			while (raw && raw !== Object.prototype) {
-				if (Object.hasOwn(raw, prop)) {
-					hasProp = true
-					owner = raw
-					break
+		if (!subProxy && !Array.isArray(obj)) {
+			const proto = Object.getPrototypeOf(obj)
+			if (proto === Object.prototype || proto === null) {
+				const ownDesc = Object.getOwnPropertyDescriptor(obj, prop)
+				if (ownDesc && 'value' in ownDesc) {
+					dependant(obj, prop)
+					return wrapReactiveValue(obj, prop, ownDesc.value)
 				}
-				raw = Object.getPrototypeOf(raw)
 			}
 		}
-		const isInheritedAccess = hasProp && !isOwnProp
+
+		// Check if property exists using a trap-free walk to avoid triggering
+		// the has-trap cascade on prototype chains of reactive proxies.
+		const { hasProp, owner, isInheritedAccess, shouldIgnoreAccessor } = analyzeAccess(
+			obj,
+			prop,
+			receiver
+		)
 
 		// Depend if...
 		if (
@@ -136,7 +210,7 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 		}
 		// For arrays, use FoolProof.get (Indexer path) for numeric index reactivity.
 		// For all other objects, inline Reflect.get directly (skips 3 function calls).
-		const value = (subsRegister.get(obj)?.get || FoolProof.get)(obj, prop, receiver)
+		const value = (subProxy?.get || FoolProof.get)(obj, prop, receiver)
 		return wrapReactiveValue(obj, prop, value)
 	},
 	set(obj, prop, value, receiver) {
@@ -256,6 +330,101 @@ const reactiveHandlers: ProxyHandler<any> & Record<symbol, unknown> = {
 	},
 }
 
+function readonlyError(prop: PropertyKey): Error {
+	return new ReactiveError(
+		`[reactive] Cannot mutate readonly reactive property '${String(prop)}'`,
+		{
+			code: ReactiveErrorCode.WriteInComputed,
+		}
+	)
+}
+
+function readonlyValue<T>(value: T): T {
+	if (!value || typeof value !== 'object') return value
+	return readonlyReactive(value)
+}
+
+const shallowReactiveHandlers: ProxyHandler<any> = {
+	get(obj, prop, receiver) {
+		if (typeof prop === 'symbol' || prop === 'constructor' || isUnreactiveProp(obj, prop))
+			return Reflect.get(obj, prop, receiver)
+		if (getActiveEffect()) dependant(obj, prop)
+		return Reflect.get(obj, prop, receiver)
+	},
+	set(obj, prop, value, receiver) {
+		const unwrapped = unwrap(receiver)
+		if (obj !== unwrapped)
+			return Object.defineProperty(unwrapped, prop, {
+				value,
+				configurable: true,
+				writable: true,
+				enumerable: true,
+			})
+		if (isUnreactiveProp(obj, prop)) return FoolProof.set(obj, prop, value, receiver)
+		const hadProperty = Reflect.has(obj, prop)
+		const oldVal = hadProperty ? Reflect.get(obj, prop, receiver) : absent
+		const newValue = unwrap(value)
+		if (oldVal !== newValue && FoolProof.set(obj, prop, newValue, receiver)) {
+			touched1(obj, { type: hadProperty ? 'set' : 'add', prop }, prop)
+		}
+		return true
+	},
+	has(obj, prop) {
+		return reactiveHandlers.has!(obj, prop)
+	},
+	deleteProperty(obj, prop) {
+		if (!Object.hasOwn(obj, prop)) return true
+		delete (obj as any)[prop]
+		touched1(obj, { type: 'del', prop }, prop)
+		return true
+	},
+	ownKeys(obj) {
+		return reactiveHandlers.ownKeys!(obj)
+	},
+	getOwnPropertyDescriptor(obj, prop) {
+		return Reflect.getOwnPropertyDescriptor(obj, prop)
+	},
+}
+
+const readonlyReactiveHandlers: ProxyHandler<any> = {
+	get(obj, prop, receiver) {
+		if (readonlyMutators.has(prop)) {
+			return () => {
+				throw readonlyError(prop)
+			}
+		}
+		const reactiveTarget = reactiveObject(obj)
+		const value = FoolProof.get(reactiveTarget, prop, receiver)
+		if (typeof value === 'function') {
+			return (...args: any[]) => readonlyValue(value.apply(reactiveTarget, args))
+		}
+		return readonlyValue(value)
+	},
+	set(_obj, prop) {
+		throw readonlyError(prop)
+	},
+	deleteProperty(_obj, prop) {
+		throw readonlyError(prop)
+	},
+	defineProperty(_obj, prop) {
+		throw readonlyError(prop)
+	},
+	setPrototypeOf() {
+		throw readonlyError('[[Prototype]]')
+	},
+	has(obj, prop) {
+		const reactiveTarget = reactiveObject(obj)
+		return Reflect.has(reactiveTarget, prop)
+	},
+	ownKeys(obj) {
+		const reactiveTarget = reactiveObject(obj)
+		return Reflect.ownKeys(reactiveTarget)
+	},
+	getOwnPropertyDescriptor(obj, prop) {
+		return Reflect.getOwnPropertyDescriptor(obj, prop)
+	},
+}
+
 const reactiveClasses = new WeakSet<Function>()
 
 // Create the ReactiveBase mixin
@@ -295,6 +464,30 @@ function reactiveObject<T>(anyTarget: T, subProxy?: SubProxy): T {
 	return proxy as T
 }
 
+function shallowReactiveObject<T>(anyTarget: T): T {
+	if (!anyTarget || typeof anyTarget !== 'object') return anyTarget
+	const target = unwrap(anyTarget as any) as object
+	if (isNonReactive(target)) return target as T
+	const existing = shallowObjectToProxy.get(target)
+	if (existing) return existing as T
+	const proxy = new Proxy(target, shallowReactiveHandlers)
+	shallowObjectToProxy.set(target, proxy)
+	proxyToObject.set(proxy, target)
+	return proxy as T
+}
+
+function readonlyReactiveObject<T>(anyTarget: T): T {
+	if (!anyTarget || typeof anyTarget !== 'object') return anyTarget
+	const target = unwrap(anyTarget as any) as object
+	if (isNonReactive(target)) return target as T
+	const existing = readonlyObjectToProxy.get(target)
+	if (existing) return existing as T
+	const proxy = new Proxy(target, readonlyReactiveHandlers)
+	readonlyObjectToProxy.set(target, proxy)
+	proxyToObject.set(proxy, target)
+	return proxy as T
+}
+
 /**
  * Main decorator for making classes reactive
  * Automatically makes class instances reactive when created
@@ -328,3 +521,6 @@ export const reactive = decorator({
 	},
 	default: reactiveObject,
 })
+
+export const shallowReactive = shallowReactiveObject
+export const readonlyReactive = readonlyReactiveObject

@@ -4,6 +4,13 @@ import { makeReactiveEntriesIterator, makeReactiveIterator } from './iterator-he
 import { reactive } from './proxy'
 import { dependant } from './tracking'
 
+// These abstract classes are prototype tables for the reactive proxy, not classes
+// that are instantiated directly. `this` is the original Set/WeakSet target when
+// a method is reached through the proxy meta-prototype path, so calls like
+// `this.has()` or `this.entries()` intentionally re-enter the proxy machinery.
+// Do not mechanically rewrite them to `super.*` as if these were real subclass
+// instances; that would bypass parts of the designed reactive dispatch.
+
 /**
  * Reactive wrapper around JavaScript's WeakSet class
  * Only tracks individual value operations, no size tracking (WeakSet limitation)

@@ -290,16 +290,21 @@ export function morphArray<I, O>(
 	const cache = tag(`morph:${fn.name || 'anonymous'}`, [] as O[])
 	let input: readonly I[] = []
 
+	function currentCleanupReason() {
+		const activeEffect = getActiveEffect()
+		if (!activeEffect) return undefined
+		const node = getEffectNode(activeEffect)
+		return node.currentReason
+	}
+
+	function stopEntry(entry: { stop: ScopedCallback; position: MorphPosition }) {
+		entry.stop(chainExternalReason({ type: 'stopped', chain: currentCleanupReason() }))
+	}
+
 	function stopItem(key: any) {
 		const entry = itemEffects.get(key)
 		if (entry) {
-			const activeEffect = getActiveEffect()
-			let chain: CleanupReason | undefined
-			if (activeEffect) {
-				const node = getEffectNode(activeEffect)
-				chain = node.currentReason
-			}
-			entry.stop(chainExternalReason({ type: 'stopped', chain }))
+			stopEntry(entry)
 			itemEffects.delete(key)
 		}
 	}
@@ -327,7 +332,7 @@ export function morphArray<I, O>(
 						stop?.({
 							type: 'invalidate',
 							cause: chainExternalReason(
-								!access.reaction || access.reaction == true
+								!access.reaction || access.reaction === true
 									? { type: 'stopped', chain }
 									: access.reaction
 							)!,
@@ -358,40 +363,57 @@ export function morphArray<I, O>(
 		const diffs = arrayDiff(input, newInput).toSorted((a, b) => b.indexA - a.indexA)
 
 		if (diffs.length > 0) {
+			const reusable = new Map<
+				I,
+				Array<{ index: number; entry: { stop: ScopedCallback; position: MorphPosition } }>
+			>()
+			for (const [index, entry] of itemEffects) {
+				const value = input[index]
+				const entries = reusable.get(value)
+				if (entries) entries.push({ index, entry })
+				else reusable.set(value, [{ index, entry }])
+			}
+
+			const nextEffects = new Map<any, { stop: ScopedCallback; position: MorphPosition }>()
+			const reused = new Set<number>()
+			const nextCache = new Map<number, O>()
+
+			for (let index = 0; index < newInput.length; index++) {
+				const entries = reusable.get(newInput[index])
+				const reusedEntry = entries?.shift()
+				if (!reusedEntry) continue
+
+				const { index: previousIndex, entry } = reusedEntry
+				reused.add(previousIndex)
+				nextEffects.set(index, entry)
+				if (entry.position.index !== index) entry.position.index = index
+				else if (Object.hasOwn(cache, previousIndex)) nextCache.set(index, cache[previousIndex])
+			}
+
+			for (const [index, entry] of itemEffects) {
+				if (!reused.has(index)) stopEntry(entry)
+			}
+			itemEffects.clear()
+			for (const [index, entry] of nextEffects) itemEffects.set(index, entry)
+
+			const previousLength = cache.length
+			cache.length = newInput.length
+			for (let i = 0; i < Math.max(previousLength, newInput.length); i++) delete cache[i]
+			for (const [index, value] of nextCache) cache[index] = value
+
+			const eagerIndices = new Set<number>()
 			for (const diff of diffs) {
-				// Stop items in removed range
-				for (let i = diff.indexA; i < diff.indexA + diff.sliceA.length; i++) stopItem(i)
-
-				// Shift existing itemEffects in the Map to match the new indices
-				const shift = diff.sliceB.length - diff.sliceA.length
-				if (shift !== 0) {
-					// We need to move entries in the Map.
-					const entries = Array.from(itemEffects.entries()).sort((a, b) => a[0] - b[0])
-					// Remove entries that will be shifted
-					for (const [idx, _entry] of entries) {
-						if (idx >= diff.indexA + diff.sliceA.length) {
-							itemEffects.delete(idx)
-						}
-					}
-					// Re-add them with shifted indices
-					for (const [idx, entry] of entries) {
-						if (idx >= diff.indexA + diff.sliceA.length) {
-							const newIdx = idx + shift
-							entry.position.index = newIdx
-							itemEffects.set(newIdx, entry)
-						}
-					}
-				}
-
-				// Splice the cache
-				cache.splice(
-					diff.indexA,
-					diff.sliceA.length,
-					...new Array(diff.sliceB.length).fill(undefined)
-				)
-
-				// Make holes for lazy computation
-				for (let i = diff.indexA; i < diff.indexA + diff.sliceB.length; i++) delete cache[i]
+				const max = Math.max(diff.sliceA.length, diff.sliceB.length)
+				for (let i = 0; i < max; i++) eagerIndices.add(diff.indexA + i)
+			}
+			for (const index of eagerIndices) {
+				if (index < 0 || index >= newInput.length || Object.hasOwn(cache, index)) continue
+				const value = newInput[index]
+				const isPure =
+					options?.pure === true || (typeof options?.pure === 'function' && options.pure(value))
+				if (isPure) continue
+				stopItem(index)
+				computeItem(index, value)
 			}
 
 			const invalidates = new Set<PropertyKey>([keysOf])

@@ -32,8 +32,8 @@ export {
 	wrapInert,
 } from './effects'
 export { type Memoizable, type MemoizableArgument, memoize } from './memoize'
-export { addUnreactiveProps, isNonReactive } from './non-reactive'
-export { ReactiveBase, reactive } from './proxy'
+export { addUnreactiveProps, isNonReactive, markRaw, markRawProps } from './non-reactive'
+export { ReactiveBase, reactive, readonlyReactive, shallowReactive } from './proxy'
 export { organize, organized } from './record'
 export { type Resource, resource, unreactive, watch, when } from './satellite'
 export { assertUntracked } from './tracking'
@@ -57,6 +57,7 @@ export {
 	ReactiveError,
 	ReactiveErrorCode,
 	type ScopedCallback,
+	toRaw,
 	unwrap,
 } from './types'
 

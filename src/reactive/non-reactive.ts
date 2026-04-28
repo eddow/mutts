@@ -49,6 +49,9 @@ export function nonReactive<T extends object[]>(...obj: T): T[0] {
 	return obj[0]
 }
 
+export const markRaw = nonReactive
+export const markRawProps = addUnreactiveProps
+
 export function nonReactiveClass<T extends (new (...args: any[]) => any)[]>(...cls: T): T[0] {
 	for (const c of cls) if (c) (c.prototype as UnreactiveHost)[unreactiveProperties] = true
 	return cls[0]

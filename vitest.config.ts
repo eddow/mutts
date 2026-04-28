@@ -9,7 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 export default defineConfig({
   resolve: {
     alias: {
-      'mutts': resolve(__dirname, process.env.TEST_ENV === 'browser' ? './src/entry-browser.dev.ts' : './src/entry-node.dev.ts')
+      'mutts': resolve(__dirname)
     },
     conditions: []
   },

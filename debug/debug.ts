@@ -7,7 +7,7 @@
 
 import { effect } from '../src/reactive/effects'
 import { effectToReactiveObjects, getEffectNode, getRoot, markWithRoot } from '../src/reactive/registry'
-import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, type CleanupReason, options } from '../src/reactive/types'
+import { allProps, type EffectCleanup, type EffectTrigger, type Evolution, type CleanupReason, devPreset, options } from '../src/reactive/types'
 import { captureLineage, digestLineage, getStackFrame, getLineage, formatLineage, wrapLineageForDebug, lineageFormatter, logLineage, isLineage } from './lineage'
 import { isCleanupReason, logReason, reasonFormatter } from './reason'
 import { showLineagePanel } from './lineage-panel'
@@ -676,6 +676,7 @@ function isDevelopmentMode(): boolean {
 
 // Auto-enable devtools when the module loads in development
 if (isDevelopmentMode() && !devtoolsEnabled) {
+	Object.assign(options, devPreset)
 	enableDevTools()
 	
 	// Optional: Log that devtools were enabled (only in development)

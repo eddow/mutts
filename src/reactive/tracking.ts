@@ -54,8 +54,9 @@ export function dependant(obj: any, prop: any = allProps) {
 		return
 
 	const node = getEffectNode(currentActiveEffect)
-	if ('dependencyHook' in node) {
-		node.dependencyHook?.(obj, prop)
+	const hasDependencyHook = node.dependencyHook !== undefined
+	if (hasDependencyHook) {
+		node.dependencyHook!(obj, prop)
 	}
 	let objectWatchers = watchers.get(obj)
 	if (!objectWatchers) {
@@ -78,21 +79,19 @@ export function dependant(obj: any, prop: any = allProps) {
 	}
 
 	// Store dependency stack if introspection is enabled
-	const gatherReasons = options.introspection?.gatherReasons
-	if (gatherReasons) {
-		const lineageConfig = gatherReasons.lineages
-		if (lineageConfig === 'dependency' || lineageConfig === 'both') {
-			let objStacks = dependencyStacks.get(obj)
-			if (!objStacks) {
-				objStacks = new Map()
-				dependencyStacks.set(obj, objStacks)
-			}
-			let propStacks = objStacks.get(prop)
-			if (!propStacks) {
-				propStacks = new Map()
-				objStacks.set(prop, propStacks)
-			}
-			propStacks.set(currentActiveEffect, debugHooks.captureLineage())
+	const lineageMode = options.introspection?.gatherReasons?.lineages
+	const shouldGatherDependencyLineage = lineageMode === 'dependency' || lineageMode === 'both'
+	if (shouldGatherDependencyLineage) {
+		let objStacks = dependencyStacks.get(obj)
+		if (!objStacks) {
+			objStacks = new Map()
+			dependencyStacks.set(obj, objStacks)
 		}
+		let propStacks = objStacks.get(prop)
+		if (!propStacks) {
+			propStacks = new Map()
+			objStacks.set(prop, propStacks)
+		}
+		propStacks.set(currentActiveEffect, debugHooks.captureLineage())
 	}
 }

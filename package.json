@@ -142,6 +142,8 @@
     "./src/entry-browser.dev.ts",
     "./src/entry-node.ts",
     "./src/entry-node.dev.ts",
+    "./debug/index.ts",
+    "./debug/debug.ts",
     "./dist/browser.esm.js",
     "./dist/browser.dev.esm.js",
     "./dist/browser.cjs",
@@ -149,7 +151,9 @@
     "./dist/node.esm.js",
     "./dist/node.dev.esm.js",
     "./dist/node.cjs",
-    "./dist/node.dev.cjs"
+    "./dist/node.dev.cjs",
+    "./dist/debug.esm.js",
+    "./dist/debug.cjs"
   ],
   "engines": {
     "node": ">=16.0.0"
@@ -162,8 +166,8 @@
     "@rollup/plugin-terser": "^1.0.0",
     "@rollup/plugin-typescript": "^12.1.4",
     "@types/node": "^22.10.10",
-    "@vitest/browser": "^4.0.18",
-    "@vitest/browser-playwright": "^4.0.18",
+    "@vitest/browser": "^4.1.4",
+    "@vitest/browser-playwright": "^4.1.4",
     "playwright": "^1.58.1",
     "rollup": "^4.52.2",
     "rollup-plugin-copy": "^3.5.0",
@@ -174,7 +178,7 @@
     "tsx": "^4.20.4",
     "typescript": "^5.8.3",
     "vis-network": "^9.1.9",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.4"
   },
   "packageManager": "pnpm@10.7.1+sha512.2d92c86b7928dc8284f53494fb4201f983da65f0fb4f0d40baafa5cf628fa31dae3e5968f12466f17df7e97310e30f343a648baea1b9b350685dafafffdf5808"
 }

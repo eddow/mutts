@@ -3,6 +3,7 @@
 - **`inert()` function**: Added new `inert(() => { ... })` function for performance-critical operations. Provides fast-path reads that bypass proxy overhead and dependency tracking while allowing writes to remain fully reactive. Uses a counter-based approach for safe nesting. Ideal for pathfinding algorithms and other read-heavy operations.
 - **Array morph position.index**: Added `position` parameter to array `morph` callbacks with live reactive index tracking. Signature now `(item, position, access?) => O` where `position.index` updates reactively during reorders. Consistent with Map/Record signatures that already expose key as second argument.
 - **Refactored Batching System**: `batch()` now uses an options object API: `batch(fnOrEffects, { immediate?, contained?, caller? })`. Nested batches are inherited by default, so `batch(fn)` joins the active batch and `batch(fn, { immediate: true })` runs immediately inside it. Use `contained: true` to force an isolated sub-batch that drains before returning.
+- **Reactive interface helpers**: Added `shallowReactive()` for top-level-only tracking, `readonlyReactive()` for deep readonly reactive views, and friendlier raw helpers `toRaw()`, `markRaw()`, and `markRawProps()`.
 
 # 1.0.13
 

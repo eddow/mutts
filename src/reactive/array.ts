@@ -267,11 +267,22 @@ export abstract class ReactiveArrayWrapper extends Array {
 
 	@atomic
 	splice(start: number, deleteCount?: number, ...items: any[]): any {
-		if (arguments.length > 2)
-			return reactive(super.splice(start, deleteCount!, ...items.map(unwrap)))
-		if (arguments.length === 2) return reactive(super.splice(start, deleteCount!))
-		if (arguments.length === 1) return reactive(super.splice(start))
-		return reactive([])
+		const length = this.length
+		const normalizedStart = start < 0 ? Math.max(length + start, 0) : Math.min(start, length)
+		const actualDeleteCount =
+			arguments.length === 1
+				? length - normalizedStart
+				: Math.min(Math.max(deleteCount!, 0), length - normalizedStart)
+		const structural = actualDeleteCount > 0 || items.length > 0
+		let result: any
+		if (arguments.length > 2) result = super.splice(start, deleteCount!, ...items.map(unwrap))
+		else if (arguments.length === 2) result = super.splice(start, deleteCount!)
+		else if (arguments.length === 1) result = super.splice(start)
+		else result = []
+		if (structural && this.length === length) {
+			touched(this, { type: 'set', prop: 'length' }, ['length'])
+		}
+		return reactive(result)
 	}
 
 	@atomic

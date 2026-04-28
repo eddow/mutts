@@ -6,6 +6,13 @@ import { reactive } from './proxy'
 import { dependant } from './tracking'
 import { keysOf } from './types'
 
+// These abstract classes are prototype tables for the reactive proxy, not classes
+// that are instantiated directly. `this` is the original Map/WeakMap target when
+// a method is reached through the proxy meta-prototype path, so calls like
+// `this.get()` or `this.entries()` intentionally re-enter the proxy machinery.
+// Do not mechanically rewrite them to `super.*` as if these were real subclass
+// instances; that would bypass parts of the designed reactive dispatch.
+
 /**
  * Reactive wrapper around JavaScript's WeakMap class
  * Only tracks individual key operations, no size tracking (WeakMap limitation)

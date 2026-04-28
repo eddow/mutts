@@ -274,6 +274,7 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 				{ type: 'set', prop: origin.prop },
 				originEffects,
 				originWatchers,
+				false,
 				[allProps],
 				[origin.prop]
 			)
@@ -294,7 +295,7 @@ export function dispatchNotifications(notifications: PendingNotification[]) {
 		if (objectWatchers) {
 			currentEffects = new Map<EffectTrigger, unknown>()
 			const broad = evolution.type !== 'set' ? [allProps, keysOf] : [allProps]
-			collectEffects(obj, evolution, currentEffects, objectWatchers, broad, propsArray)
+			collectEffects(obj, evolution, currentEffects, objectWatchers, false, broad, propsArray)
 
 			// Filter effects by ancestor chain if origin exists
 			// Include effects that either directly depend on origin or have an ancestor that does

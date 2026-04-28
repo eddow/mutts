@@ -1004,6 +1004,7 @@ export function batch(effect: EffectTrigger | EffectTrigger[], batchOptions?: Ba
 	try {
 		const effectuatedRoots: Function[] = []
 		const firstReturn: { value?: any } = {}
+		let initialError: unknown
 
 		if (immediate) {
 			// Execute initial effects in providing order
@@ -1019,6 +1020,9 @@ export function batch(effect: EffectTrigger | EffectTrigger[], batchOptions?: Ba
 					}
 					const rv = effect[i]()
 					if (rv !== undefined && !('value' in firstReturn)) firstReturn.value = rv
+				} catch (error) {
+					initialError = error
+					break
 				} finally {
 					executingStack.pop()
 					currentBatch.all.delete(getRoot(effect[i]))
@@ -1083,6 +1087,7 @@ export function batch(effect: EffectTrigger | EffectTrigger[], batchOptions?: Ba
 			}
 		}
 		success = true
+		if (initialError) throw initialError
 		return firstReturn.value
 	} catch (error) {
 		failure = error

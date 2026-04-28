@@ -528,7 +528,7 @@ export const options = {
 	 *
 	 * @default 'production'
 	 */
-	cycleHandling: 'development' as 'production' | 'development' | 'debug',
+	cycleHandling: 'production' as 'production' | 'development' | 'debug',
 	/**
 	 * Internal flag used by memoization discrepancy detector to avoid counting calls in tests
 	 * @warning Do not modify this flag manually, this flag is given by the engine
@@ -640,7 +640,7 @@ export const prodPreset: Partial<typeof options> = {
 	onMemoizationDiscrepancy: undefined,
 }
 
-/** Development preset (default): introspection on, early cycle detection, warnings */
+/** Development preset: introspection on, early cycle detection, warnings */
 export const devPreset: Partial<typeof options> = {
 	maxEffectReaction: 'warn',
 	cycleHandling: 'development',
@@ -687,6 +687,8 @@ export function unwrap<T>(obj: T): T {
 	if (!obj || typeof obj !== 'object') return obj
 	return (proxyToObject.get(obj as object) as T) || obj
 }
+
+export const toRaw = unwrap
 
 export function isReactive(obj: any): boolean {
 	return proxyToObject.has(obj)
