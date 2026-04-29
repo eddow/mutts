@@ -132,6 +132,70 @@ Nested batching is no longer implicitly contained.
 
 Use `contained: true` only when you explicitly need sub-transaction behavior.
 
+### Effect Ordering with Phase Tokens
+
+Effects are usually ordered by their data dependencies: an effect that reads a reactive property is eligible to re-run after another effect changes that property. Mutts uses those causal links as an execution graph by default. The `reactiveOptions.scheduler` option controls how much of that graph is maintained for scheduling and diagnostics:
+
+- `scheduler: 'ordered'` (default): effects that are already queued together are processed in dependency order when possible, so consequences run after the effects that caused them. Parent effects also run before their queued child effects, which lets parent cleanup stop stale children before they re-run.
+- `scheduler: 'debug'`: ordered scheduling plus heavier diagnostics for investigation.
+- `scheduler: 'raw'`: graph maintenance is disabled for speed, and already-queued effects use FIFO ordering with heuristic cycle protection.
+
+When you need to make a render phase or other side-effect phase explicit, use an ordinary reactive "phase token": one effect advances the token, and later effects read it.
+
+```typescript
+import { effect, reactive } from 'mutts'
+
+const phase = reactive({
+  measured: 0,
+  positioned: 0,
+})
+
+effect`render:measure`(() => {
+  measureDom()
+  phase.measured++
+})
+
+effect`render:position`(() => {
+  phase.measured
+  positionDom()
+  phase.positioned++
+})
+
+effect`render:paint`(() => {
+  phase.positioned
+  paintDom()
+})
+```
+
+This is sometimes called a beacon, barrier, or phase marker in application code, but it does not need a special primitive: the token is just reactive state. The important part is that the dependency is visible. The second effect does not merely rely on incidental registration order; it declares "I am downstream of `phase.measured`."
+
+This phase-token pattern also works in `scheduler: 'raw'` when the token is the downstream effect's actual scheduling dependency: the producer runs, advances the token, and that write queues the consumer afterward. That ordering comes from normal queuing, not from the dependency graph. What raw mode does not do is topologically reorder two effects that were already queued independently by some other write.
+
+If the downstream effect should be scheduled only by the phase token, and not directly by the raw state used by the producer, read the raw payload untracked:
+
+```typescript
+import { effect, reactive, untracked } from 'mutts'
+
+const state = reactive({ input: '' })
+const phase = reactive({ rendered: 0 })
+
+effect`render:first-pass`(() => {
+  state.input
+  renderFirstPass()
+  phase.rendered++
+})
+
+effect`render:second-pass`(() => {
+  phase.rendered
+
+  untracked`render:second-pass:payload`(() => {
+    renderSecondPass(state.input)
+  })
+})
+```
+
+Use `defer()` instead when the desired ordering is "after the whole current batch has settled" rather than "after this producer effect advances this phase."
+
 ### `addBatchCleanup()` / `defer()` - Deferring Work to Avoid Cycles
 
 When an effect needs to perform an action that would modify state the effect depends on, this can create a reactive cycle. The `addBatchCleanup` function (also exported as `defer` for semantic clarity) allows you to defer such work until after the current batch of effects completes.
@@ -1586,7 +1650,7 @@ For a full guide on debugging, including cycle detection and memoization discrep
 
 ### Quick Summary
 
-- **Cycle Detection**: Automatically catch circular dependencies via `reactiveOptions.cycleHandling`. Note: Instant mathematical detection requires choosing `'development'` or `'debug'` mode.
-- **Production Mode**: The default `reactiveOptions.cycleHandling` is set to `'production'`, providing maximum performance in high-frequency update scenarios by disabling graph maintenance.
+- **Cycle Detection**: Automatically catch circular dependencies via `reactiveOptions.scheduler`. Note: Instant mathematical detection requires choosing `'ordered'` or `'debug'` mode.
+- **Ordered Mode**: The default `reactiveOptions.scheduler` is set to `'ordered'`, preserving causal ordering and parent/child effect lifecycle ordering.
 - **Memoization Discrepancy**: Detect "missing dependencies" by running computations twice during development using `reactiveOptions.onMemoizationDiscrepancy`.
 - **Global Hooks**: Use `reactiveOptions.touched`, `enter`, and `leave` to observe system activity.

@@ -415,6 +415,23 @@ export class ReactiveError extends Error {
 	}
 }
 
+export type SchedulerMode = 'raw' | 'ordered' | 'debug'
+export type DeprecatedCycleHandlingMode = 'production' | 'development' | 'debug'
+export type CycleHandlingMode = SchedulerMode | DeprecatedCycleHandlingMode
+
+function normalizeSchedulerMode(mode: CycleHandlingMode): SchedulerMode {
+	switch (mode) {
+		case 'production':
+			return 'raw'
+		case 'development':
+			return 'ordered'
+		default:
+			return mode
+	}
+}
+
+let schedulerMode: SchedulerMode = 'ordered'
+
 // biome-ignore-start lint/correctness/noUnusedFunctionParameters: Interface declaration with empty defaults
 /**
  * Global options for the reactive system
@@ -513,22 +530,42 @@ export const options = {
 		  ) => void)
 		| undefined,
 	/**
-	 * How to handle cycles detected in effect batches.
+	 * Effect scheduler mode.
 	 *
-	 * - `'production'` (Default): High-performance mode. Disables dependency graph maintenance and
-	 *   Topological Sorting in favor of a simple FIFO queue. Use this for trustworthy, acyclic UI code.
-	 *   Cycle detection is heuristic (uses maxEffectChain execution counts).
+	 * - `'ordered'` (Default): maintains the causal effect graph so effects that are already
+	 *   queued together can run in dependency order. It also preserves parent/child effect
+	 *   lifecycle ordering and catches cycles eagerly when edges are created.
 	 *
-	 * - `'development'`: Maintains direct dependency graph for early cycle detection during edge creation.
-	 *   Catches cycles before effects execute via DFS check when adding edges. Throws immediately with
-	 *   basic path information. Good balance of debugging help with moderate overhead.
+	 * - `'raw'`: fastest FIFO scheduler. It does not maintain the effect graph.
+	 *   Cycle detection is heuristic, using maxEffectChain execution counts.
 	 *
-	 * - `'debug'`: Full diagnostic mode with transitive closures and topological sorting.
-	 *   Provides detailed cycle path reporting. Highest overhead but most informative for bug hunting.
+	 * - `'debug'`: ordered scheduling plus the most detailed graph diagnostics. Highest overhead,
+	 *   best for investigation.
 	 *
-	 * @default 'production'
+	 * @default 'ordered'
 	 */
-	cycleHandling: 'production' as 'production' | 'development' | 'debug',
+	get scheduler(): SchedulerMode {
+		return schedulerMode
+	},
+	set scheduler(mode: SchedulerMode) {
+		schedulerMode = mode
+	},
+	/**
+	 * @deprecated Use `scheduler` instead.
+	 *
+	 * Backward-compatible alias for older names:
+	 * - `'production'` maps to `scheduler = 'raw'`
+	 * - `'development'` maps to `scheduler = 'ordered'`
+	 * - `'debug'` maps to `scheduler = 'debug'`
+	 *
+	 * The new names describe scheduler behavior rather than runtime environment.
+	 */
+	get cycleHandling(): SchedulerMode {
+		return schedulerMode
+	},
+	set cycleHandling(mode: CycleHandlingMode) {
+		schedulerMode = normalizeSchedulerMode(mode)
+	},
 	/**
 	 * Internal flag used by memoization discrepancy detector to avoid counting calls in tests
 	 * @warning Do not modify this flag manually, this flag is given by the engine
@@ -635,7 +672,7 @@ export function optionCall<K extends CallableOption>(
 /** Production preset: no introspection, heuristic cycle detection, minimal overhead */
 export const prodPreset: Partial<typeof options> = {
 	maxEffectReaction: 'throw',
-	cycleHandling: 'production',
+	scheduler: 'raw',
 	introspection: null,
 	onMemoizationDiscrepancy: undefined,
 }
@@ -643,7 +680,7 @@ export const prodPreset: Partial<typeof options> = {
 /** Development preset: introspection on, early cycle detection, warnings */
 export const devPreset: Partial<typeof options> = {
 	maxEffectReaction: 'warn',
-	cycleHandling: 'development',
+	scheduler: 'ordered',
 	introspection: {
 		gatherReasons: { lineages: 'touch' },
 		logErrors: true,
@@ -656,7 +693,7 @@ export const devPreset: Partial<typeof options> = {
 /** Debug preset: full diagnostics, throws on violations, rich lineage capture */
 export const debugPreset: Partial<typeof options> = {
 	maxEffectReaction: 'debug',
-	cycleHandling: 'debug',
+	scheduler: 'debug',
 	introspection: {
 		gatherReasons: { lineages: 'both' },
 		logErrors: true,

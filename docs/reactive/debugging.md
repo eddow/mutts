@@ -25,7 +25,7 @@ These hooks are called during the execution of effects and computed values.
 
 - **`beginChain(targets: Function[]) / endChain()`**: Called when a batch of effects starts and ends its execution.
 - **`maxEffectChain`**: (Default: `100`) Limits the depth of synchronous effect triggering to prevent stack overflows.
-- **`maxTriggerPerBatch`**: (Default: `10`) Limits how many times a single effect can be triggered within the same batch. Useful for detecting aggressive re-computation or infinite cycles in `cycleHandling: 'production'` mode.
+- **`maxTriggerPerBatch`**: (Default: `10`) Limits how many times a single effect can be triggered within the same batch. Useful for detecting aggressive re-computation or infinite cycles, especially in `scheduler: 'raw'` mode.
 
 ## Cycle Detection
 
@@ -33,25 +33,27 @@ These hooks are called during the execution of effects and computed values.
 
 ### Configuration
 
-You can control how cycles are handled via `reactiveOptions.cycleHandling`:
+You can control how cycles are handled via `reactiveOptions.scheduler`:
 
-- **`'production'`**: High-performance FIFO mode. Disables the dependency graph and topological sorting. Uses heuristic detection via `maxEffectChain`.
-- **`'development'`** (Default): Maintains direct dependency graph for early cycle detection during edge creation. Throws immediately with basic path information.
-- **`'debug'`**: Full diagnostic mode with transitive closures and topological sorting. Provides detailed cycle path reporting.
+- **`'ordered'`** (Default): Maintains the causal effect graph for dependency ordering, parent/child lifecycle ordering, and early cycle detection. Throws immediately with basic path information.
+- **`'raw'`**: High-performance FIFO mode. Disables the dependency graph and topological sorting. Uses heuristic detection via `maxEffectChain`.
+- **`'debug'`**: Ordered scheduling plus the heaviest diagnostics. Provides detailed cycle path reporting.
+
+`reactiveOptions.cycleHandling` is still accepted as a deprecated alias: `'production'` maps to `'raw'`, and `'development'` maps to `'ordered'`.
 
 ### Topological vs. Flat Mode Detection
 - **Detection**: Cycles are detected when the execution depth exceeds `maxEffectChain` (default 100).
 - **Diagnostics**: The resulting `ReactiveError` includes a `trace` property (the recent execution sequence) and attempts to identify a repeating `cycle`.
-- **Recommendation**: Use this mode only for production to minimize performance overhead.
+- **Recommendation**: Use `raw` only when FIFO scheduling is sufficient and you want minimum overhead.
 
 ### Cycle Handling Modes
 
-You can configure how the system handles cycles via `reactiveOptions.cycleHandling`:
+You can configure how the system handles cycles via `reactiveOptions.scheduler`:
 
 | Mode | Detection Timing | Cycle Information | Performance |
 |------|-----------------|-------------------|-------------|
-| `'production'` | Late (Heuristic) | Trace of last N effects | Fastest |
-| `'development'` | Eager (On edge) | Exact path (DFS) | Moderate |
+| `'ordered'` | Eager (On edge) | Exact path (DFS) | Moderate |
+| `'raw'` | Late (Heuristic) | Trace of last N effects | Fastest |
 | `'debug'` | Structural | Transitive closures | Slowest |
 
 #### Finding Cycle Information
@@ -71,7 +73,7 @@ try {
 
 - **`error.cycle`**: An array of effect names forming the cycle.
 - **`error.causalChain`**: The sequence of triggers that led to the current effect.
-- **`error.lineage`**: The creation stack of the effect (available in `development` or `debug` modes).
+- **`error.lineage`**: The creation stack of the effect (available in `ordered` or `debug` modes).
 
 ### Memoization Discrepancy Detection
 
@@ -190,13 +192,13 @@ Since these are runtime options, you can toggle them based on your environment:
 
 ```typescript
 if (process.env.NODE_ENV === 'development') {
-    reactiveOptions.cycleHandling = 'debug';
+    reactiveOptions.scheduler = 'debug';
     reactiveOptions.onMemoizationDiscrepancy = myHandler;
     enableIntrospection();
 } else {
-    // Ensure they are off in production for performance
+    // Keep heavy diagnostics off in production for performance
     reactiveOptions.onMemoizationDiscrepancy = undefined;
-    reactiveOptions.cycleHandling = 'production';
+    reactiveOptions.scheduler = 'ordered'; // or 'raw' when FIFO scheduling is enough
 }
 ```
 

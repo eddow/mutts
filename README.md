@@ -14,7 +14,7 @@ In a world of "magic" and implicit state, Mutts chooses **Affirmative Logic**: y
 A surgical, proxy-based reactivity system that eliminates lifecycle choreography.
 - **Identity-Stable**: `morph()` transforms collections lazily with element-level precision.
 - **Dependency Tracking**: Automatic tracking through objects, arrays, maps, and prototype chains.
-- **Robust Batching**: Nested batch support with deterministic cleanup cycles.
+- **Robust Batching**: Nested batch support with deterministic cleanup cycles and explicit phase-token ordering.
 - **[Read more: Reactive Core](./docs/reactive/core.md)**
 
 ### 2. Universal Async Context (Zones)
@@ -88,6 +88,7 @@ A comprehensive reactivity system. See the **[Introduction](./docs/reactive/core
 - **Class Reactivity**: `@reactive` decorator and `ReactiveBase` for class-based reactivity
 - **Reactive Mixin**: Always-reactive classes with mixin support (`Reactive`)
 - **Back-Reference System**: Efficient change propagation through object hierarchies
+- **Effect Ordering**: Model render phases with ordinary reactive tokens so dependent effects can run after the work they rely on
 - **Type Safety**: Full TypeScript support with proper type inference
 - **Performance Optimized**: Lazy back-reference creation and efficient dependency tracking
 - **Debugging & Development**: Built-in tools like cycle detection, memoization discrepancy check and effects lineages (logical/virtual stack-trace)
@@ -261,4 +262,3 @@ A utility for creating extensible functions with chainable property modifiers. T
 
 ## [Utilities](./docs/utils.md)
 Documented helper functions for collections, type checks, and debugging (zip, deepCompare, tag, etc.).
-

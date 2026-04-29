@@ -227,7 +227,7 @@ function getOrCreateClosure(
  * @param targetRoot - Root function of the effect being triggered
  */
 function addGraphEdge(callerRoot: Function, targetRoot: Function) {
-	if (options.cycleHandling === 'production') return
+	if (options.scheduler === 'raw') return
 	// Add to forward graph: callerRoot → targetRoot
 	const triggers = effectTriggers.get(callerRoot)
 
@@ -348,7 +348,7 @@ function hasPathExcluding(start: Function, end: Function, exclude: Function): bo
  * @param effect - The effect being cleaned up
  */
 function cleanupEffectFromGraph(effect: EffectTrigger) {
-	if (options.cycleHandling === 'production') return
+	if (options.scheduler === 'raw') return
 	const root = getRoot(effect)
 
 	// Get closures before removing direct edges (needed for propagation)
@@ -479,7 +479,7 @@ export function getExecutingStack(): readonly EffectTrigger[] {
  * Called once when batch starts or when new effects are added
  */
 function computeAllInDegrees(batch: BatchQueue): void {
-	if (options.cycleHandling === 'production') return
+	if (options.scheduler === 'raw') return
 	const activeEffect = getActiveEffect()
 	const activeRoot = activeEffect ? getRoot(activeEffect) : null
 
@@ -488,6 +488,18 @@ function computeAllInDegrees(batch: BatchQueue): void {
 
 	for (const [root] of batch.all) {
 		let inDegree = 0
+		// Make sure parents are executed before children: if parent is in batch, count it as a dependency
+		const effect = batch.all.get(root)!
+		const parent = getEffectNode(effect).parent
+		const parentRoot = parent ? getRoot(parent) : undefined
+		if (
+			parentRoot &&
+			batch.all.has(parentRoot) &&
+			parentRoot !== activeRoot &&
+			parentRoot !== root
+		) {
+			inDegree++
+		}
 		const causes = causesClosure.get(root)
 		if (causes) {
 			for (const causeRoot of causes) {
@@ -508,15 +520,25 @@ function computeAllInDegrees(batch: BatchQueue): void {
 function decrementInDegreesForExecuted(batch: BatchQueue, executedRoot: Function): void {
 	// Get all effects that this executed effect triggers
 	const consequences = consequencesClosure.get(executedRoot)
-	if (!consequences) return
 
-	for (const consequenceRoot of consequences) {
-		// Only update if it's still in the batch
-		if (batch.all.has(consequenceRoot)) {
-			const currentDegree = batch.inDegrees.get(consequenceRoot) ?? 0
-			if (currentDegree > 0) {
-				batch.inDegrees.set(consequenceRoot, currentDegree - 1)
+	if (consequences) {
+		for (const consequenceRoot of consequences) {
+			// Only update if it's still in the batch
+			if (batch.all.has(consequenceRoot)) {
+				const currentDegree = batch.inDegrees.get(consequenceRoot) ?? 0
+				if (currentDegree > 0) {
+					batch.inDegrees.set(consequenceRoot, currentDegree - 1)
+				}
 			}
+		}
+	}
+
+	for (const [root, effect] of batch.all) {
+		const parent = getEffectNode(effect).parent
+		if (!parent || getRoot(parent) !== executedRoot) continue
+		const currentDegree = batch.inDegrees.get(root) ?? 0
+		if (currentDegree > 0) {
+			batch.inDegrees.set(root, currentDegree - 1)
 		}
 	}
 }
@@ -684,14 +706,14 @@ function addToBatch(
 	}
 
 	// 1. Add to batch first (needed for cycle detection)
-	// TODO: Check if it's the correct way to do (these different behavior in function of dev/production)
-	if (options.cycleHandling === 'production') {
-		// Production mode: FIFO (delete and re-add to move to end)
+	// TODO: Check if this difference between raw and graph-backed scheduling is the right tradeoff.
+	if (options.scheduler === 'raw') {
+		// Raw mode: FIFO (delete and re-add to move to end)
 		if (currentBatch.all.has(root)) {
 			currentBatch.all.delete(root)
 		}
 	} else {
-		// Dev mode: skip if already queued — the existing entry will re-run
+		// Graph-backed modes: skip if already queued — the existing entry will re-run
 		if (currentBatch.all.has(root)) {
 			return
 		}
@@ -702,7 +724,7 @@ function addToBatch(
 
 	currentBatch.all.set(root, effect)
 
-	if (caller && !immediate && options.cycleHandling !== 'production') {
+	if (caller && !immediate && options.scheduler !== 'raw') {
 		const callerRoot = getRoot(caller)
 		// const root = getRoot(effect) // Already have root
 
@@ -728,6 +750,10 @@ function addToBatch(
 		}
 
 		addGraphEdge(callerRoot, root)
+	}
+
+	if (options.scheduler !== 'raw') {
+		computeAllInDegrees(currentBatch)
 	}
 }
 
@@ -840,7 +866,7 @@ function executeNext(effectuatedRoots: Function[]): any {
 	let nextEffect: EffectTrigger | null = null
 	let nextRoot: Function | null = null
 
-	if (options.cycleHandling === 'production') {
+	if (options.scheduler === 'raw') {
 		// In flat mode, we just take the first effect in the queue (FIFO)
 		const first = currentBatch.all.entries().next().value
 		if (first) {
@@ -1028,6 +1054,7 @@ export function batch(effect: EffectTrigger | EffectTrigger[], batchOptions?: Ba
 					currentBatch.all.delete(getRoot(effect[i]))
 				}
 			}
+			if (initialError) throw initialError
 		} else {
 			// Add initial effects to batch and compute dependencies
 			for (let i = 0; i < effect.length; i++) {
@@ -1087,7 +1114,6 @@ export function batch(effect: EffectTrigger | EffectTrigger[], batchOptions?: Ba
 			}
 		}
 		success = true
-		if (initialError) throw initialError
 		return firstReturn.value
 	} catch (error) {
 		failure = error

@@ -7,7 +7,7 @@
  *   npm run benchmark:compare <name> - Compare against saved baseline
  *   npm run benchmark:list            - List saved benchmarks
  */
-// Note: For accurate benchmarks, set reactiveOptions.cycleHandling = 'production' to disable graph-based cycle detection
+// Note: For accurate benchmarks, set reactiveOptions.scheduler = 'raw' to disable graph-based cycle detection
 import { execSync } from 'child_process'
 import { writeFileSync, readFileSync, existsSync, readdirSync, mkdirSync } from 'fs'
 import { join } from 'path'
@@ -380,4 +380,3 @@ if (command === 'save') {
 	console.log('  npm run benchmark:list           - List saved benchmarks')
 	process.exit(1)
 }
-

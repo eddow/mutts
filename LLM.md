@@ -274,9 +274,9 @@ When reactive proxies form prototype chains (e.g. sursaut scope objects via `Obj
 
 Three presets are available for `reactiveOptions`, mirroring Sursaut's preset pattern:
 
-*   **`prodPreset`**: Zero introspection (`introspection: null`), `cycleHandling: 'production'`, `maxEffectReaction: 'throw'`. Minimal overhead for production.
-*   **`devPreset`**: Introspection enabled with touch lineages, `cycleHandling: 'development'`, `maxEffectReaction: 'warn'`. Good balance for development.
-*   **`debugPreset`**: Full lineage capture (`'both'`), `cycleHandling: 'debug'`, `maxEffectReaction: 'debug'`, larger history (200). Maximum diagnostics.
+*   **`prodPreset`**: Zero introspection (`introspection: null`), `scheduler: 'raw'`, `maxEffectReaction: 'throw'`. Minimal overhead for production.
+*   **`devPreset`**: Introspection enabled with touch lineages, `scheduler: 'ordered'`, `maxEffectReaction: 'warn'`. Good balance for development.
+*   **`debugPreset`**: Full lineage capture (`'both'`), `scheduler: 'debug'`, `maxEffectReaction: 'debug'`, larger history (200). Maximum diagnostics.
 
 ```ts
 import { reactiveOptions, devPreset } from 'mutts'
@@ -290,4 +290,3 @@ Object.assign(reactiveOptions, devPreset)
 `tsx` (used by mARC and other dev servers) overrides Node's ESM resolver. For symlinked packages, it can prefer a top-level `"types"` field or an `index.d.ts` over the `"exports"` map. If a `.d.ts` entry imports a DTS chunk (e.g. `./types.js` referencing `types.d.ts`), tsx tries to load the `.js` at runtime → `ERR_MODULE_NOT_FOUND`.
 
 **Fix applied:** removed the top-level `"types"` field from `package.json` (the `"exports"` map already provides per-condition `"types"` entries) and removed `index.d.ts` from the DTS build inputs since it was never referenced by `"exports"`. Pure Node ESM correctly uses the `"exports"` map; tsx now falls through to it too.
-

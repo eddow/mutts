@@ -39,6 +39,8 @@ export { type Resource, resource, unreactive, watch, when } from './satellite'
 export { assertUntracked } from './tracking'
 export {
 	type CleanupReason,
+	type CycleHandlingMode,
+	type DeprecatedCycleHandlingMode,
 	debugPreset,
 	devPreset,
 	type EffectAccess,
@@ -56,6 +58,7 @@ export {
 	proxyToObject,
 	ReactiveError,
 	ReactiveErrorCode,
+	type SchedulerMode,
 	type ScopedCallback,
 	toRaw,
 	unwrap,

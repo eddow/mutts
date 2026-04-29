@@ -3,7 +3,7 @@ const performance = globalThis.performance
 const process = globalThis.process || { memoryUsage: () => ({ heapUsed: 0, heapTotal: 0 }) } // @ts-ignore
 import { reactiveOptions } from 'mutts'
 
-// Force production settings for accurate profiling
+// Force raw scheduler settings for accurate profiling
 reactiveOptions.cycleHandling = 'production'
 reactiveOptions.introspection!.enableHistory = false
 reactiveOptions.maxDeepWatchDepth = 1000 // Allow deep structures in benchmarks
@@ -333,4 +333,3 @@ Memory Profile${name ? `: ${name}` : ''}:
   Delta %: ${profile.deltaPercent.toFixed(2)}%
 `.trim()
 }
-

@@ -185,7 +185,9 @@ export declare function deprecated(message?: string): Function;
 // buildReactivityGraph, getMutationHistory, getDependents, getDependencies, etc.
 
 export declare const reactiveOptions: {
-    cycleHandling: 'production' | 'development' | 'debug';
+    scheduler: 'raw' | 'ordered' | 'debug';
+    /** @deprecated Use scheduler instead. */
+    cycleHandling: 'raw' | 'ordered' | 'debug' | 'production' | 'development';
     introspection: unknown;
 };
 

@@ -6,7 +6,7 @@
 
 ## 1. MENTAL MODEL
 
-Proxy-based **fine-grained reactivity** — changes propagate synchronously through dependency-tracked effects. No VDOM, no scheduler, no hooks.
+Proxy-based **fine-grained reactivity** — changes propagate synchronously through dependency-tracked effects. No VDOM, no async render scheduler, no hooks.
 
 | Concept | Mutts |
 |---------|-------|
@@ -408,10 +408,10 @@ effect(() => {
 ```ts
 import { reactiveOptions } from 'mutts'
 
-// Cycle detection
-reactiveOptions.cycleHandling = 'development' // default: graph-based, throws
-reactiveOptions.cycleHandling = 'debug'       // full transitive closure, detailed paths
-reactiveOptions.cycleHandling = 'production'  // heuristic via maxTriggerPerBatch
+// Scheduler / cycle detection
+reactiveOptions.scheduler = 'ordered' // default: causal graph ordering, eager cycles
+reactiveOptions.scheduler = 'raw'     // fastest FIFO mode, heuristic cycles
+reactiveOptions.scheduler = 'debug'   // ordered mode plus heavier diagnostics
 
 // Lifecycle hooks (all wrapped via optionCall for safety)
 reactiveOptions.enter = (effect) => {}    // before effect runs

@@ -1,21 +1,38 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { effect, reset } from '../../src/reactive/effects'
-import { options, ReactiveErrorCode } from '../../src/reactive/types'
+import { atom, effect, reset } from '../../src/reactive/effects'
+import { options, ReactiveErrorCode, type SchedulerMode } from '../../src/reactive/types'
 import { reactive } from '../../src/reactive/proxy'
 
 describe('effect cycle detection and ordering', () => {
-	const originalCycleHandling = options.cycleHandling
+	const originalScheduler = options.scheduler
 	beforeEach(() => {
 		reset()
-		options.cycleHandling = 'production'
+		options.scheduler = 'raw'
 		options.maxEffectChain = 100
 		options.maxTriggerPerBatch = 100
 		vi.spyOn(options, 'warn').mockImplementation(() => {})
 	})
 	afterEach(() => {
-		options.cycleHandling = originalCycleHandling
+		options.scheduler = originalScheduler
 		vi.restoreAllMocks()
 	})
+	it('uses ordered scheduling by default', () => {
+		expect(originalScheduler).toBe('ordered')
+	})
+
+	it('maps deprecated cycleHandling names to scheduler modes', () => {
+		options.cycleHandling = 'production'
+		expect(options.scheduler).toBe('raw')
+		expect(options.cycleHandling).toBe('raw')
+
+		options.cycleHandling = 'development'
+		expect(options.scheduler).toBe('ordered')
+		expect(options.cycleHandling).toBe('ordered')
+
+		options.cycleHandling = 'debug'
+		expect(options.scheduler).toBe('debug')
+	})
+
 	describe('cycle detection', () => {
 		it('should throw error when cycle is detected (default)', () => {
 			const state = reactive({ a: 0, b: 0 })
@@ -75,6 +92,52 @@ describe('effect cycle detection and ordering', () => {
 	})
 
 	describe('topological ordering', () => {
+		it('shows raw FIFO can run a stale child before its invalidated parent', () => {
+			const run = (scheduler: SchedulerMode) => {
+				reset()
+				options.scheduler = scheduler
+
+				const state = reactive({ parent: 0, child: 0 })
+				const events: string[] = []
+				let generation = 0
+
+				effect`parent`(() => {
+					state.parent
+					const childGeneration = ++generation
+					events.push(`parent:${childGeneration}`)
+
+					effect`child`(() => {
+						state.child
+						events.push(`child:${childGeneration}`)
+						return () => events.push(`child-cleanup:${childGeneration}`)
+					})
+
+					return () => events.push(`parent-cleanup:${childGeneration}`)
+				})
+
+				events.length = 0
+
+				atom(() => {
+					state.child = 1
+					state.parent = 1
+				})
+
+				return events
+			}
+
+			const rawEvents = run('raw')
+			expect(rawEvents.indexOf('child:1')).toBeLessThan(rawEvents.indexOf('parent-cleanup:1'))
+
+			const orderedEvents = run('ordered')
+			expect(orderedEvents).not.toContain('child:1')
+			expect(orderedEvents).toEqual([
+				'parent-cleanup:1',
+				'child-cleanup:1',
+				'parent:2',
+				'child:2',
+			])
+		})
+
 		it('should execute effects in dependency order', () => {
 			const state = reactive({ a: 0, b: 0, c: 0 })
 			const executionOrder: string[] = []
@@ -314,9 +377,9 @@ describe('effect cycle detection and ordering', () => {
 			return state
 		}
 
-		it('production mode: detects cycle only when maxEffectChain is exceeded', () => {
+		it('raw mode: detects cycle only when maxEffectChain is exceeded', () => {
 			const originalMaxChain = options.maxEffectChain
-			options.cycleHandling = 'production'
+			options.scheduler = 'raw'
 
 			// With maxEffectChain=5, cycle of 10 iterations will be caught
 			options.maxEffectChain = 5
@@ -324,19 +387,19 @@ describe('effect cycle detection and ordering', () => {
 
 			// Reset broken state before next assertion
 			reset()
-			options.cycleHandling = 'production'
+			options.scheduler = 'raw'
 
 			// With maxEffectChain=100, same cycle completes without error
 			options.maxEffectChain = 100
 			const state = createSimpleCycle(10)
 			expect(state.count).toBe(10) // 10 iterations * 2 effects per iteration
 
-			options.cycleHandling = originalCycleHandling
+			options.scheduler = originalScheduler
 			options.maxEffectChain = originalMaxChain
 		})
 
-		it('development mode: detects cycle immediately at edge creation', () => {
-			options.cycleHandling = 'development'
+		it('ordered mode: detects cycle immediately at edge creation', () => {
+			options.scheduler = 'ordered'
 
 			try {
 				// Cycle is caught immediately when adding edge, regardless of maxEffectChain
@@ -344,7 +407,7 @@ describe('effect cycle detection and ordering', () => {
 
 				// Reset broken state before next assertion
 				reset()
-				options.cycleHandling = 'development'
+				options.scheduler = 'ordered'
 
 				let caughtError: any
 				try {
@@ -354,12 +417,12 @@ describe('effect cycle detection and ordering', () => {
 				}
 				expect(caughtError?.debugInfo?.code).toBe('Cycle detected')
 			} finally {
-				options.cycleHandling = originalCycleHandling
+				options.scheduler = originalScheduler
 			}
 		})
 
 		it('debug mode: detects cycle with detailed path information', () => {
-			options.cycleHandling = 'debug'
+			options.scheduler = 'debug'
 
 			try {
 				// Same immediate detection as development
@@ -367,7 +430,7 @@ describe('effect cycle detection and ordering', () => {
 
 				// Reset broken state before next assertion
 				reset()
-				options.cycleHandling = 'debug'
+				options.scheduler = 'debug'
 
 				let caughtError: any
 				try {
@@ -379,7 +442,7 @@ describe('effect cycle detection and ordering', () => {
 				expect(caughtError?.debugInfo?.cycle).toBeDefined()
 				expect(Array.isArray(caughtError?.debugInfo?.cycle)).toBe(true)
 			} finally {
-				options.cycleHandling = originalCycleHandling
+				options.scheduler = originalScheduler
 			}
 		})
 	})
