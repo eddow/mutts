@@ -1,46 +1,79 @@
-# Async Hooks (Browser)
+# Browser Async Polyfill
 
-**Status (Jan 2026)**: Browsers (Chrome/V8, Firefox) lack a native public API for `AsyncContext` or `Zone` propagation. To support zones in the browser, `mutts` implements a complex polyfill in `src/async/browser.ts`.
+## Problem
 
-## The "Sticky Promise" Problem
+In the browser, JavaScript's `Promise` implementation carries "sticky" context through its prototype chain. When a Promise is created inside a zone (e.g., with `asyncZone`), it inherits the zone's context. If this Promise is then returned to an outer scope, the zone context "leaks" - it remains attached to the Promise even after execution has left the zone.
 
-To propagate context across `await` points, the polyfill relies on **"Sticky Promises"**.
-*   **Mechanism**: When a Promise is created, we capture the current Zone context and attach it to the Promise instance.
-*   **Propagation**: When `.then()` is called (or `await` resumes), we restore that captured context.
+## Solution
 
-This creates a dilemma:
-1.  **Inside the Zone**: This is perfect. `await` resumes in the correct zone.
-2.  **Leaving the Zone**: If `zone.with(() => { return someInnerPromise })` returns that sticky Promise to the outer world, the outer code will *inherit* the inner zone context when it awaits that Promise. This causes **Context Leaks**.
+To prevent context leakage, mutts implements a **sanitization** mechanism for the browser environment:
 
-## The Solution: Return Value Sanitization
+### 1. Promise Sanitization
 
-In `src/zone.ts`, we delegate sanitization to `asyncHooks.sanitizePromise(res)`.
-
-In `src/async/browser.ts`, we implement this using a "Hack":
+The `asyncHooks.sanitizePromise` function wraps any Promise returned from a zone in a new Promise created in the outer scope:
 
 ```typescript
 asyncHooks.sanitizePromise = (res: any) => {
-    if (res && typeof (res as any).then === 'function') {
-        return new Promise((resolve, reject) => {
-            setTimeout(() => {
-                (res as any).then(resolve, reject)
-            }, 0)
-        })
-    }
-    return res
+  if (res && typeof (res as any).then === 'function') {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        (res as any).then(resolve, reject)
+      }, 0)
+    })
+  }
+  return res
 }
 ```
 
-*   **What it does**: It intercepts any Promise returning from the zone and resolves a *new* Promise using `setTimeout`.
-*   **Why**: This forces the resolution to happen in a **Macrotask**. This breaks the native Microtask chain, preventing the outer code from inheriting the inner Zone's context via V8's native Promise chaining optimization.
-*   **Result**: The outer Promise captures the *outer* context (undefined/root). The boundary is sealed.
+This breaks the sticky context chain by:
+1. Creating a new Promise in the current (outer) scope
+2. Using `setTimeout` to defer the resolution
+3. The new Promise has no zone context from the inner scope
 
-## Known Limitations & Nuances
-1.  **Triple Microtask Deferral**: In `src/async/browser.ts`, the `undo` operation (restoring context) is deferred by 3 microtasks. This is to ensure it runs *after* native Promise resolution reactions, preventing race conditions where context is cleared too early.
-2.  **Recursion Guard**: We patch global `Promise`. To prevent infinite recursion if patched multiple times (e.g. extensively in tests), we cache originals using `Symbol.for('mutts.originals')`.
+### 2. Promise Patching
 
-**Future Outlook**: This entire polyfill should be deleted when the [TC39 Async Context](https://github.com/tc39/proposal-async-context) proposal lands in browsers.
+The browser polyfill patches the global `Promise` constructor and its prototype methods (`then`, `catch`, `finally`) to capture and propagate zone context correctly through the Promise chain.
 
-## As of Mar 2026,
+### 3. Scheduler Freezing
 
-It makes effectHistory sometimes contain unexpected zones. KEEP THIS FILE and keep an eye on this hack as it causes crippling bugs
+When the reactive system enters a broken state (unrecoverable error), all async schedulers are frozen to prevent further execution:
+
+- `setTimeout` / `clearTimeout`
+- `setInterval` / `clearInterval`
+- `setImmediate` / `clearImmediate` (if available)
+- `requestAnimationFrame` / `cancelAnimationFrame` (if available)
+- `queueMicrotask` (if available)
+
+This is a safety mechanism to prevent cascading errors while still allowing DOM event inspection.
+
+## Why This is Necessary
+
+### Node.js vs Browser
+
+- **Node.js**: Uses `async_hooks` API which provides proper async context tracking without sticky Promise issues
+- **Browser**: No native async context API, so mutts must implement its own mechanism using Promise prototype patching
+
+### The "Sticky" Problem
+
+```typescript
+// Without sanitization:
+asyncZone.with('inner-zone', async () => {
+  const promise = Promise.resolve('data')
+  return promise // This promise carries 'inner-zone' context
+})
+// In outer scope, the promise still thinks it's in 'inner-zone'
+
+// With sanitization:
+asyncZone.with('inner-zone', async () => {
+  const promise = Promise.resolve('data')
+  return sanitizePromise(promise) // Returns new promise without 'inner-zone' context
+})
+// In outer scope, the promise has no zone context
+```
+
+## Implementation Notes
+
+- The polyfill is only applied in the browser environment
+- Original functions are stored and can be restored
+- The polyfill is idempotent - applying it multiple times is safe
+- Symbol.species is overridden to return the patched Promise constructor

@@ -1,7 +1,7 @@
 {
   "name": "mutts",
   "description": "Modern UTility TS: A collection of TypeScript utilities",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "main": "dist/browser.cjs",
   "module": "dist/browser.esm.js",
   "exports": {
@@ -90,7 +90,8 @@
   "files": [
     "dist",
     "README.md",
-    "docs"
+    "docs",
+    "BROWSER_ASYNC_POLYFILL.md"
   ],
   "scripts": {
     "build:js": "rollup -c",
